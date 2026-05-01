@@ -6,6 +6,9 @@ from apps.accounts import views as account_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # Mobile REST API
+    path('api/v1/', include('apps.api.urls', namespace='api')),
+    # Legacy Google app-login (kept for backward compat)
     path('api/auth/google/app-login/', account_views.google_app_login, name='api_google_app_login'),
     path('', include('apps.core.urls', namespace='core')),
     path('auth/', include('apps.accounts.urls', namespace='accounts')),

@@ -10,3 +10,11 @@ openpyxl>=3.1.0
 google-auth
 requests-oauthlib
 django-redis==5.4.0
+
+# REST API
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.3.1
+django-cors-headers==4.4.0
+
+# Firebase Cloud Messaging
+firebase-admin==6.5.0
