@@ -1,0 +1,299 @@
+{% extends "base/customer_base.html" %}
+{% block content %}
+<div class="container mt-3 mt-lg-4 phase3-detail-shell">
+  <div class="phase3-detail-topbar mb-3">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <a href="javascript:history.back()" class="btn btn-cf-soft"><i class="bi bi-arrow-left me-1"></i>Back</a>
+      <a href="{% url 'menu:menu' %}" class="btn btn-cf-outline"><i class="bi bi-grid me-1"></i>Menu</a>
+      {% if product.category and product.category.slug %}
+      <a href="{% url 'menu:category_detail' product.category.slug %}" class="btn btn-cf-outline"><i class="bi bi-tag me-1"></i>{{ product.category.name }}</a>
+      {% endif %}
+      {% if product.offering %}
+      <a href="{% url 'menu:offering_detail' product.offering.slug|default:product.offering.pk %}" class="btn btn-cf-outline"><i class="bi bi-clock me-1"></i>{{ product.offering.name }}</a>
+      {% endif %}
+    </div>
+    {% if in_cart %}<span class="pill-soft phase3-cart-pill"><i class="bi bi-cart-check"></i>{{ current_qty }} already in cart</span>{% endif %}
+  </div>
+
+  <section class="surface-card phase3-detail-card overflow-hidden">
+    <div class="row g-0">
+      <div class="col-lg-5">
+        <div class="phase3-detail-media">
+          {% if product.image %}
+            <img src="{{ product.image.url }}" alt="{{ product.name }}" class="phase3-detail-image">
+          {% else %}
+            <div class="phase3-detail-fallback">🍲</div>
+          {% endif %}
+          <div class="phase3-detail-overlay">
+            {% with ft=product.food_type.first %}
+              {% if ft %}
+                <span class="phase3-food-badge {% if 'non' in ft.name|lower %}nonveg{% else %}veg{% endif %}" aria-label="{% if 'non' in ft.name|lower %}Non-veg{% else %}Veg{% endif %}" title="{% if 'non' in ft.name|lower %}Non-veg{% else %}Veg{% endif %}">
+                  <span class="food-mark-icon"><span class="food-mark-dot"></span></span>
+                </span>
+              {% endif %}
+            {% endwith %}
+            {% if product.rating > 0 %}<span class="pill-soft phase3-overlay-pill"><i class="bi bi-star-fill"></i>{{ product.rating }}</span>{% endif %}
+            {% if product.calories %}<span class="pill-soft phase3-overlay-pill phase3-calorie-pill"><i class="bi bi-fire"></i>{{ product.calories }} kcal</span>{% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div class="phase3-detail-body">
+          <div class="phase3-detail-copy">
+            <div class="phase3-detail-kicker">Product details</div>
+            <h1 class="phase3-detail-title">{{ product.name }}</h1>
+            <p class="phase3-detail-desc">{{ product.description|default:"Freshly prepared by your cafeteria team." }}</p>
+          </div>
+
+          <div class="phase3-detail-tags">
+            {% if product.category %}<span class="pill-muted"><i class="bi bi-bookmark"></i>{{ product.category.name }}</span>{% endif %}
+            {% if product.offering %}<span class="pill-outline"><i class="bi bi-clock-history"></i>{{ product.offering.name }}</span>{% endif %}
+            {% if product.code %}<span class="pill-muted">#{{ product.code }}</span>{% endif %}
+            <span class="availability-pill {% if product.is_available_now %}open{% else %}closed{% endif %} pill-muted">
+              {% if product.is_available_now %}Available now{% else %}Unavailable{% endif %}
+            </span>
+          </div>
+
+          {% if product_offer %}
+          <div class="phase3-offer-banner">
+            {% if product_offer.offer_type == 'bogo' %}
+              <span class="phase3-offer-badge red">Buy 1 Get 1</span>
+              <strong>{{ product_offer.title }}</strong>
+              <span>Available on this item today.</span>
+            {% elif product_offer.offer_type == 'free' %}
+              <span class="phase3-offer-badge green">Free item</span>
+              <strong>{{ product_offer.title }}</strong>
+              <span>This product is free under the current offer.</span>
+            {% elif product_offer.offer_type == 'percent' %}
+              <span class="phase3-offer-badge blue">{{ product_offer.value|floatformat:0 }}% off</span>
+              <strong>{{ product_offer.title }}</strong>
+              <span>{% if product_offer.min_order_value %}Valid on ₹{{ product_offer.min_order_value|floatformat:0 }}+{% else %}Discount applied on this item{% endif %}</span>
+            {% endif %}
+          </div>
+          {% endif %}
+
+          <div class="phase3-price-panel">
+            <div>
+              <div class="phase3-price-label">Price</div>
+              {% if discounted_price %}
+                <div class="phase3-price-wrap">
+                  <div class="phase3-price-strike">₹{{ product.display_price|default:product.price }}</div>
+                  <div class="pprice phase3-detail-price">₹{{ discounted_price }}</div>
+                </div>
+              {% else %}
+                <div class="pprice phase3-detail-price">₹{{ product.display_price|default:product.price }}</div>
+              {% endif %}
+            </div>
+            <div class="phase3-price-side">
+              {% if discounted_price %}
+                <span class="phase3-save-chip">Save ₹{{ offer_saving_preview }}</span>
+              {% endif %}
+              {% if product.packing_price > 0 %}<div class="phase3-packing-note">+ ₹{{ product.packing_price }} packing</div>{% endif %}
+            </div>
+          </div>
+
+          {% if cart_level_offer %}
+            {% if cart_offer_saving > 0 %}
+            <div class="phase3-cart-offer success">
+              <i class="bi bi-megaphone-fill"></i>
+              <div>
+                <strong>{{ cart_level_offer.title }}</strong>
+                <div>You are already saving ₹{{ cart_offer_saving }} on your cart.</div>
+              </div>
+            </div>
+            {% else %}
+            <div class="phase3-cart-offer warn">
+              <i class="bi bi-tags-fill"></i>
+              <div>
+                <strong>{{ cart_level_offer.title }}</strong>
+                <div>
+                  {% if cart_level_offer.offer_type == 'flat' %}₹{{ cart_level_offer.value|floatformat:0 }} off{% else %}{{ cart_level_offer.value|floatformat:0 }}% off{% endif %}
+                  {% if cart_level_offer.min_order_value %} when cart reaches ₹{{ cart_level_offer.min_order_value|floatformat:0 }}{% endif %}
+                  {% if cart_level_offer.min_order_value and subtotal < cart_level_offer.min_order_value %}. Add ₹{{ cart_level_offer.min_order_value|floatformat:0 }} worth to unlock.{% endif %}
+                </div>
+              </div>
+            </div>
+            {% endif %}
+          {% endif %}
+          <div class="phase3-detail-info-strip">
+            {% if product.available_from and product.available_to %}
+            <span class="pill-muted"><i class="bi bi-clock"></i>{{ product.available_from|time:"h:i A" }} – {{ product.available_to|time:"h:i A" }}</span>
+            {% endif %}
+            {% if product.effective_web_qty == 0 %}<span class="pill-muted"><i class="bi bi-bag"></i>Sold out for web orders</span>{% elif product.effective_web_qty > 0 %}<span class="pill-muted"><i class="bi bi-bag"></i>Min {{ product.min_qty }} · Max {{ product.effective_web_qty }}/order</span>{% else %}<span class="pill-muted"><i class="bi bi-bag"></i>Min {{ product.min_qty }} · Unlimited</span>{% endif %}
+          </div>
+
+          {% if not customer.company.is_store_open %}
+            <div class="alert alert-danger mb-0 mt-3"><i class="bi bi-lock me-2"></i>{{ customer.company.ordering_status_message|default:'This store is currently closed.' }}</div>
+          {% elif product.is_available_now and product.effective_web_qty != 0 %}
+            <div class="phase3-buybar">
+              <div class="qty-control phase3-qty-control">
+                <button type="button" class="qty-btn" id="minusBtn">−</button>
+                <span class="qty-display" id="qtyVal">{{ product.min_qty }}</span>
+                <button type="button" class="qty-btn qty-plus" id="plusBtn">+</button>
+              </div>
+              <form method="post" action="{% url 'menu:cart_add' product.pk %}" id="addForm" class="phase3-add-form">
+                {% csrf_token %}
+                <input type="hidden" name="qty" id="qtyInput" value="{{ product.min_qty }}">
+                <button type="submit" class="btn btn-cf-primary" id="addToCartBtn"><i class="bi bi-cart-plus me-1"></i>Add to Cart</button>
+                <a href="{% url 'menu:cart' %}" class="btn btn-cf-outline">Go to cart</a>
+              </form>
+            </div>
+          {% else %}
+            <div class="alert alert-warning mb-0 mt-3"><i class="bi bi-exclamation-triangle me-2"></i>{% if product.effective_web_qty == 0 %}This item is sold out for web orders right now.{% else %}This item is not available right now.{% endif %}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% if similar_products %}
+    <div class="section-heading mt-4 mb-3">
+      <div>
+        <h4><i class="bi bi-grid me-2 text-danger"></i>You may also like</h4>
+        <div class="section-subtitle">More items from the same category.</div>
+      </div>
+    </div>
+    <div class="row g-3">
+      {% for item in similar_products %}
+        <div class="col-6 col-xl-3">
+          <div class="feature-card phase1-featured-card phase3-tile-card h-100 overflow-hidden d-flex flex-column">
+            <a href="{% url 'menu:product_detail' item.pk %}" class="text-decoration-none d-block phase3-tile-media-link">
+              <div class="phase3-tile-media">
+                {% if item.image %}
+                  <img src="{{ item.image.url }}" alt="{{ item.name }}" class="feature-image phase1-feature-image phase3-tile-image" style="object-fit:contain;background:#f8f8f8;">
+                {% else %}
+                  <div class="feature-image phase1-feature-image d-grid place-items-center phase1-feature-fallback phase3-tile-image">🍲</div>
+                {% endif %}
+                <div class="phase3-tile-badges">
+                  {% with ft=item.food_type.first %}{% if ft %}<span class="phase3-food-badge {% if 'non' in ft.name|lower %}nonveg{% else %}veg{% endif %}" aria-label="{% if 'non' in ft.name|lower %}Non-veg{% else %}Veg{% endif %}" title="{% if 'non' in ft.name|lower %}Non-veg{% else %}Veg{% endif %}"><span class="food-mark-icon"><span class="food-mark-dot"></span></span></span>{% endif %}{% endwith %}
+                </div>
+              </div>
+            </a>
+            <div class="phase1-feature-body phase3-tile-body d-flex flex-column flex-grow-1">
+              <div class="phase3-tile-topline">
+                <span class="pill-muted text-truncate">{{ item.category.name }}</span>
+                {% if item.calories %}<span class="phase1-calorie-note phase3-inline-calorie"><i class="bi bi-fire"></i> {{ item.calories }} kcal</span>{% endif %}
+              </div>
+              <a href="{% url 'menu:product_detail' item.pk %}" class="text-decoration-none text-reset d-block">
+                <h5 class="phase1-feature-title phase3-tile-title">{{ item.name }}</h5>
+                <div class="phase1-feature-desc phase3-tile-desc">{{ item.description|default:"Freshly prepared and ready to order."|truncatechars:72 }}</div>
+              </a>
+              <div class="phase1-feature-footer phase3-tile-footer mt-auto">
+                <div>
+                  <div class="pprice phase1-price phase3-tile-price">₹{{ item.display_price|default:item.price }}</div>
+                  {% if item.calories %}<div class="phase3-tile-availability open" style="font-size:0.72rem;"></div>{% endif %}
+                </div>
+                <div class="phase1-action-row phase3-action-row">
+                  <a href="{% url 'menu:product_detail' item.pk %}" class="btn btn-cf-outline btn-sm">Details</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function() {
+    const qtyVal = document.getElementById('qtyVal');
+    const qtyInput = document.getElementById('qtyInput');
+    const minusBtn = document.getElementById('minusBtn');
+    const plusBtn = document.getElementById('plusBtn');
+    const addForm = document.getElementById('addForm');
+    const addBtn = document.getElementById('addToCartBtn');
+
+    const minQty = Math.max(1, parseInt('{{ product.min_qty|default:1 }}', 10) || 1);
+    const rawMaxQty = parseInt('{{ product.effective_web_qty|default:-1 }}', 10);
+    const maxQty = Number.isFinite(rawMaxQty) && rawMaxQty > 0 ? Math.max(minQty, rawMaxQty) : Number.MAX_SAFE_INTEGER;
+    let qty = Math.max(minQty, Math.min(maxQty, parseInt((qtyInput && qtyInput.value) || '{{ product.min_qty|default:1 }}', 10) || minQty));
+
+    function syncQty() {
+      if (qtyVal) qtyVal.textContent = String(qty);
+      if (qtyInput) qtyInput.value = String(qty);
+      if (minusBtn) minusBtn.disabled = qty <= minQty;
+      if (plusBtn) plusBtn.disabled = qty >= maxQty;
+    }
+
+    function changeQty(delta) {
+      qty = Math.max(minQty, Math.min(maxQty, qty + delta));
+      syncQty();
+    }
+
+    if (minusBtn) {
+      minusBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        changeQty(-1);
+      });
+      minusBtn.addEventListener('touchend', function(e) {
+        e.preventDefault();
+        changeQty(-1);
+      }, { passive: false });
+    }
+
+    if (plusBtn) {
+      plusBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        changeQty(1);
+      });
+      plusBtn.addEventListener('touchend', function(e) {
+        e.preventDefault();
+        changeQty(1);
+      }, { passive: false });
+    }
+
+    syncQty();
+
+    addForm?.addEventListener('submit', function(e) {
+      e.preventDefault();
+      if (!addBtn || addBtn.dataset.busy === '1') return;
+      addBtn.dataset.busy = '1';
+      addBtn.disabled = true;
+      const original = addBtn.innerHTML;
+      const formData = new FormData(addForm);
+      formData.set('qty', String(qty));
+
+      fetch(addForm.action, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': NeverQUI.getCookie('csrftoken')
+        },
+        body: formData
+      })
+      .then(resp => resp.json())
+      .then(data => {
+        if (!data.success) {
+          addBtn.disabled = false;
+          alert(data.error || 'Could not add item to cart.');
+          return;
+        }
+        NeverQUI.updateCartBadges(data.cart_count || 0);
+        NeverQUI.flashButtonState(addBtn, original, '<i class="bi bi-check2 me-1"></i>Added');
+      })
+      .catch(() => {
+        addBtn.disabled = false;
+        alert('Network error. Please try again.');
+      })
+      .finally(() => {
+        window.setTimeout(function() {
+          addBtn.dataset.busy = '0';
+        }, 1350);
+      });
+    });
+  })();
+</script>
+<script>
+window.NEVERQ_PAGE_TOUR_KEY = 'product-detail';
+window.NEVERQ_PAGE_TOUR = [
+  {selector:'.phase3-detail-topbar', title:'Product navigation', copy:'Use these shortcuts to go back, return to the menu, or jump to the linked category or offering.', placement:'bottom'},
+  {selector:'.phase3-detail-card', title:'Product details', copy:'This panel shows the image, description, availability, pricing, and any active offer on the item.', placement:'bottom'},
+  {selector:'.phase3-buybar', title:'Choose quantity and add', copy:'Set the quantity here and add the item to cart when you are ready.', placement:'top'},
+  {selector:'.section-heading.mt-4', title:'More suggestions', copy:'This section suggests similar products from the same category for faster ordering.', placement:'top'}
+];
+</script>
+{% endblock %}

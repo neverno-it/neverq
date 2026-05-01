@@ -1,0 +1,1047 @@
+{% extends "base/dashboard_base.html" %}
+
+{% block extra_head %}
+<style>
+  /* KOT Modal */
+  .kot-modal-body {
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    background: white;
+    padding: 20px;
+  }
+  .kot-header { text-align: center; border-bottom: 2px dashed #333; padding-bottom: 10px; margin-bottom: 10px; }
+  .kot-header .kot-company { font-size: 17px; font-weight: 700; text-transform: uppercase; }
+  .kot-header .kot-title { font-size: 13px; letter-spacing: 2px; margin-top: 2px; }
+  .kot-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dotted #ccc; }
+  .kot-row .item-name { flex: 1; }
+  .kot-row .item-qty { min-width: 40px; text-align: center; font-weight: 700; }
+  .kot-footer { border-top: 2px dashed #333; padding-top: 10px; margin-top: 10px; }
+  .kot-total { display: flex; justify-content: space-between; font-weight: 700; font-size: 15px; }
+
+  /* New order alert */
+  .new-order-alert {
+    position: fixed;
+    top: 70px; right: 20px;
+    z-index: 2000;
+    background: var(--cf-navy);
+    color: white;
+    border-radius: 12px;
+    padding: 14px 18px;
+    min-width: 280px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.3);
+    display: none;
+    animation: slideIn .3s ease;
+  }
+  @keyframes slideIn { from { transform: translateX(120%); opacity:0; } to { transform: translateX(0); opacity:1; } }
+  .new-order-alert .alert-title { font-family: 'Rajdhani',sans-serif; font-weight:700; font-size:16px; }
+  .new-order-alert .alert-actions { margin-top: 10px; display: flex; gap: 8px; }
+
+  /* Bluetooth status */
+  .bt-status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 4px 10px;
+               border-radius: 20px; cursor: pointer; border: none; }
+  .bt-status.connected { background: #E8F5E9; color: #2E7D32; }
+  .bt-status.disconnected { background: #FFF3E0; color: #E65100; }
+
+  /* Row highlight for new orders */
+  .row-new { animation: flashRow 1.5s ease 2; background: #FFFDE7 !important; }
+  @keyframes flashRow { 0%,100%{background:#FFFDE7} 50%{background:#FFF9C4} }
+  .cashier-toolbar { padding: 14px 16px; margin-bottom: 16px; }
+  .cashier-toolbar .btn { min-height: 34px; }
+  .cashier-status-static { display:inline-flex; align-items:center; border-radius:6px; padding:5px 10px; font-size:12px; font-weight:700; background:#E5E7EB; color:#4B5563; white-space:nowrap; }
+  .cashier-status-static.is-cancelled { background:#FEE2E2; color:#B91C1C; }
+  .cashier-order-number{display:inline-block;font-size:15px;line-height:1.25;font-weight:700;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+  .cashier-actions{display:flex;gap:6px;flex-wrap:wrap}
+  @media (max-width: 768px){
+    .cashier-order-number{font-size:13px;max-width:112px}
+    #ordersTable td,#ordersTable th{padding-left:10px;padding-right:10px}
+    .cashier-actions{gap:5px}
+    .cashier-toolbar{padding:12px}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Bluetooth + Controls bar ─────────────────────────── -->
+<div class="filter-bar cashier-toolbar" id="tourCashierToolbar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    {% if not is_delivery_mode %}
+    <!-- BT Connect button — only for pickup companies -->
+    <button onclick="connectBluetooth(this)"
+            class="bt-status disconnected nq-bt-btn"
+            style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+                   padding:5px 14px;border-radius:20px;cursor:pointer;border:none;">
+      <i class="bi bi-bluetooth"></i>
+      <span class="nq-bt-label">Connect KOT Printer</span>
+    </button>
+
+    <!-- System Print fallback — works with USB/network printers, no BT needed -->
+    <button onclick="systemPrintLatestKOT()"
+            id="systemPrintBtn"
+            title="Print using browser / USB / network printer (no Bluetooth needed)"
+            style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+                   padding:5px 14px;border-radius:20px;cursor:pointer;border:1px solid var(--cf-border);
+                   background:white;color:var(--cf-navy);">
+      <i class="bi bi-printer"></i>
+      <span>System Print</span>
+    </button>
+
+    <!-- Auto-print toggle -->
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+      <input type="checkbox" id="autoPrintToggle" style="accent-color:var(--cf-blue);width:15px;height:15px;">
+      Auto-print KOT on new order
+    </label>
+    {% else %}
+    <!-- Delivery-mode toolbar — BT connect + slip actions -->
+    <button onclick="connectBluetooth(this)"
+            class="bt-status disconnected nq-bt-btn"
+            style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+                   padding:5px 14px;border-radius:20px;cursor:pointer;border:none;">
+      <i class="bi bi-bluetooth"></i>
+      <span class="nq-bt-label">Connect Slip Printer</span>
+    </button>
+    <span style="font-weight:700;font-size:14px;color:var(--cf-navy);">
+      <i class="bi bi-truck me-1"></i>Packet Delivery Mode
+    </span>
+    <button onclick="printAllSlipsBT()"
+            class="btn btn-sm"
+            style="background:var(--cf-navy);color:white;border:none;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px;"
+            title="Print all today's slips via Bluetooth. Falls back to browser print if not connected.">
+      <i class="bi bi-printer"></i> Print All Slips
+    </button>
+    <a href="{% url 'orders:delivery_confirmation_list' %}?date={{ date_filter }}{% if company %}&company={{ company.pk }}{% endif %}"
+       class="btn btn-sm"
+       style="background:#059669;color:white;border:none;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px;">
+      <i class="bi bi-check2-circle"></i> Bulk Mark Delivered
+    </a>
+    {% endif %}
+
+    <!-- Poll status -->
+    <span id="pollStatus" style="font-size:11px;color:var(--cf-muted);">
+      <i class="bi bi-circle-fill" style="font-size:8px;color:#10B981;"></i> Live
+    </span>
+  </div>
+
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'dashboard:order_list' %}?date={{ date_filter }}&export=csv"
+       class="btn btn-cf-danger btn-sm">
+      <i class="bi bi-download me-1"></i>Download
+    </a>
+    <a href="{% url 'orders:pickup_scan_terminal' %}" class="btn btn-cf-outline btn-sm"><i class="bi bi-upc-scan me-1"></i>Pickup Scan</a>
+    <a href="{% url 'pos:terminal' %}" class="btn btn-cf-outline btn-sm">
+      <i class="bi bi-display me-1"></i>POS Terminal
+    </a>
+  </div>
+</div>
+
+<div class="cf-card" id="tourCashierOrdersCard">
+  <div class="cf-card-header" style="flex-wrap:wrap;gap:10px;">
+    <h5><i class="bi bi-bag-check me-2"></i>Today Web Orders
+      <span id="newOrderBadge" class="badge bg-danger ms-2" style="display:none;">New!</span>
+    </h5>
+
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+      <!-- Date filter -->
+      <form class="d-flex gap-1" method="get">
+        <input type="date" name="date" value="{{ date_filter }}"
+               class="form-control form-control-sm" style="width:145px;">
+        <input type="hidden" name="status" value="{{ status_filter }}">
+        <input type="hidden" name="company" value="{{ company_filter }}">
+        <button type="submit" class="btn btn-cf-primary btn-sm">Go</button>
+      </form>
+
+      <!-- Status dropdown -->
+      <div class="dropdown">
+        <button class="btn btn-sm dropdown-toggle"
+                style="background:var(--cf-blue);color:white;border:none;border-radius:6px;padding:6px 14px;font-weight:600;"
+                data-bs-toggle="dropdown">
+          Order Status
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          {% for val, lbl, color in status_options %}
+          <li>
+            <a class="dropdown-item {% if status_filter == val|stringformat:'s' %}fw-bold{% endif %}"
+               href="?date={{ date_filter }}&status={{ val }}&company={{ company_filter }}">
+              <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{{ color }};margin-right:6px;"></span>
+              {{ lbl }}
+            </a>
+          </li>
+          {% endfor %}
+          <li><hr class="dropdown-divider"></li>
+          <li>
+            <a class="dropdown-item {% if not status_filter %}fw-bold{% endif %}"
+               href="?date={{ date_filter }}&company={{ company_filter }}">All</a>
+          </li>
+        </ul>
+      </div>
+
+      {% if companies|length > 1 %}
+      <!-- Site filter (multi-site users only) -->
+      <form method="get" class="d-flex gap-1 align-items-center">
+        <input type="hidden" name="date" value="{{ date_filter }}">
+        <input type="hidden" name="status" value="{{ status_filter }}">
+        <input type="hidden" name="q" value="{{ q }}">
+        <select name="company" class="form-select form-select-sm" style="width:150px;" onchange="this.form.submit()">
+          <option value="">All Sites</option>
+          {% for co in companies %}
+          <option value="{{ co.pk }}" {% if company_filter == co.pk|stringformat:'s' %}selected{% endif %}>
+            {{ co.name|truncatechars:20 }}
+          </option>
+          {% endfor %}
+        </select>
+      </form>
+      {% endif %}
+
+      <!-- Search -->
+      <form method="get" class="d-flex gap-1">
+        <input type="hidden" name="date" value="{{ date_filter }}">
+        <input type="hidden" name="status" value="{{ status_filter }}">
+        <input type="hidden" name="company" value="{{ company_filter }}">
+        <input type="search" name="q" value="{{ q }}"
+               class="form-control form-control-sm" style="width:180px;"
+               placeholder="Order# or customer…">
+      </form>
+    </div>
+  </div>
+
+  <div style="overflow-x:auto;">
+    <table class="cf-table" id="ordersTable">
+      <thead>
+        <tr>
+          <th style="width:100px;">Actions</th>
+          <th>Order #</th>
+          <th>Items</th>
+          <th>Status</th>
+          <th>Amount</th>
+          <th>Delivery Date</th>
+          <th>Payment</th>
+          <th>Customer</th>
+        </tr>
+      </thead>
+
+      <tbody id="ordersTbody">
+        {% for order in orders %}
+        <tr id="row-{{ order.pk }}" data-order-id="{{ order.pk }}">
+          <td>
+            <div class="cashier-actions">
+              {% if is_delivery_mode %}
+              {# ── Packet-delivery company: slip print + mark delivered ── #}
+              <button onclick="printSlipBT({{ order.pk }}, this)"
+                      title="Print Packet Slip via Bluetooth (falls back to browser print)"
+                      class="btn btn-sm"
+                      style="background:var(--cf-navy);color:white;border:none;padding:4px 8px;border-radius:5px;display:inline-flex;align-items:center;gap:4px;">
+                <i class="bi bi-printer" style="font-size:13px;"></i>
+                <span style="font-size:11px;">Slip</span>
+              </button>
+
+              {% if order.order_status != 5 and order.order_status != 6 %}
+              <button onclick="markDelivered({{ order.pk }}, this)"
+                      title="Mark Delivered"
+                      class="btn btn-sm"
+                      style="background:#059669;color:white;border:none;padding:4px 8px;border-radius:5px;">
+                <i class="bi bi-check2-circle" style="font-size:13px;"></i>
+              </button>
+              {% endif %}
+              {% else %}
+              {# ── Pickup company: BT KOT print ── #}
+              <button onclick="fetchAndPrintKOT({{ order.pk }})"
+                      title="Print KOT via Bluetooth"
+                      class="btn btn-sm"
+                      style="background:var(--cf-red);color:white;border:none;padding:4px 8px;border-radius:5px;">
+                <i class="bi bi-bluetooth" style="font-size:13px;"></i>
+              </button>
+
+              <a href="{% url 'orders:kot_print_html' order.pk %}"
+                 target="_blank"
+                 title="System Print (USB / network / any printer)"
+                 class="btn btn-sm"
+                 style="background:#1e3a5f;color:white;border:none;padding:4px 8px;border-radius:5px;">
+                <i class="bi bi-printer" style="font-size:13px;"></i>
+              </a>
+
+              <button onclick="openKOTModal({{ order.pk }})"
+                      title="View KOT"
+                      class="btn btn-sm btn-cf-outline"
+                      style="padding:4px 8px;">
+                <i class="bi bi-eye" style="font-size:13px;"></i>
+              </button>
+              {% endif %}
+
+              <a href="{% url 'dashboard:order_detail' order.pk %}"
+                 title="View Bill"
+                 class="btn btn-sm"
+                 style="background:var(--cf-blue);color:white;border:none;padding:4px 8px;border-radius:5px;">
+                <i class="bi bi-receipt" style="font-size:13px;"></i>
+              </a>
+            </div>
+          </td>
+
+          <td>
+            <span class="cashier-order-number text-blue" title="{{ order.order_number }}">{{ order.display_order_number|default:order.order_number }}</span>
+          </td>
+
+          <td>
+            <small>
+              {% for item in order.remaining_items %}
+                {{ forloop.counter }}. {{ item.product.name|default:"Item" }} × {{ item.qty }}
+                {% if not forloop.last %}<br>{% endif %}
+              {% endfor %}
+            </small>
+          </td>
+
+          <td id="status-cell-{{ order.pk }}">
+            {% if order.order_status == 5 %}
+            <span class="cashier-status-static">Delivered</span>
+            {% elif order.order_status == 6 %}
+            <span class="cashier-status-static is-cancelled">Cancelled</span>
+            {% else %}
+            <div class="dropdown">
+              <button class="btn btn-sm dropdown-toggle status-btn-{{ order.pk }}"
+                      data-bs-toggle="dropdown"
+                      style="background:{{ order.order_status|yesno:'#F59E0B,#F59E0B' }};
+                             {% if order.order_status == 1 %}background:#F59E0B;
+                             {% elif order.order_status == 2 %}background:#3B82F6;
+                             {% elif order.order_status == 3 %}background:#8B5CF6;
+                             {% elif order.order_status == 4 %}background:#10B981;
+                             {% elif order.order_status == 5 %}background:#059669;
+                             {% else %}background:#EF4444;{% endif %}
+                             color:white;border:none;border-radius:6px;padding:5px 10px;
+                             font-size:12px;font-weight:600;white-space:nowrap;">
+                {{ order.status_label }} ▾
+              </button>
+
+              <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="#" onclick="updateStatus({{ order.pk }},1,'Pending','#F59E0B');return false;">⏳ Pending</a></li>
+                <li><a class="dropdown-item" href="#" onclick="updateStatus({{ order.pk }},2,'Confirmed','#3B82F6');return false;">✅ Confirmed</a></li>
+                <li><a class="dropdown-item" href="#" onclick="updateStatus({{ order.pk }},3,'Preparing','#8B5CF6');return false;">👨‍🍳 Preparing</a></li>
+                <li><a class="dropdown-item" href="#" onclick="updateStatus({{ order.pk }},4,'Food is Ready','#10B981');return false;">🔔 Food is Ready</a></li>
+                <li><a class="dropdown-item" href="#" onclick="updateStatus({{ order.pk }},5,'Delivered','#059669');return false;">✅ Delivered</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item text-danger" href="#" onclick="updateStatus({{ order.pk }},6,'Cancelled','#EF4444');return false;">❌ Cancelled</a></li>
+              </ul>
+            </div>
+            {% endif %}
+          </td>
+
+          <td><strong>₹{{ order.total_amount }}</strong></td>
+          <td><small>{{ order.scheduled_date|date:"d-m-Y"|default:order.created_at|date:"d-m-Y"|default:"—" }}</small></td>
+          <td>
+            <span class="badge" style="background:#10B981;color:white;font-size:11px;">
+              {{ order.get_payment_mode_display }}
+            </span>
+          </td>
+          <td>
+            <div class="fw-500">{{ order.display_customer_name }}</div>
+              <div class="small text-muted mt-1"><i class="bi bi-shop me-1"></i>{{ order.cafe.name|default:"—" }}</div>
+            {% if order.display_customer_phone %}<small class="text-muted">{{ order.display_customer_phone }}</small>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr id="emptyRow">
+          <td colspan="8" class="text-center text-muted py-5">
+            No orders for {{ date_filter }}.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;border-top:1px solid var(--cf-border);">
+    <div style="font-size:13px;color:var(--cf-muted);">
+      Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }} entries
+    </div>
+
+    {% if page_obj.has_other_pages %}
+    <div class="d-flex gap-1">
+      {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}&date={{ date_filter }}&status={{ status_filter }}&q={{ q }}"
+         class="btn btn-sm" style="border:1px solid var(--cf-border);background:white;">‹ Prev</a>
+      {% endif %}
+
+      {% for num in page_obj.paginator.page_range %}
+        {% if num == page_obj.number %}
+          <span class="btn btn-sm btn-cf-primary">{{ num }}</span>
+        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+          <a href="?page={{ num }}&date={{ date_filter }}&status={{ status_filter }}&q={{ q }}"
+             class="btn btn-sm" style="border:1px solid var(--cf-border);background:white;">{{ num }}</a>
+        {% endif %}
+      {% endfor %}
+
+      {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}&date={{ date_filter }}&status={{ status_filter }}&q={{ q }}"
+         class="btn btn-sm" style="border:1px solid var(--cf-border);background:white;">Next ›</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── KOT View Modal ──────────────────────────────────── -->
+<div class="modal fade" id="kotModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:360px;">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--cf-navy);color:white;border:none;padding:12px 18px;">
+        <h6 class="modal-title" style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;margin:0;">
+          <i class="bi bi-receipt me-2"></i>Kitchen Order Ticket
+        </h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div class="kot-modal-body" id="kotBody"></div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button onclick="window.printKOT(currentKotData,'KITCHEN ORDER TICKET','kotPrintFrame')"
+                class="btn btn-cf-danger">
+          <i class="bi bi-bluetooth me-2"></i>Print via Bluetooth
+        </button>
+        <button onclick="openKotSystemPrint()"
+                class="btn btn-cf-outline">
+          <i class="bi bi-printer me-2"></i>System Print
+        </button>
+        <button class="btn btn-cf-outline" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Hidden print iframe — no new windows ever ─────────── -->
+<iframe id="kotPrintFrame"
+        style="position:fixed;left:-9999px;top:-9999px;width:80mm;height:1px;border:none;"
+        aria-hidden="true"></iframe>
+
+<!-- ── New Order Alert (slides in from right) ─────────── -->
+<div id="newOrderAlert" class="new-order-alert">
+  <div class="alert-title">🔔 New Order Received!</div>
+  <div id="alertOrderInfo" style="font-size:13px;color:rgba(255,255,255,.8);margin-top:4px;"></div>
+  <div class="alert-actions">
+    <button onclick="fetchAndPrintKOT(alertOrderId); dismissAlert();"
+            class="btn btn-sm"
+            style="background:var(--cf-red);color:white;border:none;border-radius:6px;padding:6px 14px;font-weight:600;">
+      <i class="bi bi-printer me-1"></i>Print KOT
+    </button>
+    <button onclick="openKOTModal(alertOrderId); dismissAlert();"
+            class="btn btn-sm"
+            style="background:rgba(255,255,255,.15);color:white;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:6px 14px;">
+      View KOT
+    </button>
+    <button onclick="dismissAlert()"
+            style="background:none;border:none;color:rgba(255,255,255,.5);font-size:18px;cursor:pointer;margin-left:auto;">×</button>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── State ─────────────────────────────────────────────────────
+let currentKotId = null;
+let currentKotData = null;
+let alertOrderId = null;
+let lastSeenAt = '{{ last_order_time|escapejs }}';
+let kotModal = null;
+let alertTimeout = null;
+let seenOrderIds = new Set();
+
+// ── KOT URL template ─────────────────────────────────────────
+const KOT_URL_TEMPLATE = "{% url 'orders:kot_data' 0 %}";
+const KOT_URL_FALLBACK = "/orders/__ID__/kot/";
+
+// ── CSRF ──────────────────────────────────────────────────────
+function getCsrf() {
+  const m = document.cookie.match(/csrftoken=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
+// ── Bootstrap modal init ──────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  kotModal = new bootstrap.Modal(document.getElementById('kotModal'));
+  document.querySelectorAll('#ordersTbody tr[data-order-id]').forEach(tr => {
+    seenOrderIds.add(String(tr.dataset.orderId));
+  });
+});
+
+// ── Helpers ───────────────────────────────────────────────────
+function escH(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function shortOrderNumber(orderNumber) {
+  const value = String(orderNumber || '').trim();
+  const match = value.match(/^([A-Za-z]+)-(\d{6}|\d{8})-(.+)$/);
+  return match ? `${match[1]}-${match[3]}` : value;
+}
+
+function buildKotUrl(orderId) {
+  if (KOT_URL_TEMPLATE && KOT_URL_TEMPLATE.includes('/0/')) {
+    return KOT_URL_TEMPLATE.replace('/0/', '/' + orderId + '/');
+  }
+  return KOT_URL_FALLBACK.replace('__ID__', orderId);
+}
+
+async function fetchKotJson(orderId) {
+  const tried = [];
+  const urls = [];
+
+  const primary = buildKotUrl(orderId);
+  urls.push(primary);
+
+  const fallback = KOT_URL_FALLBACK.replace('__ID__', orderId);
+  if (fallback !== primary) {
+    urls.push(fallback);
+  }
+
+  for (const url of urls) {
+    tried.push(url);
+
+    let resp;
+    try {
+      resp = await fetch(url, {
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': getCsrf()
+        }
+      });
+    } catch (e) {
+      continue;
+    }
+
+    const ct = resp.headers.get('Content-Type') || '';
+
+    if (ct.includes('application/json')) {
+      const data = await resp.json();
+
+      if (!resp.ok || data.error) {
+        throw new Error(data.error || ('Server error ' + resp.status + ' at ' + url));
+      }
+
+      return data;
+    }
+
+    if (resp.redirected || resp.url.includes('/auth/login')) {
+      throw new Error('Session expired. Please refresh the page and log in again.');
+    }
+
+    if (resp.status !== 404) {
+      throw new Error('Unexpected server response (HTTP ' + resp.status + ') at ' + url);
+    }
+  }
+
+  throw new Error('KOT endpoint not found. Tried: ' + tried.join(' , '));
+}
+
+// ── Print via Bluetooth — tries BT, shows error toast if it fails ──
+async function fetchAndPrintKOT(orderId) {
+  let data;
+  try {
+    data = await fetchKotJson(orderId);
+  } catch (e) {
+    alert('KOT Error: ' + e.message);
+    return;
+  }
+  const btn = document.querySelector(`#row-${orderId} button[onclick*="fetchAndPrintKOT"]`);
+  const sent = await window.printKOT(data, 'KITCHEN ORDER TICKET', 'kotPrintFrame');
+  if (sent && btn) {
+    btn.style.background = '#10B981';
+    setTimeout(() => { btn.style.background = 'var(--cf-red)'; }, 1800);
+  } else if (!sent) {
+    // printKOT returned false — printer not connected or route mismatch.
+    // The BT toast already shows the reason; also flash the button red so user notices.
+    if (btn) {
+      btn.style.background = '#b91c1c';
+      setTimeout(() => { btn.style.background = 'var(--cf-red)'; }, 2000);
+    }
+  }
+}
+
+// ── Mark a single delivery-mode order as Delivered (inline cashier action) ──
+async function markDelivered(orderId, btn) {
+  if (!confirm('Mark order #' + orderId + ' as Delivered?')) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '⏳';
+
+  try {
+    const resp = await fetch(`/dashboard/orders/${orderId}/status/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCsrf(),
+        'X-Requested-With': 'XMLHttpRequest',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+      },
+      body: 'status=5&details='
+    });
+
+    const ct = resp.headers.get('content-type') || '';
+    let data = null;
+
+    if (ct.includes('application/json')) {
+      data = await resp.json();
+    } else {
+      const text = await resp.text();
+      throw new Error(`Server returned ${resp.status} and non-JSON response: ${text.slice(0, 120)}`);
+    }
+
+    if (resp.ok && data.success) {
+      const cell = document.getElementById('status-cell-' + orderId);
+      if (cell) cell.innerHTML = '<span class="cashier-status-static">Delivered</span>';
+      btn.style.display = 'none';
+      return;
+    }
+
+    throw new Error(data?.error || `Request failed with status ${resp.status}`);
+  } catch (e) {
+    alert('Request failed: ' + e.message);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check2-circle" style="font-size:13px;"></i>';
+  }
+}
+
+// ── Print a single packet slip via BT; system-print fallback via toast ──
+const SLIP_FALLBACK_TPL = "{% url 'orders:delivery_packet_labels' %}?order_ids=__ID__";
+
+async function printSlipBT(orderId, btn) {
+  const SLIP_URL = SLIP_FALLBACK_TPL.replace('__ID__', orderId);
+
+  // If no BT: open browser print page immediately (synchronous click → not blocked)
+  if (!window.btChar) {
+    window.open(SLIP_URL, '_blank');
+    return;
+  }
+
+  const origHtml = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳'; }
+
+  let sent = false;
+  try {
+    const data = await fetchKotJson(orderId);
+    sent = await window.printKOT(data, 'PACKET DELIVERY SLIP', 'kotPrintFrame');
+  } catch (e) {
+    console.error('[printSlipBT] error for order', orderId, e);
+    sent = false;
+  }
+
+  if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+
+  if (sent) {
+    // Flash green briefly on BT success
+    if (btn) {
+      btn.style.background = '#059669';
+      setTimeout(() => { btn.style.background = 'var(--cf-navy)'; }, 1800);
+    }
+  } else {
+    // BT failed — the btToast already shows Retry/System Print buttons.
+    // Also store the slip URL so "System Print" in the toast opens it.
+    window._slipFallbackUrl = SLIP_URL;
+    // If the toast didn't show (e.g. route issue), navigate directly.
+    const toast = document.getElementById('btToast');
+    const toastVisible = toast && toast.style.display !== 'none';
+    if (!toastVisible) {
+      window.location.href = SLIP_URL;
+    }
+  }
+}
+
+// ── Print all visible slips sequentially via BT; browser-print fallback ──
+
+function showBtToast(message, showRetry = false, showSystemPrint = false, autoHideMs = 3000) {
+  let toast = document.getElementById('btSlipToast');
+
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'btSlipToast';
+    toast.style.position = 'fixed';
+    toast.style.right = '20px';
+    toast.style.bottom = '20px';
+    toast.style.zIndex = '9999';
+    toast.style.maxWidth = '360px';
+    toast.style.background = '#1f2937';
+    toast.style.color = '#fff';
+    toast.style.padding = '12px 14px';
+    toast.style.borderRadius = '10px';
+    toast.style.boxShadow = '0 10px 25px rgba(0,0,0,.25)';
+    toast.style.fontSize = '13px';
+    toast.style.display = 'none';
+    document.body.appendChild(toast);
+  }
+
+  let actions = '';
+
+  if (showRetry) {
+    actions += `
+      <button onclick="this.closest('#btSlipToast').style.display='none'"
+              style="margin-right:8px;background:#f59e0b;color:#111;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;">
+        OK
+      </button>
+    `;
+  }
+
+  if (showSystemPrint) {
+    actions += `
+      <button onclick="if(window._slipFallbackUrl){ window.open(window._slipFallbackUrl, '_blank'); }"
+              style="background:#10b981;color:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer;">
+        System Print
+      </button>
+    `;
+  }
+
+  toast.innerHTML = `
+    <div>${message}</div>
+    ${actions ? `<div style="margin-top:10px;">${actions}</div>` : ''}
+  `;
+
+  toast.style.display = 'block';
+
+  const dismiss = () => {
+    toast.style.display = 'none';
+  };
+
+  window._btSlipDismissToast = dismiss;
+
+  if (autoHideMs && autoHideMs > 0) {
+    setTimeout(dismiss, autoHideMs);
+  }
+}
+
+async function printAllSlipsBT() {
+  const LABEL_URL = "{% url 'orders:delivery_packet_labels' %}?date={{ date_filter }}{% if company %}&company={{ company.pk }}{% endif %}";
+
+  const rows = [...document.querySelectorAll('#ordersTbody tr[id^="row-"]')];
+  if (!rows.length) {
+    alert('No orders visible to print.');
+    return;
+  }
+
+  // BT not connected → navigate directly (location.href can't be popup-blocked)
+  if (!window.btChar) {
+    window.location.href = LABEL_URL;
+    return;
+  }
+
+  // Show immediate feedback so user knows the button worked
+  showBtToast('⏳ Sending ' + rows.length + ' slip(s) to printer…', false, false, 0);
+
+  let ok = 0, fail = 0;
+  for (const row of rows) {
+    const orderId = parseInt(row.dataset.orderId || '0', 10);
+    if (!orderId) continue;
+    try {
+      const data = await fetchKotJson(orderId);
+      // Only count as success when printKOT returns TRUE (BT actually sent)
+      const sent = await window.printKOT(data, 'PACKET DELIVERY SLIP', 'kotPrintFrame');
+      if (sent) { ok++; } else { fail++; console.warn('[printAllSlipsBT] printKOT returned false for order', orderId); }
+    } catch (e) {
+      fail++;
+      console.error('[printAllSlipsBT] failed for order', orderId, e);
+    }
+    // Gap between slips so printer buffer doesn't overflow
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  // Dismiss the working toast
+  window._btSlipDismissToast && window._btSlipDismissToast();
+
+  if (ok > 0 && fail === 0) {
+    showBtToast('✓ ' + ok + ' slip(s) sent to printer.', false, false, 3000);
+  } else if (ok > 0 && fail > 0) {
+    showBtToast('⚠ ' + ok + ' printed, ' + fail + ' failed — check printer.', true, true, 0);
+  } else {
+    // All failed — navigate to browser print (location.href, not popup)
+    showBtToast('⚠ Bluetooth print failed. Opening browser print…', false, false, 2500);
+    setTimeout(() => { window.location.href = LABEL_URL; }, 2600);
+  }
+}
+
+// ── System print from modal — opens the server-rendered print page in new tab ──
+function openKotSystemPrint() {
+  if (!currentKotId) return;
+  const KOT_PRINT_TEMPLATE = "{% url 'orders:kot_print_html' 0 %}";
+  const url = KOT_PRINT_TEMPLATE.replace('/0/', '/' + currentKotId + '/');
+  window.open(url, '_blank');
+}
+
+// ── IMPORTANT FIX: renamed so it does NOT collide ────────────
+async function openKOTModal(orderId) {
+  currentKotId = orderId;
+
+  try {
+    currentKotData = await fetchKotJson(orderId);
+  } catch (e) {
+    alert('KOT Error: ' + e.message);
+    return;
+  }
+
+  renderKOTModal(currentKotData);
+  kotModal.show();
+}
+
+function renderKOTModal(data) {
+  const hr = '<div style="border-bottom:2px dashed #333;margin:8px 0;"></div>';
+  let itemsHtml = '';
+
+  for (const item of data.items) {
+    itemsHtml += `
+      <div class="kot-row">
+        <span class="item-name">${escH(item.name)}</span>
+        <span class="item-qty">× ${item.qty}</span>
+      </div>
+    `;
+  }
+
+  document.getElementById('kotBody').innerHTML = `
+    <div class="kot-header">
+      <div class="kot-company">${escH(data.company_name)}</div>
+      <div class="kot-title">KITCHEN ORDER TICKET</div>
+    </div>
+    <div style="font-size:12px;margin-bottom:8px;">
+      <strong>Order:</strong> ${escH(shortOrderNumber(data.order_number))}<br>
+      <strong>Date:</strong> ${escH(data.created_at)}<br>
+      <strong>Customer:</strong> ${escH(data.customer_name)}
+      ${data.customer_phone ? ' · ' + escH(data.customer_phone) : ''}<br>
+      ${data.scheduled_date ? '<strong>Delivery:</strong> ' + escH(data.scheduled_date) + '<br>' : ''}
+      <strong>Payment:</strong> ${escH(data.payment_mode)}
+    </div>
+    ${hr}
+    <div style="display:flex;justify-content:space-between;font-weight:700;font-size:12px;margin-bottom:6px;">
+      <span>ITEM</span><span>QTY</span>
+    </div>
+    ${hr}
+    ${itemsHtml}
+    ${hr}
+    <div class="kot-total">
+      <span>TOTAL</span>
+      <span>₹${parseFloat(data.total).toFixed(2)}</span>
+    </div>
+  `;
+}
+
+// ── Status update ─────────────────────────────────────────────
+function updateStatus(orderId, newStatus, label, color) {
+  const form = new FormData();
+  form.append('status', newStatus);
+  form.append('details', '');
+
+  fetch(`/dashboard/orders/${orderId}/status/`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': getCsrf(),
+      'X-Requested-With': 'XMLHttpRequest'
+    },
+    body: form
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      const cell = document.getElementById(`status-cell-${orderId}`);
+      if (cell && (newStatus === 5 || newStatus === 6)) {
+        cell.innerHTML = newStatus === 5
+          ? '<span class="cashier-status-static">Delivered</span>'
+          : '<span class="cashier-status-static is-cancelled">Cancelled</span>';
+        return;
+      }
+      const btn = document.querySelector(`.status-btn-${orderId}`);
+      if (btn) {
+        btn.textContent = label + ' ▾';
+        btn.style.background = color;
+      }
+    }
+  })
+  .catch(() => alert('Failed to update status.'));
+}
+
+// ══════════════════════════════════════════════════════════════
+//  AUTO-POLL  (new orders every 15s)
+// ══════════════════════════════════════════════════════════════
+let pollingActive = true;
+
+function pollNewOrders() {
+  if (!pollingActive) return;
+
+  const company = '{{ company.pk|default:"" }}';
+  const url = `/orders/poll/new/?since=${encodeURIComponent(lastSeenAt)}&company=${company}`;
+
+  fetch(url)
+    .then(r => r.json())
+    .then(data => {
+      const returnedOrders = Array.isArray(data.orders) ? data.orders : [];
+
+      if (returnedOrders.length > 0) {
+        const freshOrders = returnedOrders.filter(o => !seenOrderIds.has(String(o.id)));
+
+        // Always advance the marker to the newest order returned by the backend,
+        // even if this tab has already seen that order before.
+        lastSeenAt = returnedOrders[0].created_at;
+
+        if (freshOrders.length > 0) {
+          const newest = freshOrders[0];
+          alertOrderId = newest.id;
+
+          const badge = document.getElementById('newOrderBadge');
+          badge.style.display = '';
+          badge.textContent = `${freshOrders.length} New`;
+
+          showNewOrderAlert(newest);
+
+          if (document.getElementById('autoPrintToggle')?.checked) {
+            freshOrders.forEach((o, idx) => {
+              setTimeout(() => fetchAndPrintKOT(o.id), 300 + (idx * 300));
+            });
+          }
+
+          playPing();
+
+          for (const o of freshOrders) {
+            seenOrderIds.add(String(o.id));
+            insertNewOrderRow(o);
+          }
+        }
+      }
+    })
+    .catch(() => {})
+    .finally(() => {
+      setTimeout(pollNewOrders, 15000);
+    });
+}
+
+function showNewOrderAlert(order) {
+  clearTimeout(alertTimeout);
+  const alert = document.getElementById('newOrderAlert');
+  const cafePart = order.cafe_name ? ` · ${order.cafe_name}` : '';
+  document.getElementById('alertOrderInfo').textContent =
+    `${shortOrderNumber(order.order_number)}${cafePart} · ${order.customer} · ₹${parseFloat(order.total).toFixed(2)}`;
+  alert.style.display = 'block';
+  alertTimeout = setTimeout(dismissAlert, 12000);
+}
+
+function dismissAlert() {
+  document.getElementById('newOrderAlert').style.display = 'none';
+}
+
+// ── System Print toolbar button: opens the newest visible order's print page ──
+function systemPrintLatestKOT() {
+  const KOT_PRINT_TEMPLATE = "{% url 'orders:kot_print_html' 0 %}";
+  let orderId = null;
+  if (currentKotId) {
+    orderId = currentKotId;
+  } else {
+    const firstRow = document.querySelector('#ordersTbody tr[id^="row-"]');
+    if (!firstRow) { alert('No orders to print.'); return; }
+    orderId = firstRow.dataset.orderId;
+  }
+  if (!orderId) { alert('No order selected.'); return; }
+  const url = KOT_PRINT_TEMPLATE.replace('/0/', '/' + orderId + '/');
+  window.open(url, '_blank');
+}
+
+function insertNewOrderRow(order) {
+  const tbody = document.getElementById('ordersTbody');
+  const emptyRow = document.getElementById('emptyRow');
+  if (emptyRow) emptyRow.remove();
+
+  if (document.getElementById('row-' + order.id)) return;
+
+  const statusColors = {
+    1: '#F59E0B',
+    2: '#3B82F6',
+    3: '#8B5CF6',
+    4: '#10B981',
+    5: '#059669',
+    6: '#EF4444'
+  };
+  const status = parseInt(order.order_status || 1, 10);
+  const statusLabel = escH(order.status_label || 'Pending');
+  const paymentMode = escH(order.payment_mode || 'Online');
+  const deliveryDate = escH(order.scheduled_date || '—');
+  const cafeName = escH(order.cafe_name || '—');
+
+  const tr = document.createElement('tr');
+  tr.id = 'row-' + order.id;
+  tr.className = 'row-new';
+  tr.dataset.orderId = order.id;
+  const KOT_PRINT_URL = "{% url 'orders:kot_print_html' 0 %}".replace('/0/', '/' + order.id + '/');
+  const SLIP_URL = "{% url 'orders:delivery_packet_labels' %}?order_ids=" + order.id;
+  const IS_DELIVERY = {% if is_delivery_mode %}true{% else %}false{% endif %};
+  const actionBtns = IS_DELIVERY
+    ? `<button onclick="printSlipBT(${order.id}, this)" title="Print Packet Slip via Bluetooth" class="btn btn-sm"
+              style="background:var(--cf-navy);color:white;border:none;padding:4px 8px;border-radius:5px;display:inline-flex;align-items:center;gap:4px;">
+         <i class="bi bi-printer" style="font-size:13px;"></i><span style="font-size:11px;">Slip</span>
+       </button>
+       <button onclick="markDelivered(${order.id}, this)" title="Mark Delivered" class="btn btn-sm"
+               style="background:#059669;color:white;border:none;padding:4px 8px;border-radius:5px;">
+         <i class="bi bi-check2-circle" style="font-size:13px;"></i>
+       </button>`
+    : `<button onclick="fetchAndPrintKOT(${order.id})" title="Print KOT via Bluetooth" class="btn btn-sm"
+              style="background:var(--cf-red);color:white;border:none;padding:4px 8px;border-radius:5px;">
+         <i class="bi bi-bluetooth" style="font-size:13px;"></i>
+       </button>
+       <a href="${KOT_PRINT_URL}" target="_blank" title="System Print (USB / network / any printer)" class="btn btn-sm"
+          style="background:#1e3a5f;color:white;border:none;padding:4px 8px;border-radius:5px;display:inline-flex;align-items:center;">
+         <i class="bi bi-printer" style="font-size:13px;"></i>
+       </a>
+       <button onclick="openKOTModal(${order.id})" title="View KOT" class="btn btn-sm btn-cf-outline" style="padding:4px 8px;">
+         <i class="bi bi-eye" style="font-size:13px;"></i>
+       </button>`;
+  tr.innerHTML = `
+    <td>
+      <div class="d-flex gap-1">
+        ${actionBtns}
+        <a href="/dashboard/orders/${order.id}/" class="btn btn-sm"
+           style="background:var(--cf-blue);color:white;border:none;padding:4px 8px;border-radius:5px;">
+          <i class="bi bi-receipt" style="font-size:13px;"></i>
+        </a>
+      </div>
+    </td>
+    <td>
+      <span class="fw-600 text-blue">${escH(shortOrderNumber(order.order_number))}</span>
+      <span class="badge bg-warning ms-1" style="font-size:9px;">NEW</span>
+    </td>
+    <td><small>${order.items_count} item(s)</small></td>
+    <td>
+      <button class="btn btn-sm status-btn-${order.id}"
+              data-bs-toggle="dropdown"
+              style="background:${statusColors[status] || '#F59E0B'};color:white;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;">
+        ${statusLabel} ▾
+      </button>
+    </td>
+    <td><strong>₹${parseFloat(order.total).toFixed(2)}</strong></td>
+    <td><small>${deliveryDate}</small></td>
+    <td><span class="badge" style="background:#10B981;color:white;font-size:11px;">${paymentMode}</span></td>
+    <td>
+      <div class="fw-500">${escH(order.customer)}</div>
+      <div class="small text-muted mt-1"><i class="bi bi-shop me-1"></i>${cafeName}</div>
+      <small class="text-muted">${escH(order.phone)}</small>
+    </td>
+  `;
+  tbody.insertBefore(tr, tbody.firstChild);
+}
+
+function playPing() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.8);
+  } catch {}
+}
+
+setTimeout(pollNewOrders, 3000);
+window.NEVERQ_DASHBOARD_TOUR_KEY = 'dashboard-cashier';
+window.NEVERQ_DASHBOARD_TOUR = [
+  {selector:'#tourCashierToolbar', title:'Cashier controls', copy:'This top toolbar controls KOT printer connection, auto-print, live polling, pickup scan, downloads, and POS terminal shortcuts.', placement:'bottom'},
+  {selector:'#tourCashierOrdersCard', title:'Today web orders', copy:'This main section shows today\'s live web orders for the cashier team with filtering, search, and actions.', placement:'top'},
+  {selector:'#ordersTable', title:'Action column', copy:'Use the action buttons to print KOT, open the KOT preview, or jump into the full bill view.', placement:'top'},
+  {selector:'#ordersTable tbody tr:first-child td:nth-child(4)', title:'Status control', copy:'Pending, Confirmed, Preparing, and Ready can be updated here. Delivered and Cancelled stay visible but become non-editable.', placement:'left'},
+  {selector:'#ordersTable tbody tr:first-child td:nth-child(8)', title:'Customer details', copy:'The last columns help the cashier identify the customer, payment mode, and delivery date before handing over the order.', placement:'left'}
+];
+</script>
+{% endblock %}

@@ -1,0 +1,202 @@
+{% extends "base/customer_base.html" %}
+{% load core_extras %}
+{% block extra_head %}
+<style>
+  .confirm-shell { padding-top: 16px; }
+  .confirm-wrap { max-width: 960px; margin: 0 auto; }
+  .confirm-hero {
+    background: linear-gradient(180deg,#fff,#f8fbff);
+    border:1px solid var(--cf-border);
+    border-radius: 26px;
+    box-shadow: var(--cf-shadow-soft);
+    padding: 28px;
+  }
+  .confirm-check {
+    width:84px; height:84px; border-radius:24px; background:linear-gradient(135deg,var(--cf-blue),var(--cf-navy));
+    display:grid; place-items:center; color:#fff; font-size:38px; margin:0 auto 18px;
+    box-shadow:0 16px 34px rgba(21,101,192,.24);
+  }
+  .confirm-title { font-size: clamp(34px, 5vw, 52px); line-height:.92; color: var(--cf-navy); margin-bottom: 8px; }
+  .confirm-order-no {
+    max-width:460px; margin:0 auto; background: linear-gradient(135deg, var(--cf-blue-light), #fff);
+    border:1px solid var(--cf-border); border-radius: 22px; padding: 18px; box-shadow: var(--cf-shadow-soft);
+  }
+  .confirm-qr-card, .confirm-item-card { border:1px solid var(--cf-border); background:#fff; border-radius:18px; padding:14px; }
+  @media (max-width: 767.98px) {
+    .confirm-shell { padding-top: 10px; }
+    .confirm-hero { padding: 16px; border-radius: 20px; }
+    .confirm-check { width:72px; height:72px; border-radius:20px; font-size:32px; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container confirm-shell">
+  <div class="confirm-wrap">
+    <div class="confirm-hero text-center">
+      <div class="confirm-check"><i class="bi bi-check2"></i></div>
+      <div class="pill-soft mb-3" style="display:inline-flex;"><i class="bi bi-bag-check"></i>Order placed successfully</div>
+
+      {% if order.order_status == 2 %}
+        <h1 class="confirm-title">Your order is confirmed</h1>
+        {% if is_delivery_mode %}
+          <p class="text-muted" style="max-width:620px; margin:0 auto 18px;">Your items are now in process. Our staff will deliver your packed food to your company.</p>
+        {% else %}
+          <p class="text-muted" style="max-width:620px; margin:0 auto 18px;">Your items are now in process. Use the correct counter QR below when pickup is ready.</p>
+        {% endif %}
+      {% else %}
+        <h1 class="confirm-title">Your order is placed</h1>
+        <p class="text-muted" style="max-width:620px; margin:0 auto 18px;">Your order is waiting for cashier confirmation. Tracking and updates are available below.</p>
+      {% endif %}
+
+      {% if is_delivery_mode %}
+      <div class="alert alert-info text-start mb-4" style="max-width:600px; margin:0 auto;">
+        <i class="bi bi-truck me-2"></i><strong>Packet Delivery</strong> — Your food will be packed and delivered to your company by our staff. No QR scan required. You will be notified once delivered.
+      </div>
+      {% endif %}
+
+      <div class="confirm-order-no mb-4">
+        <div class="metric-label">Order Number</div>
+        <div class="metric-value">{{ order.order_number|short_order_no }}</div>
+      </div>
+
+      <div class="progress-track mb-4">
+        {% for step in progress_steps %}
+          <div class="progress-step {% if step.complete %}complete{% endif %} {% if step.current %}current{% endif %}">
+            <div class="step-index">{{ forloop.counter }}</div>
+            <div class="fw-bold">{{ step.label }}</div>
+            <div class="small text-muted mt-1">{{ step.note }}</div>
+          </div>
+        {% endfor %}
+      </div>
+
+      {% if tickets and not is_delivery_mode %}
+      <div class="surface-card soft-shadow p-3 p-md-4 text-start mb-4">
+        <div class="section-heading mb-3">
+          <div>
+            <h4><i class="bi bi-qr-code-scan me-2 text-danger"></i>Counter tickets</h4>
+            <div class="section-subtitle">Each counter has its own pickup QR. Valid today only. T&amp;C Applied.</div>
+          </div>
+        </div>
+        <div class="row g-3">
+          {% for ticket in tickets %}
+          <div class="col-md-6 col-lg-4">
+            <div class="confirm-qr-card h-100 text-center">
+              {% if ticket.counter %}
+                <div class="fw-bold mb-1" style="font-size:18px;">{{ ticket.counter.name }}</div>
+                {% if ticket.counter.cafe %}<div class="small text-muted">{{ ticket.counter.cafe.name }}</div>{% endif %}
+              {% else %}
+                <div class="fw-bold mb-1" style="font-size:18px; color:var(--cf-red);">Main Counter</div>
+              {% endif %}
+              <div class="small text-muted mb-2">{{ ticket.ticket_number }}</div>
+              {% if ticket.pickup_qr_data_uri %}
+              <img src="{{ ticket.pickup_qr_data_uri }}" alt="Counter QR" class="js-qr-enlarge" style="width:128px;height:128px;border:1px solid #eee;border-radius:12px;cursor:zoom-in;">
+              {% endif %}
+              <div class="small mt-2"><strong>Scan code:</strong> {{ ticket.scan_code }}</div>
+              <div class="small text-muted mt-2">
+                {% for item in ticket.items %}
+                  {{ item.product.name|default:'Item' }} × {{ item.qty }}{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="surface-card soft-shadow p-3 p-md-4 text-start mb-4">
+        <div class="section-heading mb-3">
+          <div>
+            <h4><i class="bi bi-list-check me-2 text-danger"></i>Items ordered</h4>
+            <div class="section-subtitle">Quick summary of your basket.</div>
+          </div>
+        </div>
+        <div class="d-flex flex-column gap-2">
+          {% for item in items %}
+            <div class="confirm-item-card d-flex justify-content-between align-items-center gap-2">
+              <div>
+                <div>{{ item.product.name|default:"Item" }} × {{ item.qty }}</div>
+                {% if item.counter and not is_delivery_mode %}<div class="small text-muted">{{ item.counter.name }} · {{ item.pickup_code }}</div>{% endif %}
+              </div>
+              <div class="text-end fw-bold">₹{{ item.line_total }}</div>
+            </div>
+          {% endfor %}
+        </div>
+        {% if order.offer_discount > 0 %}<div class="summary-row" style="color:var(--cf-success);"><span><i class="bi bi-megaphone-fill me-1"></i>Offer saving</span><span>−₹{{ order.offer_discount }}</span></div>{% endif %}
+        {% if order.coupon_discount > 0 %}<div class="summary-row" style="color:var(--cf-success);"><span><i class="bi bi-ticket-perforated me-1"></i>Coupon</span><span>−₹{{ order.coupon_discount }}</span></div>{% endif %}
+        {% if order.wallet_used > 0 %}<div class="summary-row" style="color:#2e7d32;"><span><i class="bi bi-wallet2 me-1"></i>Wallet used</span><span>−₹{{ order.wallet_used|floatformat:2 }}</span></div>{% endif %}
+        {% if order.points_redeemed > 0 %}<div class="summary-row" style="color:#2e7d32;"><span><i class="bi bi-star-fill me-1"></i>Points redeemed ({{ order.points_redeemed }} pts)</span><span>−₹{{ order.points_redeemed }}</span></div>{% endif %}
+        {% if order.bill_to_company > 0 %}<div class="summary-row" style="color:var(--cf-success);"><span><i class="bi bi-building me-1"></i>Company covers</span><span>−₹{{ order.bill_to_company|floatformat:2 }}</span></div>{% endif %}
+        <div class="summary-row total mt-2"><span>You paid</span><span>₹{{ order.my_pay|floatformat:2 }}</span></div>
+      </div>
+
+      <div class="small text-muted text-center mb-3" style="font-size:11px;">
+        <i class="bi bi-info-circle me-1"></i>T&amp;C Applied.
+      </div>
+      <div class="d-flex flex-wrap justify-content-center gap-2">
+        <a href="{% url 'orders:order_detail' order.pk %}" class="btn btn-cf-primary"><i class="bi bi-eye me-1"></i>Track this order</a>
+        <a href="{% url 'orders:order_history' %}" class="btn btn-cf-outline"><i class="bi bi-clock-history me-1"></i>My Orders</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="qrLightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;align-items:center;justify-content:center;padding:24px;cursor:zoom-out;">
+  <img id="qrLightboxImg" src="" alt="QR preview" style="max-width:min(92vw,560px);max-height:82vh;background:#fff;padding:14px;border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.45);">
+</div>
+<script>
+(function(){
+  const box=document.getElementById('qrLightbox');
+  const img=document.getElementById('qrLightboxImg');
+  if(!box||!img) return;
+  document.querySelectorAll('.js-qr-enlarge').forEach(function(el){
+    el.addEventListener('click', function(){ img.src=this.src; box.style.display='flex'; });
+  });
+  box.addEventListener('click', function(){ box.style.display='none'; img.src=''; });
+})();
+</script>
+<script>
+(function(){
+  const feedUrl = "{% url 'orders:customer_order_status_feed' order.pk %}";
+  let lastStatus = {{ order.order_status|default:0 }};
+  let lastPicked = {{ order.picked_items_count|default:0 }};
+  const terminalStatuses = [5, 6];
+  if (terminalStatuses.includes(lastStatus)) return;
+
+  async function pollOrderStatus(){
+    try {
+      const response = await fetch(feedUrl + '?_ts=' + Date.now(), {
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+        cache: 'no-store'
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const nextStatus = Number(payload.order_status || 0);
+      const nextPicked = Number(payload.picked_items_count || 0);
+      if (nextStatus !== lastStatus || nextPicked !== lastPicked) {
+        window.location.reload();
+        return;
+      }
+      lastStatus = nextStatus;
+      lastPicked = nextPicked;
+      if (terminalStatuses.includes(nextStatus)) {
+        clearInterval(pollTimer);
+      }
+    } catch (err) {
+      console.warn('Order status poll failed', err);
+    }
+  }
+
+  const pollTimer = setInterval(pollOrderStatus, 8000);
+})();
+</script>
+
+<script>
+window.NEVERQ_PAGE_TOUR_KEY = 'order-confirmation';
+window.NEVERQ_PAGE_TOUR = [
+  {selector:'.confirmation-shell, .container.final-page-shell, .container.order-detail-shell, .container', title:'Order confirmed', copy:'This page confirms the order and shows the next steps after placement.', placement:'bottom'},
+  {selector:'.ticket-card-clean, .confirmation-qr-card, .js-qr-enlarge', title:'Pickup QR', copy:'Use the QR card here at the correct counter during pickup.', placement:'top'},
+  {selector:'a[href*="order_history"], a[href*="order_detail"]', title:'Track the order', copy:'Use these buttons to watch status changes or open the full detail page.', placement:'top'}
+];
+</script>
+{% endblock %}

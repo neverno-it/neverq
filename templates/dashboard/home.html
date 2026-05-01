@@ -1,0 +1,289 @@
+{% extends "base/dashboard_base.html" %}
+{% load core_extras %}
+{% block page_heading %}Dashboard{% endblock %}
+
+{% block content %}
+<style>
+  .weekly-revenue-bars{display:flex;align-items:flex-end;gap:14px;height:250px;padding:8px 4px 0}
+  .weekly-revenue-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:10px}
+  .weekly-revenue-value{font-size:12px;font-weight:700;color:#7a8599;line-height:1}
+  .weekly-revenue-track{width:100%;max-width:58px;height:180px;display:flex;align-items:flex-end;justify-content:center;border-radius:18px;background:linear-gradient(180deg,#f7f9fc 0%,#eef3fb 100%)}
+  .weekly-revenue-bar{width:100%;border-radius:14px 14px 6px 6px;background:linear-gradient(180deg,#7cb4ff 0%,#1565C0 100%);box-shadow:0 10px 18px rgba(21,101,192,.18);min-height:0}
+  .weekly-revenue-day{font-size:12px;font-weight:800;color:#23395d;letter-spacing:.02em}
+  .weekly-revenue-empty{display:grid;place-items:center;height:250px;color:#7a8599;font-weight:700}
+  @media (max-width: 767.98px){
+    .weekly-revenue-bars{gap:8px;height:220px}
+    .weekly-revenue-track{max-width:40px;height:150px}
+    .weekly-revenue-value,.weekly-revenue-day{font-size:11px}
+  }
+</style>
+
+
+{# ── Stat Grid ─────────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <a href="{% url 'dashboard:customer_list' %}" class="stat-card" id="tourCustomersCard">
+      <div class="stat-icon blue"><i class="bi bi-people-fill"></i></div>
+      <div><div class="stat-value">{{ total_customers }}</div><div class="stat-label">Customers</div></div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="{% url 'dashboard:order_list' %}" class="stat-card">
+      <div class="stat-icon green"><i class="bi bi-bag-check-fill"></i></div>
+      <div><div class="stat-value">{{ today_web_orders }}</div><div class="stat-label">Orders Today</div></div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="{% url 'dashboard:order_list' %}" class="stat-card">
+      <div class="stat-icon orange"><i class="bi bi-currency-rupee"></i></div>
+      <div><div class="stat-value">₹{{ today_web_sale|floatformat:0 }}</div><div class="stat-label">Revenue Today</div></div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="{% url 'pos:order_list' %}" class="stat-card">
+      <div class="stat-icon red"><i class="bi bi-display"></i></div>
+      <div><div class="stat-value">{{ today_pos_orders }}</div><div class="stat-label">POS Today</div></div>
+    </a>
+  </div>
+</div>
+
+{# ── Secondary Stats ───────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <a href="{% url 'dashboard:order_list' %}" class="stat-card">
+      <div class="stat-icon indigo"><i class="bi bi-bag"></i></div>
+      <div><div class="stat-value">{{ total_web_orders }}</div><div class="stat-label">Total Web Orders</div></div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="{% url 'dashboard:order_list' %}" class="stat-card">
+      <div class="stat-icon green"><i class="bi bi-graph-up-arrow"></i></div>
+      <div><div class="stat-value">₹{{ total_web_sale|floatformat:0 }}</div><div class="stat-label">Total Web Revenue</div></div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="{% url 'pos:order_list' %}" class="stat-card">
+      <div class="stat-icon purple"><i class="bi bi-receipt"></i></div>
+      <div><div class="stat-value">{{ total_pos_orders }}</div><div class="stat-label">Total POS Orders</div></div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="{% url 'pos:order_list' %}" class="stat-card">
+      <div class="stat-icon teal"><i class="bi bi-cash-stack"></i></div>
+      <div><div class="stat-value">₹{{ total_pos_sale|floatformat:0 }}</div><div class="stat-label">Total POS Revenue</div></div>
+    </a>
+  </div>
+</div>
+
+{# ── Chart + Quick Actions ─────────────────────────────────── #}
+<div class="row g-3 mb-4">
+  <div class="col-lg-8">
+    <div class="cf-card h-100" id="tourRevenueChart">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-bar-chart-line"></i>Weekly Revenue</h5>
+        <a href="{% url 'dashboard:order_list' %}?export=csv" class="btn btn-cf-ghost btn-sm">
+          <i class="bi bi-download me-1"></i>Export CSV
+        </a>
+      </div>
+      <div class="cf-card-body" style="padding:20px;">
+        {% if weekly_max_revenue > 0 %}
+        <div class="weekly-revenue-bars" role="img" aria-label="Weekly revenue bar chart">
+          {% for point in weekly_data %}
+          <div class="weekly-revenue-col">
+            <div class="weekly-revenue-value">₹{{ point.revenue|floatformat:0 }}</div>
+            <div class="weekly-revenue-track">
+              <div class="weekly-revenue-bar" style="height:{% widthratio point.revenue weekly_max_revenue 100 %}%;{% if point.revenue > 0 %}min-height:10px;{% endif %}"></div>
+            </div>
+            <div class="weekly-revenue-day">{{ point.date }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="weekly-revenue-empty">No revenue recorded in the last 7 days.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="cf-card h-100" id="tourQuickActions">
+      <div class="cf-card-header"><h5><i class="bi bi-lightning-charge-fill text-red"></i>Quick Actions</h5></div>
+      <div class="cf-card-body d-flex flex-column gap-2">
+        <a href="{% url 'pos:terminal' %}" class="btn btn-cf-primary"><i class="bi bi-display me-2"></i>POS Terminal</a>
+        <a href="{% url 'dashboard:order_list' %}" class="btn btn-cf-outline"><i class="bi bi-bag-check me-2"></i>View All Orders</a>
+        <a href="{% url 'dashboard:customer_add' %}" class="btn btn-cf-ghost"><i class="bi bi-person-plus me-2"></i>Add Customer</a>
+        <a href="{% url 'dashboard:product_list' %}" class="btn btn-cf-ghost"><i class="bi bi-egg-fried me-2"></i>Manage Products</a>
+        <a href="{% url 'dashboard:product_add' %}" class="btn btn-cf-ghost"><i class="bi bi-plus-circle me-2"></i>Add Product</a>
+        <a href="{% url 'dashboard:reports' %}" class="btn btn-cf-ghost"><i class="bi bi-bar-chart-line me-2"></i>Reports</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Today's Item Breakdown ────────────────────────────────── #}
+<div class="row g-3 mb-4">
+  <div class="col-lg-6">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-globe2"></i>Today's Web Orders — By Item</h5>
+        <form method="get">
+          <input type="hidden" name="pos_company" value="{{ pos_company_filter }}">
+          <select name="web_company" class="form-select form-select-sm" style="width:160px;" onchange="this.form.submit()">
+            <option value="">All Companies</option>
+            {% for co in companies %}
+              <option value="{{ co.pk }}" {% if web_company_filter == co.pk|stringformat:'s' %}selected{% endif %}>{{ co.name|truncatechars:22 }}</option>
+            {% endfor %}
+          </select>
+        </form>
+      </div>
+      <div style="max-height:260px;overflow-y:auto;">
+        <table class="cf-table">
+          <thead><tr><th>Item</th><th style="text-align:right;">Qty Sold</th></tr></thead>
+          <tbody>
+            {% for item in today_web_items %}
+            <tr>
+              <td class="td-main">{{ item.product__name|default:"Unknown" }}</td>
+              <td style="text-align:right;"><span class="fw-700 text-blue">{{ item.cnt }}</span></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="2"><div class="empty-state" style="padding:28px 16px;"><div class="empty-icon">🌐</div><p>No web orders today.</p></div></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-display" style="color:var(--cf-orange);"></i>Today's POS Orders — By Item</h5>
+        <form method="get">
+          <input type="hidden" name="web_company" value="{{ web_company_filter }}">
+          <select name="pos_company" class="form-select form-select-sm" style="width:160px;" onchange="this.form.submit()">
+            <option value="">All Companies</option>
+            {% for co in companies %}
+              <option value="{{ co.pk }}" {% if pos_company_filter == co.pk|stringformat:'s' %}selected{% endif %}>{{ co.name|truncatechars:22 }}</option>
+            {% endfor %}
+          </select>
+        </form>
+      </div>
+      <div style="max-height:260px;overflow-y:auto;">
+        <table class="cf-table">
+          <thead><tr><th>Item</th><th style="text-align:right;">Qty Sold</th></tr></thead>
+          <tbody>
+            {% for item in today_pos_items %}
+            <tr>
+              <td class="td-main">{{ item.product_name|default:"Unknown" }}</td>
+              <td style="text-align:right;"><span class="fw-700" style="color:var(--cf-orange);">{{ item.cnt }}</span></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="2"><div class="empty-state" style="padding:28px 16px;"><div class="empty-icon">🖥️</div><p>No POS orders today.</p></div></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="cf-card" id="tourBirthdayAlerts">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-gift-fill text-danger"></i>Birthday Alerts</h5>
+        <span class="badge-cf badge-info">{{ birthdays_today_count|default:0 }} today</span>
+      </div>
+      <div class="cf-card-body p-0">
+        {% if upcoming_birthdays %}
+        <div style="overflow-x:auto;">
+          <table class="cf-table mb-0">
+            <thead>
+              <tr><th>Customer</th><th>Company</th><th>Building</th><th>Birth date</th><th>Alert</th></tr>
+            </thead>
+            <tbody>
+              {% for customer in upcoming_birthdays %}
+              <tr>
+                <td>
+                  <div class="td-main">{{ customer.name }}</div>
+                  {% if customer.phone %}<div class="td-sub">{{ customer.phone }}</div>{% endif %}
+                </td>
+                <td class="td-sub">{{ customer.company.name|default:'—' }}</td>
+                <td class="td-sub">{{ customer.building.name|default:'—' }}</td>
+                <td class="td-sub">{{ customer.date_of_birth|date:"d M" }}</td>
+                <td>
+                  {% if customer.days_until_birthday == 0 %}
+                    <span class="badge-cf badge-active">Today{% if customer.upcoming_age %} · Turning {{ customer.upcoming_age }}{% endif %}</span>
+                  {% elif customer.days_until_birthday == 1 %}
+                    <span class="badge-cf badge-warning">Tomorrow{% if customer.upcoming_age %} · Turning {{ customer.upcoming_age }}{% endif %}</span>
+                  {% else %}
+                    <span class="badge-cf badge-info">In {{ customer.days_until_birthday }} days{% if customer.upcoming_age %} · Turning {{ customer.upcoming_age }}{% endif %}</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <div class="empty-icon">🎂</div>
+          <h6>No upcoming birthdays</h6>
+          <p>No active customer birthdays fall within the next 30 days.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Recent Orders ─────────────────────────────────────────── #}
+<div class="cf-card" id="tourRecentOrders">
+  <div class="cf-card-header">
+    <h5><i class="bi bi-clock-history"></i>Recent Orders</h5>
+    <a href="{% url 'dashboard:order_list' %}" class="btn btn-cf-outline btn-sm">View All Orders</a>
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="cf-table">
+      <thead>
+        <tr><th>Order</th><th>Customer</th><th>Amount</th><th>Payment</th><th>Status</th><th>Date</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for order in recent_orders %}
+        <tr>
+          <td>
+            <div class="td-main">{{ order.order_number|short_order_no }}</div>
+            {% if order.company %}<div class="td-sub">{{ order.company.name }}</div>{% endif %}
+          </td>
+          <td>
+                        <div class="td-main">{{ order.display_customer_name }}</div>
+                        {% if order.display_customer_phone %}<div class="td-sub">{{ order.display_customer_phone }}</div>{% endif %}
+          </td>
+          <td><span class="fw-700">₹{{ order.total_amount }}</span></td>
+          <td><span class="badge-cf badge-info">{{ order.get_payment_mode_display }}</span></td>
+          <td><span class="badge-cf bg-{{ order.status_color }}">{{ order.status_label }}</span></td>
+          <td class="td-sub">{{ order.created_at|date:"d M, h:i A" }}</td>
+          <td><a href="{% url 'dashboard:order_detail' order.pk %}" class="btn btn-cf-ghost btn-icon"><i class="bi bi-eye"></i></a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📦</div><h6>No orders yet</h6><p>Orders will appear here when customers place them.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+window.NEVERQ_DASHBOARD_TOUR_KEY = 'dashboard-home';
+window.NEVERQ_DASHBOARD_TOUR = [
+  {selector:'#sidebar .brand-logo-link', title:'Main workspace', copy:'Your left sidebar is the command center for operations, menu setup, users, reports, and company controls.', placement:'right'},
+  {selector:'[data-group="overview"]', title:'Overview section', copy:'Dashboard, cashier dashboard, and kitchen orders are grouped here for day-to-day control.', placement:'right'},
+  {selector:'[data-group="operations"]', title:'Operations section', copy:'This section gives quick access to web orders, counter tickets, POS terminal, POS orders, and flash ordering.', placement:'right'},
+  {selector:'#tourCustomersCard', title:'KPI cards', copy:'These top cards give a fast snapshot of customers, web orders, revenue, and POS activity.', placement:'bottom'},
+  {selector:'#tourRevenueChart', title:'Revenue trend', copy:'Weekly Revenue shows short-term sales movement without opening detailed reports.', placement:'bottom'},
+  {selector:'#tourQuickActions', title:'Quick actions', copy:'Use these shortcuts for the most common tasks like POS, orders, customers, products, and reports.', placement:'left'},
+  {selector:'#tourBirthdayAlerts', title:'Birthday alerts', copy:'Use this list to see today's and upcoming customer birthdays for gifting or engagement planning.', placement:'top'},
+  {selector:'#tourRecentOrders', title:'Recent orders', copy:'This table helps the team jump into the latest orders quickly when support or follow-up is needed.', placement:'top'}
+];
+</script>
+{% endblock %}

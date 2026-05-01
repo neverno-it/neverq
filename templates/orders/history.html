@@ -1,0 +1,196 @@
+{% extends "base/customer_base.html" %}
+{% load static %}
+{% load core_extras %}
+{% block extra_head %}
+<style>
+  .order-shell { padding-top: 16px; }
+  .order-page-head {display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px;}
+  .order-page-title { margin:0; font-size: clamp(28px, 4vw, 40px); line-height: .95; }
+  .order-page-subtitle { color: var(--cf-muted); font-size: 14px; margin-top: 6px; }
+  .order-kpi-card {background:linear-gradient(180deg,#fff,#f8fbff);border:1px solid var(--cf-border);border-radius:20px;padding:18px;box-shadow:var(--cf-shadow-soft);height:100%;}
+  .order-kpi-label { font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--cf-muted); }
+  .order-kpi-value { font-family:'Rajdhani',sans-serif; font-size: clamp(28px, 4vw, 40px); line-height: 1; margin-top: 8px; color: var(--cf-navy); }
+  .order-list-card {background:linear-gradient(180deg,#fff,#f9fbff);border:1px solid var(--cf-border);border-radius:22px;box-shadow:var(--cf-shadow-soft);padding:18px;}
+  .order-topline { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+  .order-title { margin:0; font-size: clamp(22px, 3vw, 32px); line-height: .98; color:var(--cf-navy); }
+  .order-number-small { color: var(--cf-muted); font-size: 13px; margin-top: 6px; }
+  .order-meta-line { color: var(--cf-muted); font-size: 13px; margin-top:4px; }
+  .order-chip-row { display:flex; flex-wrap:wrap; gap:8px; margin-top: 12px; }
+  .order-price-block { text-align:right; }
+  .order-price-label { color: var(--cf-muted); font-size: 12px; }
+  .order-price-value { font-family:'Rajdhani',sans-serif; font-size: clamp(30px, 4vw, 42px); line-height:.9; color: var(--cf-navy); }
+  .order-action-row { display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-end; }
+  @media (max-width: 767.98px) {
+    .order-shell { padding-top: 10px; }
+    .order-page-head { margin-bottom: 14px; }
+    .order-kpi-card,.order-list-card { padding: 14px; border-radius: 18px; }
+    .order-price-block { text-align:left; }
+    .order-action-row { justify-content:stretch; }
+    .order-action-row .btn, .order-action-row form { width:100%; }
+    .order-action-row form .btn { width:100%; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container order-shell">
+  <div class="order-page-head">
+    <div>
+      <h1 class="order-page-title">My Orders</h1>
+      <div class="order-page-subtitle">Track live status, rate received food, and reorder in one place.</div>
+    </div>
+    <a href="{% url 'menu:menu' %}" class="btn btn-cf-primary"><i class="bi bi-plus-lg me-1"></i>New order</a>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-xl-3"><div class="order-kpi-card"><div class="order-kpi-label">Total Orders</div><div class="order-kpi-value">{{ stats.total_orders }}</div></div></div>
+    <div class="col-6 col-xl-3"><div class="order-kpi-card"><div class="order-kpi-label">Active</div><div class="order-kpi-value">{{ stats.active_orders }}</div></div></div>
+    <div class="col-6 col-xl-3"><div class="order-kpi-card"><div class="order-kpi-label">Delivered</div><div class="order-kpi-value">{{ stats.delivered_orders }}</div></div></div>
+    <div class="col-6 col-xl-3"><div class="order-kpi-card"><div class="order-kpi-label">Total Spend</div><div class="order-kpi-value">₹{{ stats.total_spend|floatformat:0 }}</div></div></div>
+  </div>
+
+  {% if orders %}
+    <div class="d-flex flex-column gap-3">
+      {% for order in orders %}
+        <div class="order-list-card" data-order-id="{{ order.pk }}" data-order-status="{{ order.order_status|default:0 }}">
+          <div class="row g-3 align-items-center">
+            <div class="col-lg-8">
+              <div class="order-topline">
+                <div>
+                  <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                    <h3 class="order-title">{{ order.display_title }}</h3>
+                    <span class="badge-cf bg-{{ order.status_color }}-subtle">{{ order.status_label }}</span>
+                  </div>
+                  <div class="order-number-small">Order #{{ order.order_number|short_order_no }}</div>
+                  <div class="order-meta-line">
+                    {{ order.created_at|date:"d M Y, h:i A" }} ·
+                    {% if order.is_wallet_recharge %}
+                      Wallet recharge · {{ order.recharge_payment_label }}
+                    {% else %}
+                      {{ order.item_count_display }} item{{ order.item_count_display|pluralize }} · {{ order.get_payment_mode_display }}
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              <div class="order-chip-row">
+                {% if order.is_wallet_recharge %}
+                  <span class="pill-muted">Wallet added Rs.{{ order.recharge_wallet_amount|floatformat:2 }}</span>
+                {% else %}
+                {% for item in order.items.all|slice:":4" %}
+                  <span class="pill-muted">{{ item.product.name|default:"Item" }}{% if item.qty > 1 %} ×{{ item.qty }}{% endif %}</span>
+                {% endfor %}
+                {% if order.item_count_display > 4 %}<span class="pill-muted">+{{ order.item_count_display|add:"-4" }} more</span>{% endif %}
+                {% endif %}
+              </div>
+            </div>
+            <div class="col-lg-4">
+              <div class="d-flex flex-column gap-3 align-items-lg-end">
+                <div class="order-price-block">
+                  <div class="order-price-label">{% if order.is_wallet_recharge %}Wallet added{% elif order.bill_to_company > 0 %}You paid{% else %}Order total{% endif %}</div>
+                  <div class="order-price-value">₹{{ order.my_pay|floatformat:2 }}</div>
+                  {% if order.is_wallet_recharge %}<div class="small text-muted">Credited Rs.{{ order.recharge_wallet_amount|floatformat:2 }}</div>{% endif %}
+                  {% if order.bill_to_company > 0 %}<div class="small text-muted">Company covered ₹{{ order.bill_to_company|floatformat:2 }}</div>{% endif %}
+                </div>
+                <div class="order-action-row">
+                  <a href="{% url 'orders:order_detail' order.pk %}" class="btn btn-cf-outline">View details</a>
+                  {% if not order.is_wallet_recharge %}
+                  {% if order.can_leave_review %}
+                    <a href="{% url 'reviews:leave_review' order.pk %}" class="btn btn-cf-soft"><i class="bi bi-star me-1"></i>Rate food</a>
+                  {% endif %}
+                  <form method="post" action="{% url 'orders:reorder_order' order.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-cf-primary"><i class="bi bi-arrow-repeat me-1"></i>Reorder</button>
+                  </form>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <div style="margin-bottom:14px;">
+        <img src="{% static 'img/no-orders-icon.webp' %}" alt="No orders yet" style="width:110px;height:110px;object-fit:contain;">
+      </div>
+      <h4>No orders yet</h4>
+      <p class="text-muted">Once you place your first order, it will appear here.</p>
+      <a href="{% url 'menu:menu' %}" class="btn btn-cf-primary">Start ordering</a>
+    </div>
+  {% endif %}
+</div>
+<script>
+(function(){
+  const feedUrl = "{% url 'orders:customer_order_history_feed' %}";
+  const cards = Array.from(document.querySelectorAll('[data-order-id]'));
+  const terminalStatuses = [5, 6];
+  if (!cards.length) return;
+
+  function snapshotFromDom(){
+    return JSON.stringify(
+      cards.map(function(card){
+        return {
+          pk: Number(card.dataset.orderId || 0),
+          order_status: Number(card.dataset.orderStatus || 0),
+        };
+      })
+    );
+  }
+
+  function allTerminal(rows){
+    return (rows || []).length > 0 && (rows || []).every(function(row){
+      return terminalStatuses.includes(Number(row.order_status || 0));
+    });
+  }
+
+  const domRows = cards.map(function(card){
+    return {
+      pk: Number(card.dataset.orderId || 0),
+      order_status: Number(card.dataset.orderStatus || 0),
+    };
+  });
+  let lastSnapshot = JSON.stringify(domRows);
+  if (allTerminal(domRows)) return;
+
+  async function pollHistory(){
+    try {
+      const response = await fetch(feedUrl + '?_ts=' + Date.now(), {
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+        cache: 'no-store'
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const rows = (payload.orders || []).map(function(row){
+        return {
+          pk: Number(row.pk || 0),
+          order_status: Number(row.order_status || 0),
+        };
+      });
+      const nextSnapshot = JSON.stringify(rows);
+      if (nextSnapshot !== lastSnapshot) {
+        window.location.reload();
+        return;
+      }
+      lastSnapshot = nextSnapshot;
+      if (allTerminal(rows)) {
+        clearInterval(pollTimer);
+      }
+    } catch (err) {
+      console.warn('Order history poll failed', err);
+    }
+  }
+
+  const pollTimer = setInterval(pollHistory, 8000);
+})();
+</script>
+
+<script>
+window.NEVERQ_PAGE_TOUR_KEY = 'order-history';
+window.NEVERQ_PAGE_TOUR = [
+  {selector:'.order-page-head', title:'My Orders', copy:'This page gathers all your earlier orders and active ones in one place.', placement:'bottom'},
+  {selector:'.row.g-3.mb-4', title:'Order snapshot', copy:'These cards give you a quick view of total orders, active orders, deliveries, and total spend.', placement:'bottom'},
+  {selector:'.order-list-card', title:'Track each order', copy:'Every order card shows status, short order number, price, and quick actions like reorder or review.', placement:'top'},
+  {selector:'.bottom-nav', title:'Switch pages quickly', copy:'Use bottom navigation to jump back to menu, cart, profile, or checkout.', placement:'top'}
+];
+</script>
+{% endblock %}

@@ -1,0 +1,45 @@
+<div class="d-flex flex-wrap align-items-center gap-3 mb-3 bulk-delete-toolbar" data-bulk-form="{{ bulk_form_id }}">
+  <label class="d-inline-flex align-items-center gap-2 small text-muted mb-0" style="cursor:pointer;">
+    <input type="checkbox" class="form-check-input bulk-select-all" data-bulk-form="{{ bulk_form_id }}">
+    <span>Select all</span>
+  </label>
+  <span class="small text-muted"><strong id="{{ bulk_form_id }}-count">0</strong> selected</span>
+  <button type="submit" form="{{ bulk_form_id }}" class="btn btn-outline-danger btn-sm" id="{{ bulk_form_id }}-delete-btn" disabled onclick="return confirm('{{ bulk_confirm_message|default:"Delete selected items?"|escapejs }}');">
+    <i class="bi bi-trash me-1"></i>Delete Selected
+  </button>
+</div>
+<form method="post" id="{{ bulk_form_id }}" action="{{ bulk_action }}" style="display:none;">{% csrf_token %}</form>
+<script>
+(function(){
+  function initBulkDeleteToolbar(toolbar){
+    if (!toolbar || toolbar.dataset.bulkReady === '1') return;
+    toolbar.dataset.bulkReady = '1';
+    const formId = toolbar.dataset.bulkForm;
+    const selectAll = toolbar.querySelector('.bulk-select-all');
+    const countEl = document.getElementById(formId + '-count');
+    const deleteBtn = document.getElementById(formId + '-delete-btn');
+    const getChecks = () => Array.from(document.querySelectorAll('.bulk-item-check[data-bulk-form-input="' + formId + '"]'));
+    const sync = () => {
+      const checks = getChecks();
+      const checked = checks.filter(c => c.checked);
+      if (countEl) countEl.textContent = checked.length;
+      if (deleteBtn) deleteBtn.disabled = checked.length === 0;
+      if (selectAll) selectAll.checked = checks.length > 0 && checked.length === checks.length;
+      if (selectAll) selectAll.indeterminate = checked.length > 0 && checked.length < checks.length;
+    };
+    if (selectAll) {
+      selectAll.addEventListener('change', function(){
+        getChecks().forEach(c => { c.checked = selectAll.checked; });
+        sync();
+      });
+    }
+    document.addEventListener('change', function(e){
+      if (e.target.classList.contains('bulk-item-check') && e.target.dataset.bulkFormInput === formId) {
+        sync();
+      }
+    });
+    sync();
+  }
+  document.querySelectorAll('.bulk-delete-toolbar').forEach(initBulkDeleteToolbar);
+})();
+</script>

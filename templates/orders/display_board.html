@@ -1,0 +1,1049 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page_title|default:'Live Order Board' }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=DM+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --board-primary: {{ board_cfg.effective_theme_color|default:'#1e3a5f' }};
+      --board-secondary: #3143a3;
+      --panel-bg: rgba(13, 21, 72, 0.78);
+      --panel-bg-2: rgba(9, 17, 58, 0.86);
+      --soft-border: rgba(255,255,255,0.14);
+      --text-main: #ffffff;
+      --text-soft: rgba(255,255,255,0.72);
+      --pending: #ef4444;
+      --confirmed: #fde047;
+      --preparing: #60a5fa;
+      --ready: #34d399;
+      --chip-text-dark: #061a2f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      font-family: 'DM Sans', sans-serif;
+      color: var(--text-main);
+      background:
+        linear-gradient(140deg, rgba(0,0,0,0.18), rgba(0,0,0,0.12)),
+        {% if board_cfg and board_cfg.background_image %}url('{{ board_cfg.background_image.url }}') center/cover no-repeat,{% endif %}
+        linear-gradient(115deg, var(--board-secondary) 0%, var(--board-primary) 58%, #48286f 100%);
+      overflow: hidden;
+    }
+    .board-shell {
+      min-height: 100dvh;
+      height: 100dvh;
+      padding: .7rem .8rem;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: .7rem;
+      position: relative;
+      isolation: isolate;
+    }
+    .board-shell::before {
+      content: "{{ board_cfg.effective_side_text|default:'ORDER STATUS'|upper }}";
+      position: absolute;
+      left: -1rem;
+      top: 50%;
+      transform: translateY(-50%) rotate(-90deg);
+      transform-origin: left top;
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 700;
+      font-size: clamp(4rem, 8vw, 6rem);
+      letter-spacing: .25rem;
+      color: rgba(255,255,255,.08);
+      pointer-events: none;
+      z-index: 0;
+      white-space: nowrap;
+    }
+    .surface {
+      background: linear-gradient(180deg, rgba(14, 23, 81, 0.84), rgba(10, 17, 59, 0.78));
+      border: 1px solid var(--soft-border);
+      border-radius: 1.25rem;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 18px 50px rgba(0,0,0,.2);
+    }
+    .top-bar {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) auto;
+      align-items: center;
+      gap: .8rem;
+      padding: .8rem 1rem;
+    }
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: .85rem;
+      min-width: 0;
+    }
+    .brand-logo {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex: 0 0 auto;
+      border: 1px solid rgba(255,255,255,.14);
+    }
+    .brand-logo img, .footer-logo img { width: 100%; height: 100%; object-fit: contain; }
+    .eyebrow {
+      font-style: italic;
+      font-weight: 800;
+      letter-spacing: .02rem;
+      color: rgba(255,255,255,.88);
+      margin-bottom: .15rem;
+      font-size: .86rem;
+    }
+    .brand-title {
+      margin: 0;
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 700;
+      font-size: clamp(1.65rem, 2.6vw, 2.25rem);
+      letter-spacing: .04rem;
+      line-height: .95;
+      text-transform: uppercase;
+    }
+    .brand-subtitle {
+      color: var(--text-soft);
+      font-size: .82rem;
+      margin-top: .18rem;
+    }
+    .controls-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: .6rem;
+      flex-wrap: wrap;
+    }
+    .sound-btn, .filter-select, .clock-pill {
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      padding: .55rem .9rem;
+      font-weight: 800;
+      min-height: 42px;
+      font-size: .95rem;
+    }
+    .sound-btn { cursor: pointer; }
+    .sound-btn.enabled {
+      background: linear-gradient(135deg, #39d98a, #17c37b);
+      color: #062f25;
+      border-color: transparent;
+    }
+    .filter-select option { color: #111827; }
+    .clock-pill {
+      min-width: 98px;
+      text-align: center;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 1rem;
+      letter-spacing: .03rem;
+    }
+    .board-main {
+      position: relative;
+      z-index: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1.12fr) minmax(440px, 1.02fr);
+      gap: .75rem;
+    }
+    .orders-panel,
+    .promo-panel {
+      min-height: 0;
+      position: relative;
+      overflow: hidden;
+      padding: .78rem .88rem;
+    }
+    .orders-panel {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: .75rem;
+    }
+    .promo-panel {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: .55rem;
+    }
+    .panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: .75rem;
+    }
+    .panel-title {
+      margin: 0;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: clamp(1.4rem, 2.2vw, 1.9rem);
+      font-weight: 700;
+      letter-spacing: .04rem;
+      text-transform: uppercase;
+    }
+    .panel-subtitle {
+      margin: .12rem 0 0;
+      color: var(--text-soft);
+      font-size: .82rem;
+    }
+    .page-pill {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      padding: .38rem .7rem;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.14);
+      font-weight: 800;
+      font-size: .82rem;
+      min-width: 64px;
+      white-space: nowrap;
+    }
+    .summary-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: .55rem;
+    }
+    .summary-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .22rem;
+      border-radius: .95rem;
+      padding: .56rem .7rem;
+      font-family: 'Rajdhani', sans-serif;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: .03rem;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+    }
+    .summary-pill .count {
+      min-width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .92rem;
+      background: rgba(0,0,0,.12);
+    }
+    .summary-pill.ready { background: rgba(52,211,153,.95); color: #062f25; }
+    .summary-pill.confirmed { background: rgba(253,224,71,.95); color: #3a3103; }
+    .summary-pill.preparing { background: rgba(96,165,250,.95); color: #fff; }
+    .summary-pill.pending { background: rgba(239,68,68,.95); color: #fff; }
+    .grid-wrap {
+      min-height: 0;
+      position: relative;
+      border-radius: .85rem;
+      border: 1px solid rgba(255,255,255,.08);
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
+      padding: .8rem;
+      overflow: hidden;
+    }
+    .order-grid {
+      height: 100%;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 185px));
+      justify-content: start;
+      align-content: start;
+      gap: .55rem;
+    }
+    .empty-state {
+      position: absolute;
+      inset: .8rem;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      border-radius: .85rem;
+      border: 1px dashed rgba(255,255,255,.18);
+      color: rgba(255,255,255,.62);
+      font-weight: 800;
+      font-size: 1.1rem;
+      letter-spacing: .02rem;
+    }
+    .order-card {
+      min-height: 54px;
+      border-radius: .75rem;
+      padding: .46rem .62rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: .18rem;
+      border: 1px solid rgba(255,255,255,.14);
+      box-shadow: 0 8px 18px rgba(0,0,0,.14);
+      position: relative;
+      overflow: hidden;
+      max-width: 185px;
+    }
+    .order-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,0));
+      pointer-events: none;
+    }
+    .order-card.ready { background: linear-gradient(145deg, rgba(52,211,153,.96), rgba(16,185,129,.9)); color: #062f25; }
+    .order-card.confirmed { background: linear-gradient(145deg, rgba(253,224,71,.98), rgba(250,204,21,.92)); color: #3a3103; }
+    .order-card.preparing { background: linear-gradient(145deg, rgba(96,165,250,.95), rgba(59,130,246,.9)); color: #ffffff; }
+    .order-card.pending { background: linear-gradient(145deg, rgba(239,68,68,.96), rgba(220,38,38,.92)); color: #ffffff; }
+    .order-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .45rem;
+      position: relative;
+      z-index: 1;
+    }
+    .order-number {
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 700;
+      font-size: clamp(.9rem, 1vw, 1.04rem);
+      letter-spacing: .02rem;
+      line-height: 1;
+    }
+    .status-tag {
+      flex: 0 0 auto;
+      border-radius: 999px;
+      padding: .18rem .48rem;
+      font-size: .58rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .04rem;
+      background: rgba(0,0,0,.12);
+      color: inherit;
+      white-space: nowrap;
+    }
+    .order-name {
+      position: relative;
+      z-index: 1;
+      font-size: .58rem;
+      font-weight: 700;
+      letter-spacing: .04rem;
+      text-transform: uppercase;
+      opacity: .95;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .order-top {
+      align-items: center;
+    }
+    .order-number {
+      letter-spacing: .02rem;
+      line-height: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      word-break: normal;
+      overflow-wrap: normal;
+      flex: 1 1 auto;
+    }
+    .status-tag {
+      padding: .14rem .34rem;
+      font-size: .5rem;
+      letter-spacing: .03rem;
+      flex: 0 0 auto;
+    }
+    .order-name {
+      white-space: nowrap;
+      line-height: 1;
+      min-height: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: block;
+      -webkit-line-clamp: unset;
+      -webkit-box-orient: unset;
+    }
+    .promo-panel {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: .7rem;
+    }
+    .hero-heading {
+      margin: 0;
+      text-align: right;
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 700;
+      font-size: clamp(2.1rem, 4.2vw, 4rem);
+      line-height: .9;
+      text-transform: uppercase;
+      text-shadow: 0 10px 30px rgba(0,0,0,.18);
+    }
+    .promo-card {
+      position: relative;
+      min-height: 0;
+      border-radius: 1.2rem;
+      overflow: hidden;
+      border: 4px solid rgba(255,0,0,.86);
+      background: rgba(0,0,0,.16);
+      box-shadow: 0 16px 42px rgba(0,0,0,.22);
+    }
+    .promo-frame,
+    .promo-placeholder,
+    .promo-preview {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+    .promo-placeholder,
+    .promo-preview {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 1rem;
+    }
+    .promo-placeholder {
+      background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+      color: rgba(255,255,255,0.72);
+      font-weight: 800;
+    }
+    .promo-preview {
+      text-decoration: none;
+      color: #fff;
+      overflow: hidden;
+      background: #000;
+    }
+    .promo-preview img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: brightness(.75);
+    }
+    .promo-preview-overlay {
+      position: relative;
+      z-index: 1;
+      max-width: 75%;
+      padding: 1rem 1.1rem;
+      border-radius: .85rem;
+      background: rgba(0,0,0,.4);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 12px 28px rgba(0,0,0,.22);
+      font-weight: 800;
+      line-height: 1.35;
+    }
+    .promo-note {
+      font-size: .76rem;
+      color: rgba(255,255,255,.62);
+      text-align: right;
+      margin-top: -.05rem;
+    }
+    .footer-bar {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .8rem;
+      padding: .65rem .9rem;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+    }
+    .legend-pill {
+      border-radius: .85rem;
+      padding: .42rem .72rem;
+      font-family: 'Rajdhani', sans-serif;
+      font-size: .86rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      min-width: 96px;
+      text-align: center;
+      box-shadow: 0 8px 18px rgba(0,0,0,.16);
+    }
+    .legend-pill.ready { background: #fb923c; color: #fff; }
+    .legend-pill.confirmed { background: var(--confirmed); color: #3a3103; }
+    .legend-pill.preparing { background: var(--preparing); color: #fff; }
+    .legend-pill.pending { background: var(--pending); color: #fff; }
+    .footer-brand {
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+      min-width: 0;
+      margin-left: auto;
+    }
+    .footer-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(255,255,255,.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .footer-text {
+      font-size: .82rem;
+      color: rgba(255,255,255,.82);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    @media (max-height: 860px) {
+      .board-shell { padding: .55rem .65rem; gap: .55rem; }
+      .top-bar { padding: .65rem .85rem; }
+      .eyebrow { font-size: .76rem; }
+      .brand-title { font-size: clamp(1.35rem, 2.2vw, 1.85rem); }
+      .brand-subtitle { font-size: .74rem; }
+      .sound-btn, .filter-select, .clock-pill { min-height: 38px; padding: .46rem .78rem; font-size: .86rem; }
+      .summary-pill { padding: .48rem .62rem; }
+      .grid-wrap { padding: .65rem; }
+      .order-grid { grid-template-columns: repeat(auto-fill, minmax(148px, 172px)); justify-content: start; gap: .42rem; }
+      .order-card { min-height: 50px; padding: .4rem .5rem; max-width: 172px; }
+      .order-number { font-size: clamp(.95rem, 1.45vw, 1.2rem); }
+      .order-name { font-size: .7rem; }
+      .hero-heading { font-size: clamp(1.7rem, 3.2vw, 3rem); }
+      .footer-bar { padding: .52rem .75rem; }
+      .legend-pill { min-width: 84px; font-size: .76rem; }
+    }
+    @media (max-width: 1180px) {
+      body { overflow: auto; }
+      .board-shell { min-height: auto; height: auto; }
+      .top-bar { grid-template-columns: 1fr; }
+      .controls-row { justify-content: flex-start; }
+      .board-main { grid-template-columns: 1fr; }
+      .hero-heading, .promo-note { text-align: left; }
+      .summary-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .promo-panel { min-height: 420px; }
+    }
+    @media (max-width: 700px) {
+      .brand-wrap { align-items: flex-start; }
+      .summary-row { grid-template-columns: 1fr 1fr; }
+      .order-grid { grid-template-columns: repeat(auto-fill, minmax(138px, 160px)); justify-content: start; }
+      .legend-pill { flex: 1 1 calc(50% - .5rem); min-width: 0; }
+      .footer-bar { flex-direction: column; align-items: stretch; }
+      .footer-brand { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  {{ initial_board_data|json_script:"board-data" }}
+  {{ feed_url|json_script:"feed-url" }}
+  <div class="board-shell">
+    <header class="top-bar surface">
+      <div class="brand-wrap">
+        {% if board_cfg and board_cfg.effective_logo %}
+        <div class="brand-logo"><img src="{{ board_cfg.effective_logo.url }}" alt="logo"></div>
+        {% endif %}
+        <div>
+          <div class="eyebrow">{{ board_cfg.effective_waiting_text|default:'Waiting for orders...' }}</div>
+          <h1 class="brand-title">{% if company %}{{ company.name }}{% else %}Live Order Board{% endif %}</h1>
+          <div class="brand-subtitle">Ready-order buzzer and live board view</div>
+        </div>
+      </div>
+      <div class="controls-row">
+        {% if not board_cfg or board_cfg.show_company_filter %}
+        <form method="get" class="m-0">
+          <select name="company" class="filter-select" onchange="this.form.submit()">
+            <option value="">{% if requires_company_selection %}Select company{% else %}All Companies{% endif %}</option>
+            {% for c in companies %}
+            <option value="{{ c.id }}" {% if company and c.id == company.id %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        {% if company and board_configs %}
+        <form method="get" class="m-0">
+          <input type="hidden" name="company" value="{{ company.pk }}">
+          <select name="board" class="filter-select" onchange="this.form.submit()">
+            <option value="">Default board</option>
+            {% for cfg in board_configs %}
+            <option value="{{ cfg.slug }}" {% if board_cfg and cfg.pk == board_cfg.pk %}selected{% endif %}>{{ cfg.name }}{% if cfg.building %} - {{ cfg.building.name }}{% endif %}</option>
+            {% endfor %}
+          </select>
+        </form>
+        {% endif %}
+        {% endif %}
+        {% if not board_cfg or board_cfg.sound_enabled or board_cfg.voice_enabled %}
+        <button type="button" class="sound-btn" id="enableSoundBtn">🔊 Enable Sound</button>
+        {% endif %}
+        {% if not board_cfg or board_cfg.show_clock %}
+        <div class="clock-pill" id="clock">00:00</div>
+        {% endif %}
+      </div>
+    </header>
+
+    <main class="board-main">
+      <section class="orders-panel surface">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">All Orders</h2>
+            <p class="panel-subtitle">{% if requires_company_selection %}Select a company to load its live board safely.{% else %}Single live grid with status-wise colors for quicker TV visibility{% endif %}</p>
+          </div>
+          <div class="page-pill" id="pageIndicator">1 / 1</div>
+        </div>
+
+        <div class="summary-row">
+          <div class="summary-pill ready"><span>{% if board_cfg %}{{ board_cfg.ready_label|default:'Food Ready' }}{% else %}Food Ready{% endif %}</span><span class="count" data-count-for="ready">0</span></div>
+          <div class="summary-pill confirmed"><span>{% if board_cfg %}{{ board_cfg.confirmed_label|default:'Order Placed' }}{% else %}Order Placed{% endif %}</span><span class="count" data-count-for="confirmed">0</span></div>
+          <div class="summary-pill preparing"><span>{% if board_cfg %}{{ board_cfg.preparing_label|default:'Preparing' }}{% else %}Preparing{% endif %}</span><span class="count" data-count-for="preparing">0</span></div>
+          <div class="summary-pill pending"><span>Pending</span><span class="count" data-count-for="pending">0</span></div>
+        </div>
+
+        <div class="grid-wrap" id="orderGridWrap">
+          <div class="order-grid" id="orderGrid"></div>
+          <div class="empty-state" id="gridEmpty">No orders right now</div>
+        </div>
+      </section>
+
+      <aside class="promo-panel surface">
+        <h2 class="hero-heading">{{ board_cfg.effective_heading_text|default:'SERVING HAPPINESS' }}</h2>
+        <div class="promo-card" id="promoCard">
+          {% if board_cfg and board_cfg.normalized_promo_embed_url %}
+          <iframe class="promo-frame" id="promoFrame" src="{{ board_cfg.normalized_promo_embed_url }}" title="Display Promo" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+          <a class="promo-preview" id="promoPreview" href="{{ board_cfg.normalized_promo_embed_url }}" target="_blank" rel="noopener">
+            <img id="promoPreviewImg" alt="Promo preview">
+            <div class="promo-preview-overlay">Preview shown for local testing. Open the original video in a new tab.</div>
+          </a>
+          {% else %}
+          <div class="promo-placeholder" style="display:flex;">Promo video can be added from Superadmin → Display Configs.</div>
+          {% endif %}
+        </div>
+      </aside>
+    </main>
+
+    <footer class="footer-bar surface">
+      {% if not board_cfg or board_cfg.show_status_legend %}
+      <div class="legend">
+        <div class="legend-pill ready">{% if board_cfg %}{{ board_cfg.ready_label|default:'Food Ready' }}{% else %}Food Ready{% endif %}</div>
+        <div class="legend-pill confirmed">{% if board_cfg %}{{ board_cfg.confirmed_label|default:'Order Placed' }}{% else %}Order Placed{% endif %}</div>
+        <div class="legend-pill preparing">{% if board_cfg %}{{ board_cfg.preparing_label|default:'Preparing' }}{% else %}Preparing{% endif %}</div>
+        <div class="legend-pill pending">Pending</div>
+      </div>
+      {% endif %}
+      <div class="footer-brand">
+        {% if board_cfg and board_cfg.effective_footer_logo %}
+        <div class="footer-logo"><img src="{{ board_cfg.effective_footer_logo.url }}" alt="footer logo"></div>
+        {% endif %}
+        <div class="footer-text">{{ board_cfg.effective_footer_text|default:'Neverno Allied Services Pvt Ltd' }}</div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const feedEndpoint = JSON.parse(document.getElementById('feed-url').textContent);
+    const stageKeys = ['pending', 'confirmed', 'preparing', 'ready'];
+    const stageOrder = ['ready', 'confirmed', 'preparing', 'pending'];
+    const stageTitles = {
+      pending: 'Pending',
+      confirmed: "{% if board_cfg %}{{ board_cfg.confirmed_label|default:'Order Placed'|escapejs }}{% else %}Order Placed{% endif %}",
+      preparing: "{% if board_cfg %}{{ board_cfg.preparing_label|default:'Preparing'|escapejs }}{% else %}Preparing{% endif %}",
+      ready: "{% if board_cfg %}{{ board_cfg.ready_label|default:'Food Ready'|escapejs }}{% else %}Food Ready{% endif %}"
+    };
+    const storageKey = 'neverq_display_ready_seen:' + (new URLSearchParams(window.location.search).get('company') || 'all') + ':' + (new URLSearchParams(window.location.search).get('board') || 'default');
+    const soundFlagKey = storageKey + ':sound-enabled';
+    const reminderKey = storageKey + ':ready-reminders';
+    const readyReminderMs = 25000;
+    const enableSoundBtn = document.getElementById('enableSoundBtn');
+    const canBuzz = {% if board_cfg %}{% if board_cfg.sound_enabled %}true{% else %}false{% endif %}{% else %}true{% endif %};
+    const canSpeak = {% if board_cfg %}{% if board_cfg.voice_enabled %}true{% else %}false{% endif %}{% else %}true{% endif %};
+
+    let currentPages = [];
+    let currentPageIndex = 0;
+    let pageTimer = null;
+    let latestPayload = null;
+
+    function updateClock() {
+      const el = document.getElementById('clock');
+      if (!el) return;
+      const now = new Date();
+      let hours = now.getHours();
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      el.textContent = hours + ':' + minutes + ' ' + ampm;
+    }
+
+    function getSoundEnabled() {
+      return localStorage.getItem(soundFlagKey) === '1';
+    }
+
+    function setSoundEnabled(enabled) {
+      if (!enabled) return;
+      localStorage.setItem(soundFlagKey, '1');
+      if (enableSoundBtn) {
+        enableSoundBtn.classList.add('enabled');
+        enableSoundBtn.textContent = '🔔 Sound Enabled';
+      }
+    }
+
+    function readSeenReadyIds() {
+      try {
+        return JSON.parse(localStorage.getItem(storageKey) || '[]');
+      } catch (err) {
+        return [];
+      }
+    }
+
+    function saveSeenReadyIds(ids) {
+      localStorage.setItem(storageKey, JSON.stringify(ids.slice(-100)));
+    }
+
+    function readReminderMap() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(reminderKey) || '{}');
+        return raw && typeof raw === 'object' ? raw : {};
+      } catch (err) {
+        return {};
+      }
+    }
+
+    function saveReminderMap(map) {
+      localStorage.setItem(reminderKey, JSON.stringify(map || {}));
+    }
+
+    function beep() {
+      if (!getSoundEnabled() || !canBuzz) return;
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const audioCtx = new AudioCtx();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.type = 'square';
+        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.18, audioCtx.currentTime + 0.02);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.45);
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + 0.45);
+      } catch (err) {
+        console.warn('Buzzer failed', err);
+      }
+    }
+
+    function announce(text) {
+      if (!getSoundEnabled() || !canSpeak || !('speechSynthesis' in window) || !text) return;
+      try {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.95;
+        utterance.pitch = 1;
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        console.warn('Announcement failed', err);
+      }
+    }
+
+    function shortOrderNumber(value) {
+      const raw = String(value || '').trim();
+      const match = raw.match(/^([A-Za-z]+)-(\d{6}|\d{8})-(.+)$/);
+      return match ? (match[1] + '-' + match[3]) : raw;
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function flattenOrders(payload) {
+      const flat = [];
+      stageKeys.forEach((key) => {
+        const countEl = document.querySelector('[data-count-for="' + key + '"]');
+        const list = (payload.groups && payload.groups[key]) ? payload.groups[key] : [];
+        if (countEl) countEl.textContent = String(list.length);
+      });
+      stageOrder.forEach((key) => {
+        const list = (payload.groups && payload.groups[key]) ? payload.groups[key] : [];
+        list.forEach((order) => flat.push({
+          id: order.id,
+          order_number: order.order_number,
+          customer_name: order.customer_name,
+          stage_key: key,
+          stage_title: stageTitles[key] || key
+        }));
+      });
+      return flat;
+    }
+
+    function computePageSize() {
+      const wrap = document.getElementById('orderGridWrap');
+      if (!wrap) return 12;
+      const width = wrap.clientWidth || 900;
+      const height = wrap.clientHeight || 500;
+      const cardMinWidth = width >= 1350 ? 170 : width >= 1050 ? 160 : 145;
+      const cardHeight = height >= 560 ? 60 : 54;
+      const cols = Math.max(2, Math.floor(width / cardMinWidth));
+      const rows = Math.max(2, Math.floor(height / cardHeight));
+      return Math.max(6, cols * rows);
+    }
+
+    function paginateOrders(flatOrders) {
+      const size = computePageSize();
+      const pages = [];
+      for (let i = 0; i < flatOrders.length; i += size) {
+        pages.push(flatOrders.slice(i, i + size));
+      }
+      return pages.length ? pages : [[]];
+    }
+
+    function renderPage(page) {
+      const grid = document.getElementById('orderGrid');
+      const empty = document.getElementById('gridEmpty');
+      if (!grid || !empty) return;
+      if (!page.length) {
+        grid.innerHTML = '';
+        empty.style.display = 'flex';
+        return;
+      }
+      empty.style.display = 'none';
+      grid.innerHTML = page.map((order) => {
+        const showName = order.customer_name && order.customer_name !== 'Guest';
+        const compactName = showName ? order.customer_name : '';
+        return '<article class="order-card ' + escapeHtml(order.stage_key) + '">' +
+          '<div class="order-top">' +
+            '<div class="order-number">' + escapeHtml(shortOrderNumber(order.order_number)) + '</div>' +
+          '</div>' +
+          '<div class="order-name">' + escapeHtml(compactName) + '</div>' +
+        '</article>';
+      }).join('');
+    }
+
+    function refreshPageIndicator() {
+      const pageEl = document.getElementById('pageIndicator');
+      if (!pageEl) return;
+      if (!currentPages.length || currentPages.length <= 1) {
+        pageEl.style.display = 'none';
+        return;
+      }
+      pageEl.style.display = 'inline-flex';
+      pageEl.textContent = (currentPageIndex + 1) + ' / ' + currentPages.length;
+    }
+
+    function showCurrentPage() {
+      renderPage(currentPages[currentPageIndex] || []);
+      refreshPageIndicator();
+    }
+
+    function resetPageRotation() {
+      if (pageTimer) {
+        clearInterval(pageTimer);
+        pageTimer = null;
+      }
+      if (currentPages.length > 1) {
+        pageTimer = setInterval(() => {
+          currentPageIndex = (currentPageIndex + 1) % currentPages.length;
+          showCurrentPage();
+        }, 5500);
+      }
+    }
+
+    function renderGroups(payload) {
+      const flatOrders = flattenOrders(payload);
+      currentPages = paginateOrders(flatOrders);
+      if (currentPageIndex >= currentPages.length) currentPageIndex = 0;
+      showCurrentPage();
+      resetPageRotation();
+    }
+
+    function queueReadyAnnouncement(order, delay, isReminder) {
+      setTimeout(() => {
+        const hasName = order.customer_name && order.customer_name !== 'Guest';
+        const message = isReminder
+          ? (hasName ? (order.customer_name + ', your order is still ready for pickup') : ('Order ' + shortOrderNumber(order.order_number) + ' is still ready for pickup'))
+          : (hasName ? (order.customer_name + ', your order is ready') : ('Order ' + shortOrderNumber(order.order_number) + ' is ready'));
+        const duckMs = Math.max(3200, Math.min(9000, 2200 + (message.length * 45)));
+        duckPromoAudio(duckMs);
+        beep();
+        announce(message);
+      }, delay);
+    }
+
+    function handleAnnouncements(payload) {
+      const readyList = (payload.groups && payload.groups.ready) ? payload.groups.ready : [];
+      const currentReady = readyList.map((order) => String(order.id));
+      const prevReady = readSeenReadyIds();
+      const reminderMap = readReminderMap();
+      const now = Date.now();
+      const newReady = readyList.filter((order) => !prevReady.includes(String(order.id)));
+      const repeatReady = readyList.filter((order) => {
+        const key = String(order.id);
+        if (newReady.some((fresh) => String(fresh.id) === key)) return false;
+        const lastAt = Number(reminderMap[key] || 0);
+        return !lastAt || (now - lastAt) >= readyReminderMs;
+      });
+
+      if (getSoundEnabled()) {
+        newReady.slice(0, 8).forEach((order, idx) => {
+          queueReadyAnnouncement(order, idx * 2200, false);
+          reminderMap[String(order.id)] = now;
+        });
+        repeatReady.slice(0, 4).forEach((order, idx) => {
+          queueReadyAnnouncement(order, (newReady.slice(0, 8).length * 2200) + (idx * 2600), true);
+          reminderMap[String(order.id)] = now;
+        });
+      }
+
+      const trimmedReminderMap = {};
+      currentReady.forEach((id) => {
+        if (reminderMap[id]) trimmedReminderMap[id] = reminderMap[id];
+      });
+      saveSeenReadyIds(currentReady);
+      saveReminderMap(trimmedReminderMap);
+    }
+
+    async function refreshBoard(isFirstLoad=false) {
+      try {
+        const separator = feedEndpoint.includes('?') ? '&' : '?';
+        const response = await fetch(feedEndpoint + separator + '_ts=' + Date.now(), {headers: {'X-Requested-With': 'XMLHttpRequest'}, cache: 'no-store'});
+        if (!response.ok) return;
+        const payload = await response.json();
+        latestPayload = payload;
+        renderGroups(payload);
+        if (!isFirstLoad) handleAnnouncements(payload);
+      } catch (err) {
+        console.warn('Display board refresh failed', err);
+      }
+    }
+
+    let promoRestoreTimer = null;
+
+    function getPromoFrame() {
+      return document.getElementById('promoFrame');
+    }
+
+    function promoFrameOrigin() {
+      const frame = getPromoFrame();
+      if (!frame) return '*';
+      try {
+        return new URL(frame.getAttribute('src') || '', window.location.href).origin;
+      } catch (err) {
+        return '*';
+      }
+    }
+
+    function promoVideoIdFromSrc(src) {
+      const match = String(src || '').match(/\/embed\/([^?&/]+)/);
+      return match ? match[1] : '';
+    }
+
+    function configurePromoFrame() {
+      const frame = getPromoFrame();
+      if (!frame) return;
+      const rawSrc = frame.getAttribute('src') || '';
+      if (!/youtube\.com|youtu\.be/.test(rawSrc)) return;
+      const videoId = promoVideoIdFromSrc(rawSrc);
+      if (!videoId) return;
+      try {
+        const url = new URL(rawSrc, window.location.href);
+        url.searchParams.set('autoplay', '1');
+        url.searchParams.set('mute', '1');
+        url.searchParams.set('loop', '1');
+        url.searchParams.set('playlist', videoId);
+        url.searchParams.set('playsinline', '1');
+        url.searchParams.set('enablejsapi', '1');
+        url.searchParams.set('origin', window.location.origin);
+        frame.setAttribute('src', url.toString());
+      } catch (err) {
+        console.warn('Promo frame setup failed', err);
+      }
+    }
+
+    function postPromoCommand(func, args) {
+      const frame = getPromoFrame();
+      if (!frame || !frame.contentWindow) return;
+      try {
+        frame.contentWindow.postMessage(JSON.stringify({
+          event: 'command',
+          func: func,
+          args: Array.isArray(args) ? args : []
+        }), promoFrameOrigin());
+      } catch (err) {
+        console.warn('Promo command failed', err);
+      }
+    }
+
+    function syncPromoAudioState() {
+      const frame = getPromoFrame();
+      if (!frame) return;
+      if (!getSoundEnabled()) {
+        postPromoCommand('mute');
+        return;
+      }
+      postPromoCommand('playVideo');
+      postPromoCommand('unMute');
+      postPromoCommand('setVolume', [100]);
+    }
+
+    function duckPromoAudio(durationMs) {
+      const frame = getPromoFrame();
+      if (!frame) return;
+      if (promoRestoreTimer) {
+        clearTimeout(promoRestoreTimer);
+        promoRestoreTimer = null;
+      }
+      postPromoCommand('mute');
+      promoRestoreTimer = setTimeout(() => {
+        if (getSoundEnabled()) {
+          postPromoCommand('unMute');
+          postPromoCommand('setVolume', [100]);
+        } else {
+          postPromoCommand('mute');
+        }
+      }, Math.max(1800, Number(durationMs || 0)));
+    }
+
+    function setupPromoPreview() {
+      const frame = document.getElementById('promoFrame');
+      const preview = document.getElementById('promoPreview');
+      const previewImg = document.getElementById('promoPreviewImg');
+      if (!frame || !preview || !previewImg) return;
+      const host = window.location.hostname;
+      const src = frame.getAttribute('src') || '';
+      const isLocal = host === '127.0.0.1' || host === 'localhost';
+      const match = src.match(/\/embed\/([^?&/]+)/);
+      if (isLocal && /youtube\.com|youtu\.be/.test(src) && match) {
+        preview.href = 'https://www.youtube.com/watch?v=' + match[1];
+        previewImg.src = 'https://img.youtube.com/vi/' + match[1] + '/hqdefault.jpg';
+        preview.style.display = 'flex';
+        frame.style.display = 'none';
+      }
+    }
+
+    if (enableSoundBtn) {
+      enableSoundBtn.addEventListener('click', () => {
+        setSoundEnabled(true);
+        syncPromoAudioState();
+        beep();
+      });
+      if (getSoundEnabled()) {
+        setSoundEnabled(true);
+        setTimeout(syncPromoAudioState, 1400);
+      }
+    }
+
+    const boardData = JSON.parse(document.getElementById('board-data').textContent);
+    latestPayload = boardData;
+    configurePromoFrame();
+    renderGroups(boardData);
+    handleAnnouncements(boardData);
+    updateClock();
+    setupPromoPreview();
+    setTimeout(syncPromoAudioState, 1400);
+    window.addEventListener('resize', () => {
+      currentPages = paginateOrders(flattenOrders(latestPayload || boardData));
+      if (currentPageIndex >= currentPages.length) currentPageIndex = 0;
+      showCurrentPage();
+      resetPageRotation();
+    });
+    setInterval(updateClock, 1000);
+    setInterval(() => refreshBoard(false), 5000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<h4 class="mb-4" style="font-family:'Rajdhani',sans-serif;font-weight:700;">{{ page_title }}</h4>
+
+{% if messages %}{% for msg in messages %}<div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}success{% endif %}">{{ msg }}</div>{% endfor %}{% endif %}
+
+<div class="card border-0 shadow-sm" style="border-radius:var(--cf-radius);">
+  <div class="card-body p-4">
+    <form method="post">
+      {% csrf_token %}
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Coupon Code</label>
+          <input type="text" name="code" class="form-control" value="{{ coupon.code|default:'' }}" required style="text-transform:uppercase;letter-spacing:1px;">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Discount Type</label>
+          <select name="discount_type" class="form-select">
+            <option value="flat" {% if coupon.discount_type == 'flat' %}selected{% endif %}>Flat Amount (₹)</option>
+            <option value="percent" {% if coupon.discount_type == 'percent' %}selected{% endif %}>Percentage (%)</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Discount Value</label>
+          <input type="number" name="discount_value" class="form-control" step="0.01" value="{{ coupon.discount_value|default:'0' }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Min Order Amount</label>
+          <input type="number" name="min_order" class="form-control" step="0.01" value="{{ coupon.min_order|default:'0' }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Max Discount Cap</label>
+          <input type="number" name="max_discount" class="form-control" step="0.01" value="{{ coupon.max_discount|default:'0' }}" placeholder="0 = no cap">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Usage Limit</label>
+          <input type="number" name="usage_limit" class="form-control" value="{{ coupon.usage_limit|default:'0' }}" placeholder="0 = unlimited">
+        </div>
+        {% if request.user.is_superadmin %}
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Company (optional)</label>
+          <select name="company" class="form-select">
+            <option value="">— Site-wide —</option>
+            {% for co in companies %}
+              <option value="{{ co.pk }}" {% if coupon.company_id == co.pk %}selected{% endif %}>{{ co.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Valid From</label>
+          <input type="datetime-local" name="valid_from" class="form-control" value="{{ coupon.valid_from|date:'Y-m-d\TH:i'|default:'' }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Valid To</label>
+          <input type="datetime-local" name="valid_to" class="form-control" value="{{ coupon.valid_to|date:'Y-m-d\TH:i'|default:'' }}">
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-semibold">Description</label>
+          <textarea name="description" class="form-control" rows="2">{{ coupon.description|default:'' }}</textarea>
+        </div>
+        <div class="col-12">
+          <div class="form-check">
+            <input type="checkbox" name="is_active" class="form-check-input" id="is_active" {% if coupon.is_active or not coupon %}checked{% endif %}>
+            <label class="form-check-label" for="is_active">Active</label>
+          </div>
+        </div>
+      </div>
+      <div class="mt-4">
+        <button type="submit" class="btn px-4" style="background:var(--cf-blue);color:white;border-radius:7px;">{{ action }}</button>
+        <a href="{% url 'dashboard:coupon_list' %}" class="btn btn-light ms-2" style="border-radius:7px;">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% if perm_level %}
+<script>
+(function(){
+  var LVL="{{ perm_level }}";
+  var LOCKED=new Set({{ locked_names_json|safe }});
+  var form=document.querySelector('form[method="post"]');
+  if(form&&LVL!=="full_edit"){
+    var html=LVL==="view"
+      ?'<div class="alert alert-warning py-2 mb-3" style="border-radius:10px;"><i class="bi bi-eye-fill me-2"></i><strong>View-only access</strong> — you can see this record but cannot save changes.</div>'
+      :'<div class="alert alert-info py-2 mb-3" style="border-radius:10px;"><i class="bi bi-shield-lock me-2"></i><strong>Limited edit access</strong> — fields marked 🔒 cannot be modified.</div>';
+    form.insertAdjacentHTML("afterbegin",html);
+  }
+  if(LVL==="view"){
+    document.querySelectorAll('button[type="submit"]').forEach(function(b){b.style.display="none";});
+  }
+  if(LOCKED.size){
+    document.querySelectorAll("input,select,textarea").forEach(function(el){
+      if(!LOCKED.has(el.name))return;
+      el.disabled=true;el.style.background="#f8f9fa";el.style.cursor="not-allowed";el.style.opacity="0.7";
+      var c=el.closest('[class*="col-"]');
+      if(c){
+        var lb=c.querySelector("label");
+        if(lb&&!lb.querySelector(".flock"))lb.insertAdjacentHTML("beforeend",' <span class="flock" style="font-size:11px;" title="You do not have permission to edit this field">🔒</span>');
+      }
+    });
+    if(LOCKED.has("__schedule_windows__")){
+      document.querySelectorAll('[name^="window_day_"],[name^="window_start_"],[name^="window_end_"]').forEach(function(el){
+        el.disabled=true;el.style.background="#f8f9fa";el.style.cursor="not-allowed";el.style.opacity="0.7";
+      });
+      var ab=document.getElementById("add-schedule-btn");if(ab)ab.style.display="none";
+      document.querySelectorAll(".btn-remove").forEach(function(b){b.style.display="none";});
+    }
+    if(LOCKED.has("food_types")){
+      document.querySelectorAll(".food-type-pill").forEach(function(p){
+        p.style.pointerEvents="none";p.style.opacity="0.65";
+      });
+    }
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

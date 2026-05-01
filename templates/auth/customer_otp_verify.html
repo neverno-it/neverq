@@ -1,0 +1,97 @@
+{% extends "base/customer_base.html" %}
+{% block content %}
+<div style="min-height:80vh;display:flex;align-items:center;justify-content:center;padding:24px;">
+  <div style="width:100%;max-width:420px;">
+
+    {# ── Brand mark ──────────────────────────────────────── #}
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;color:var(--cf-navy,#202B7A);letter-spacing:.5px;">
+        Verify Your Email
+      </div>
+      <div style="font-size:14px;color:#6C7498;margin-top:6px;">
+        We sent a 6-digit code to
+        <strong style="color:#18213F;">{{ email }}</strong>
+      </div>
+    </div>
+
+    {# ── Messages ────────────────────────────────────────── #}
+    {% if messages %}
+    <div style="margin-bottom:16px;">
+      {% for msg in messages %}
+      <div style="padding:10px 14px;border-radius:8px;font-size:13.5px;margin-bottom:6px;
+                  {% if msg.tags == 'error' %}background:#FFF0F2;color:#D91724;border:1px solid #fecaca;
+                  {% elif msg.tags == 'success' %}background:#E8F5E9;color:#2E7D32;border:1px solid #a5d6a7;
+                  {% else %}background:#EEF2FF;color:#202B7A;border:1px solid #c7d3ff;{% endif %}">
+        {{ msg }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {# ── OTP Entry Card ──────────────────────────────────── #}
+    <div style="background:#fff;border-radius:16px;box-shadow:0 8px 32px rgba(32,43,122,.10);padding:32px 28px;">
+
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="verify">
+
+        <div style="margin-bottom:20px;">
+          <label style="display:block;font-size:13px;font-weight:600;color:#18213F;margin-bottom:8px;">
+            Enter OTP
+          </label>
+          <input
+            type="text"
+            name="otp"
+            inputmode="numeric"
+            pattern="[0-9]{6}"
+            maxlength="6"
+            autocomplete="one-time-code"
+            autofocus
+            placeholder="● ● ● ● ● ●"
+            style="width:100%;padding:14px 16px;border:1.5px solid #E4E7F2;border-radius:10px;
+                   font-size:22px;letter-spacing:8px;text-align:center;font-weight:700;
+                   color:#18213F;outline:none;transition:border-color .15s;"
+            onfocus="this.style.borderColor='#202B7A'"
+            onblur="this.style.borderColor='#E4E7F2'"
+          >
+          <div style="font-size:12px;color:#6C7498;margin-top:6px;text-align:center;">
+            Check your inbox — the code is valid for 48 hours.
+          </div>
+        </div>
+
+        <button type="submit"
+                style="width:100%;padding:13px;background:#202B7A;color:#fff;border:none;
+                       border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;
+                       font-family:'Rajdhani',sans-serif;letter-spacing:.4px;transition:background .15s;"
+                onmouseover="this.style.background='#182161'"
+                onmouseout="this.style.background='#202B7A'">
+          Verify &amp; Activate Account
+        </button>
+      </form>
+
+      {# ── Resend OTP ──────────────────────────────────────── #}
+      <div style="text-align:center;margin-top:20px;">
+        <span style="font-size:13px;color:#6C7498;">Didn't receive it? </span>
+        <form method="post" style="display:inline;">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="resend">
+          <button type="submit"
+                  style="background:none;border:none;color:#202B7A;font-size:13px;
+                         font-weight:600;cursor:pointer;padding:0;text-decoration:underline;">
+            Resend OTP
+          </button>
+        </form>
+      </div>
+
+      {# ── Back link ───────────────────────────────────────── #}
+      <div style="text-align:center;margin-top:14px;">
+        <a href="{% url 'accounts:customer_register' %}"
+           style="font-size:12.5px;color:#6C7498;text-decoration:none;">
+          ← Start registration again
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

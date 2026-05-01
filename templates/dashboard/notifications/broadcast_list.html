@@ -1,0 +1,153 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<div class="cf-card">
+  <div class="cf-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h5><i class="bi bi-megaphone-fill me-2"></i>Broadcast Notifications</h5>
+    <a href="{% url 'dashboard:broadcast_notification_send' %}" class="btn btn-cf-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>Send New
+    </a>
+  </div>
+  <div class="cf-card-body pb-0">
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert {% if msg.tags == 'error' %}alert-danger{% else %}alert-success{% endif %} mb-3">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+
+    {% if companies|length > 1 %}
+    <form method="get" class="mb-3 d-flex align-items-center gap-2" style="flex-wrap:wrap;">
+      <label class="td-sub mb-0" style="white-space:nowrap;font-weight:500;">Filter by Company:</label>
+      <select name="company" class="form-select form-select-sm" style="max-width:260px;" onchange="this.form.submit()">
+        <option value="">— All Companies —</option>
+        {% for c in companies %}
+          <option value="{{ c.pk }}" {% if filter_company_id == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+      {% if filter_company_id %}
+        <a href="{% url 'dashboard:broadcast_notification_list' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
+      {% endif %}
+    </form>
+    {% endif %}
+
+    {% if broadcast_groups %}
+      {% for grp in broadcast_groups %}
+      <div class="cf-card mb-3" style="border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+
+        {# ── Header row ── #}
+        <div class="d-flex align-items-center justify-content-between px-3 py-2 gap-2"
+             style="background:#f9fafb;flex-wrap:wrap;">
+          {# Left — clickable area #}
+          <div class="d-flex align-items-center gap-2 flex-wrap"
+               style="cursor:pointer;flex:1;"
+               onclick="toggleGroup('grp{{ forloop.counter }}')">
+            <span style="font-weight:600;font-size:.95rem;">{{ grp.title }}</span>
+            <span class="badge-cf badge-active">{{ grp.notif_type_display }}</span>
+            <span class="td-sub">{{ grp.company.name|default:"All Companies" }}</span>
+          </div>
+          {# Right — meta + delete + chevron #}
+          <div class="d-flex align-items-center gap-2">
+            <span class="td-sub" style="font-size:.83rem;">{{ grp.sent_at|date:"d M Y, h:i A" }}</span>
+            <span class="badge rounded-pill" style="background:#dbeafe;color:#1e40af;font-size:.8rem;padding:4px 10px;">
+              <i class="bi bi-people-fill me-1"></i>{{ grp.count }} recipient{{ grp.count|pluralize }}
+            </span>
+            {# Bulk delete for this batch #}
+            <form method="post" action="{% url 'dashboard:broadcast_notification_bulk_delete' %}"
+                  onsubmit="return confirm('Delete all {{ grp.count }} entries for this broadcast?');">
+              {% csrf_token %}
+              {% for n in grp.recipients %}
+                <input type="hidden" name="pks" value="{{ n.pk }}">
+              {% endfor %}
+              <button type="submit" class="btn btn-sm"
+                      style="background:#fee2e2;color:#991b1b;border:none;border-radius:8px;padding:4px 10px;white-space:nowrap;">
+                <i class="bi bi-trash me-1"></i>Delete All
+              </button>
+            </form>
+            <i class="bi bi-chevron-down td-sub" id="chevron-grp{{ forloop.counter }}"
+               style="transition:transform .2s;cursor:pointer;"
+               onclick="toggleGroup('grp{{ forloop.counter }}')"></i>
+          </div>
+        </div>
+
+        {# ── Expandable recipients ── #}
+        <div id="grp{{ forloop.counter }}" style="display:none;">
+          <div class="px-3 py-2" style="background:#fff;border-top:1px solid #e5e7eb;">
+            <div class="td-sub mb-2" style="font-size:.85rem;">
+              <i class="bi bi-chat-left-text me-1"></i>{{ grp.message|truncatechars:160 }}
+            </div>
+            <table class="cf-table" style="font-size:.88rem;">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Customer</th>
+                  <th>Sent</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for n in grp.recipients %}
+                <tr>
+                  <td class="td-sub">{{ forloop.counter }}</td>
+                  <td><div class="td-main">{{ n.customer.name|default:"—" }}</div></td>
+                  <td class="td-sub">{{ n.created_at|date:"d M Y, h:i A" }}</td>
+                  <td>
+                    <form method="post" action="{% url 'dashboard:broadcast_notification_delete' n.pk %}"
+                          onsubmit="return confirm('Delete this entry?');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm"
+                              style="background:#fee2e2;color:#991b1b;border:none;border-radius:8px;padding:3px 9px;">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state">
+        <div class="empty-icon">📢</div>
+        <h6>No broadcasts sent yet</h6>
+        <p><a href="{% url 'dashboard:broadcast_notification_send' %}">Send your first notification</a></p>
+      </div>
+    {% endif %}
+
+    {# ── Pagination ── #}
+    {% if page_obj.has_other_pages %}
+    <div class="d-flex justify-content-center align-items-center gap-2 py-3" style="flex-wrap:wrap;">
+      {% if page_obj.has_previous %}
+        <a href="?{% if filter_company_id %}company={{ filter_company_id }}&{% endif %}page={{ page_obj.previous_page_number }}"
+           class="btn btn-sm btn-outline-secondary">‹ Prev</a>
+      {% else %}
+        <button class="btn btn-sm btn-outline-secondary" disabled>‹ Prev</button>
+      {% endif %}
+      <span class="td-sub px-2">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+        <a href="?{% if filter_company_id %}company={{ filter_company_id }}&{% endif %}page={{ page_obj.next_page_number }}"
+           class="btn btn-sm btn-outline-secondary">Next ›</a>
+      {% else %}
+        <button class="btn btn-sm btn-outline-secondary" disabled>Next ›</button>
+      {% endif %}
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+
+<script>
+function toggleGroup(id) {
+  var el = document.getElementById(id);
+  var ch = document.getElementById('chevron-' + id);
+  if (el.style.display === 'none') {
+    el.style.display = 'block';
+    ch.style.transform = 'rotate(180deg)';
+  } else {
+    el.style.display = 'none';
+    ch.style.transform = 'rotate(0deg)';
+  }
+}
+</script>
+{% endblock %}

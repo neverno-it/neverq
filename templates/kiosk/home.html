@@ -1,0 +1,207 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ company.name }} - Kiosk</title>
+{% include "includes/favicon_links.html" %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<style>
+  :root{--kp:{% if kiosk_cfg %}{{ kiosk_cfg.effective_theme_color }}{% else %}{{ company.kiosk_theme_color|default:'#1e3a5f' }}{% endif %};--ink:#10233e;--muted:#64748b;--line:rgba(15,23,42,.09);--card:rgba(255,255,255,.94);--soft:#edf4fb;--soft2:#f8fafc;--shadow:0 18px 44px rgba(15,23,42,.12)}
+  *{box-sizing:border-box} html{scroll-behavior:smooth} body{margin:0;color:var(--ink);font-family:'Segoe UI',sans-serif;background:radial-gradient(circle at top left, rgba(37,99,235,.14), transparent 26%),radial-gradient(circle at top right, rgba(16,185,129,.10), transparent 24%),linear-gradient(180deg,#f4f8fc 0%,#eef3f8 100%);padding-bottom:96px}
+  .store-closed-bar{background:linear-gradient(135deg,#8f1d2c,#d63749);color:#fff;text-align:center;padding:10px 18px;font-weight:700;font-size:14px}
+  .kiosk-header{position:sticky;top:0;z-index:100;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:18px;padding:16px clamp(16px,2vw,30px);background:rgba(15,34,59,.92);color:#fff;box-shadow:0 12px 30px rgba(15,23,42,.18);backdrop-filter:blur(16px)}
+  .kiosk-brand,.header-actions,.hero-actions,.scope-chip-wrap,.brand-chips,.product-context,.search-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .kiosk-brand{min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center}.header-actions{justify-content:flex-end}.brand-chips,.scope-chip-wrap{gap:8px}
+  .kiosk-logo{width:52px;height:52px;border-radius:16px;overflow:hidden;flex-shrink:0;background:rgba(255,255,255,.12);display:grid;place-items:center}.kiosk-logo img{width:100%;height:100%;object-fit:cover}.kiosk-logo-fallback{font-size:18px;font-weight:800}
+  .kiosk-copy{min-width:0}.kiosk-name{font-size:30px;font-weight:800;line-height:1;letter-spacing:-.03em}.kiosk-sub{font-size:13px;opacity:.78;margin-top:4px}
+  .brand-chip,.scope-chip,.section-badge,.product-badge,.context-pill,.search-summary,.product-availability{display:inline-flex;align-items:center;gap:8px;border-radius:999px;font-weight:800}
+  .brand-chip{padding:7px 12px;background:rgba(255,255,255,.11);color:#f8fbff;font-size:12px}.brand-chip.is-open{background:rgba(34,197,94,.14);color:#d7ffe7}.brand-chip.is-closed{background:rgba(239,68,68,.14);color:#ffe0e0}
+  .tour-chip,.cart-fab,.veg-btn,.pill,.add-btn,.unavail-tag,.qty-btn,.search-clear{display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}
+  .tour-chip{padding:10px 14px;border-radius:16px;background:rgba(255,255,255,.1);color:#fff;font-weight:700;font-size:14px;border:1px solid rgba(255,255,255,.12)} .tour-chip:hover{color:#fff;background:rgba(255,255,255,.16)}
+  .cart-fab{padding:13px 18px;border-radius:18px;background:linear-gradient(135deg,#ef4444,#dc2626);box-shadow:0 14px 34px rgba(220,38,38,.3);color:#fff;font-size:16px;font-weight:800}.cart-fab:hover{color:#fff;transform:translateY(-1px)}
+  .badge-count{min-width:30px;height:30px;border-radius:999px;display:grid;place-items:center;background:#fff;color:#dc2626;font-size:13px;font-weight:900}
+  .shell{max-width:1480px;margin:0 auto;padding:20px clamp(16px,2vw,30px) 42px}.stack{display:grid;gap:18px}.panel{background:var(--card);border:1px solid var(--line);border-radius:28px;box-shadow:var(--shadow);backdrop-filter:blur(12px)}
+  .hero{display:block}
+  .hero-media{padding:12px;display:flex}.media-frame{position:relative;overflow:hidden;border-radius:26px;flex:1;min-height:460px;background:linear-gradient(135deg,#dbeafe 0%,#eff6ff 100%)}.media-frame img{width:100%;height:100%;object-fit:cover;display:block}
+  .media-overlay{display:none}
+  .fallback-grid{position:absolute;inset:0;padding:22px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;background:radial-gradient(circle at top right, rgba(37,99,235,.18), transparent 22%),linear-gradient(145deg,#0f172a 0%,color-mix(in srgb,var(--kp) 82%, #1e293b 18%) 100%)} .fallback-tile{border-radius:20px;padding:16px;background:rgba(255,255,255,.08);color:#fff} .fallback-tile strong{display:block;font-size:16px;margin-bottom:6px}
+  .indicators{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);display:flex;gap:8px;z-index:3;padding:6px 10px;border-radius:999px;background:rgba(15,23,42,.18);backdrop-filter:blur(10px)}.indicators button{width:10px;height:10px;border:none;border-radius:999px;background:rgba(255,255,255,.42)} .indicators .active{background:#fff}
+  .controls,.section{padding:16px}.controls-head,.section-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:12px}.controls-head{margin-bottom:10px}.title{margin:0;font-size:15px;font-weight:900;letter-spacing:.01em}.sub{font-size:12px;color:var(--muted);margin:2px 0 0}.section-title{margin:0;font-size:24px;line-height:1.02;font-weight:900;letter-spacing:-.045em}.section-copy{font-size:13px;color:var(--muted);margin-top:4px;max-width:60ch}
+  .scope-chip,.section-badge,.product-availability{padding:8px 12px;background:var(--soft);color:var(--ink);font-size:12px;border:1px solid rgba(148,163,184,.18)}
+  .locations{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;margin-bottom:12px}.field-span{grid-column:span 5}.reset-span{grid-column:span 2}.field{width:100%;height:48px;border:1px solid rgba(148,163,184,.3);background:#fff;color:var(--ink);border-radius:15px;padding:0 15px;font-size:14px}
+  .toolbar-shell{display:grid;gap:10px;margin-bottom:14px}.menu-toolbar-top{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}.menu-toolbar-bottom{display:flex;align-items:center;justify-content:flex-start;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}.menu-toolbar-bottom::-webkit-scrollbar{display:none}
+  .search-shell{display:flex;align-items:center;gap:10px;min-height:48px;padding:0 14px;border-radius:18px;border:1px solid rgba(148,163,184,.24);background:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.7)}.search-shell i{color:#6f7f97;font-size:16px;flex-shrink:0}.search-input{flex:1;min-width:0;border:none;background:transparent;font-size:15px;color:var(--ink);outline:none}.search-input::placeholder{color:#90a0b7}
+  .veg-only-toggle{border:1px solid rgba(46,125,50,.18);background:#f8fafc;color:var(--ink);border-radius:18px;min-height:48px;padding:5px 7px 5px 12px;display:inline-flex;align-items:center;gap:10px;box-shadow:none}.veg-only-toggle:hover{border-color:rgba(46,125,50,.3);background:#f1f7f1;color:var(--ink)}.veg-only-toggle.active{background:#edf8ef;border-color:rgba(46,125,50,.28);color:#1f6b2c}.veg-toggle-mark{width:20px;height:20px;border-radius:6px;border:1.6px solid rgba(46,125,50,.4);background:#fff;display:inline-flex;align-items:center;justify-content:center}.veg-toggle-dot{width:9px;height:9px;border-radius:999px;background:#8fb692}.veg-only-toggle.active .veg-toggle-mark{background:#ebfff0;border-color:#1e8a34}.veg-only-toggle.active .veg-toggle-dot{background:#1e8a34;box-shadow:0 0 0 4px rgba(30,138,52,.12)}.veg-only-switch{position:relative;width:34px;height:20px;border-radius:999px;background:#d9e1ea;display:inline-flex;align-items:center;padding:2px}.veg-only-toggle.active .veg-only-switch{background:#2e7d32}.veg-only-knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:999px;background:#fff;box-shadow:0 2px 8px rgba(15,23,42,.16);transition:transform .18s ease}.veg-only-toggle.active .veg-only-knob{transform:translateX(14px)}
+  .calorie-inline-group{display:flex;align-items:center;gap:7px;min-width:max-content}.calorie-inline-label{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#5b6478}.filter-pill{display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;border-radius:999px;border:1px solid rgba(148,163,184,.24);background:#f7f9fc;color:#5f6e86;font-size:12px;font-weight:800;text-decoration:none}.filter-pill.compact{padding:7px 11px}.filter-pill:hover{background:#edf4fb;color:var(--kp)}.filter-pill.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .filter-stack{display:grid;gap:10px}.filter-label{display:flex;align-items:center;justify-content:space-between;gap:10px}.filter-title{font-size:13px;font-weight:900;letter-spacing:.03em;text-transform:uppercase}.filter-note{font-size:12px;color:var(--muted)}.strip{display:flex;gap:9px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}.strip::-webkit-scrollbar{display:none}.pill{white-space:nowrap;padding:9px 14px;border-radius:999px;border:1px solid rgba(148,163,184,.28);background:#fff;font-size:12px;font-weight:800;color:#475569;text-decoration:none}.pill.active,.pill:hover{background:var(--kp);border-color:var(--kp);color:#fff}.pill.is-neutral:not(.active){background:var(--soft2)}
+  .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.cards.single>[data-product-col]{min-width:0}.card{height:100%;border-radius:22px;overflow:hidden;background:#fff;border:1px solid rgba(148,163,184,.16);box-shadow:0 12px 28px rgba(15,23,42,.08);transition:.18s ease;display:flex;flex-direction:column}.card:hover{transform:translateY(-2px)} .card.featured{border-color:rgba(245,158,11,.34);box-shadow:0 14px 34px rgba(245,158,11,.13)}
+  .media{position:relative;overflow:hidden;aspect-ratio:1.18/0.78;min-height:0;background:linear-gradient(135deg,#dbeafe 0%,#eff6ff 100%)} .media img{width:100%;height:100%;object-fit:cover;display:block}.placeholder{width:100%;height:100%;display:grid;place-items:center;background:linear-gradient(135deg,#e0f2fe,#eff6ff);color:color-mix(in srgb,var(--kp) 78%, #ffffff 22%);font-size:46px}
+  .badges{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;gap:8px}.product-badge{padding:6px 10px;border-radius:999px;background:rgba(15,23,42,.58);color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.05em}.product-badge.featured{background:rgba(245,158,11,.94)}.product-badge.stock{background:rgba(255,255,255,.92);color:#0f172a}
+  .body{display:flex;flex-direction:column;gap:10px;padding:14px 14px 13px}.top{display:flex;align-items:center;gap:8px}.food-mark{width:14px;height:14px;border:2px solid #2e7d32;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;background:#fff}.food-mark::after{content:'';width:6px;height:6px;border-radius:999px;background:#2e7d32}.food-mark.nonveg{border-color:#c62828}.food-mark.nonveg::after{background:#c62828}
+  .meta-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;flex:1;min-width:0}.meta-pills{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.name{margin:0;font-size:18px;line-height:1.08;font-weight:900;letter-spacing:-.035em;color:var(--ink)}.context-pill{padding:5px 10px;background:var(--soft2);color:#475569;border:1px solid rgba(148,163,184,.18);font-size:11px;font-weight:800;letter-spacing:.02em}.context-pill.secondary{background:#fff}.calorie-note{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800;color:#ea580c;white-space:nowrap}.desc{min-height:34px;margin:0;font-size:12.5px;line-height:1.52;color:var(--muted)}
+  .footer{margin-top:auto;display:grid;gap:10px}.price-row{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}.price-block{display:grid;gap:6px}.price{font-size:22px;line-height:1;font-weight:900;color:#d63749;letter-spacing:-.035em}.actions{width:100%;min-width:0;margin-left:0}.qty{display:flex;align-items:center;gap:6px;padding:6px;border-radius:14px;background:var(--soft);border:1px solid rgba(148,163,184,.16)}.qty-btn{width:34px;height:34px;border:none;border-radius:11px;background:var(--kp);color:#fff;font-size:20px;font-weight:900;cursor:pointer}.qty-num{flex:1;text-align:center;font-size:16px;font-weight:900;color:var(--ink)}
+  .add-btn,.unavail-tag{width:100%;min-height:42px;border-radius:14px;font-size:13px;font-weight:900}.add-btn{border:none;background:linear-gradient(135deg,var(--kp),color-mix(in srgb,var(--kp) 72%, #0f172a 28%));color:#fff;cursor:pointer}.unavail-tag{background:#e2e8f0;color:#64748b;border:1px solid rgba(148,163,184,.28)}
+  .empty{padding:56px 20px;border-radius:26px;text-align:center;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);border:1px dashed rgba(148,163,184,.36);color:var(--muted)} .empty i{font-size:58px;color:var(--kp)} .empty h3{margin:18px 0 10px;font-size:28px;font-weight:900;color:var(--ink)} .empty p{max-width:40ch;margin:0 auto 16px;line-height:1.6}
+  [hidden]{display:none !important}
+  @media (max-width:1399.98px){.cards{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media (max-width:1199.98px){.media-frame{min-height:340px}.cards{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media (max-width:991.98px){.kiosk-header{padding:14px 18px;gap:14px}.brand-chips,.scope-chip-wrap{flex-wrap:nowrap;overflow-x:auto;max-width:100%;padding-bottom:2px;scrollbar-width:none}.brand-chips::-webkit-scrollbar,.scope-chip-wrap::-webkit-scrollbar{display:none}.brand-chip,.scope-chip{flex:0 0 auto}.header-actions{gap:10px}.controls,.section{padding:15px}.hero-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.locations{grid-template-columns:1fr}.field-span,.reset-span{grid-column:auto}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.media-frame{min-height:280px}}
+  @media (max-width:767.98px){.kiosk-header{grid-template-columns:1fr;align-items:stretch;padding:12px 14px}.kiosk-brand{gap:10px}.kiosk-logo{width:44px;height:44px;border-radius:14px}.kiosk-name{font-size:22px}.kiosk-sub{font-size:12px}.header-actions{display:grid;grid-template-columns:auto minmax(0,1fr);width:100%}.tour-chip{padding:10px 12px;border-radius:14px;font-size:13px}.cart-fab{width:auto;padding:12px 16px;border-radius:16px;min-height:50px}.badge-count{min-width:28px;height:28px;font-size:12px}.shell{padding:14px 14px 34px}.stack{gap:14px}.hero-media{padding:8px}.media-frame{min-height:220px;border-radius:22px}.controls,.section{padding:14px}.controls-head,.section-head{gap:10px;margin-bottom:10px}.title{font-size:14px}.sub,.filter-note{font-size:11px}.section-title{font-size:22px}.scope-chip,.section-badge,.product-availability{padding:8px 12px;font-size:11px}.field{height:46px;border-radius:14px}.menu-toolbar-top{grid-template-columns:minmax(0,1fr) auto}.search-shell{min-height:46px;border-radius:16px}.search-input{font-size:14px}.veg-only-toggle{min-height:44px;border-radius:16px;padding:4px 6px 4px 10px}.hero-title{font-size:34px;max-width:none}.cards{grid-template-columns:1fr}.actions{width:100%;min-width:0}.card{border-radius:20px}.body{padding:13px}.name{font-size:17px}.desc{min-height:0}.price{font-size:24px}.qty-btn{width:36px;height:36px;border-radius:12px}.add-btn,.unavail-tag{min-height:44px}}
+  @media (max-width:575.98px){.brand-chip-meta,.brand-chip-location,.kiosk-sub{display:none}.tour-chip{display:none}.brand-chip{padding:6px 10px;font-size:11px}.kiosk-header{gap:10px}.controls-head,.section-head,.filter-label{align-items:flex-start;flex-direction:column;gap:4px}.media-frame{min-height:196px}.menu-toolbar-top{grid-template-columns:minmax(0,1fr) auto;gap:8px}.search-shell{padding:0 12px}.calorie-inline-group{gap:6px}.calorie-inline-label{font-size:11px}.filter-pill.compact{padding:7px 10px;font-size:11px}}
+</style>
+</head>
+<body>
+{% if not company.is_store_open %}<div class="store-closed-bar"><i class="bi bi-clock me-2"></i>Ordering is currently closed.{% if company.ordering_status_message %} {{ company.ordering_status_message }}{% endif %}</div>{% endif %}
+<div class="kiosk-header">
+  <div class="kiosk-brand">
+    <div class="kiosk-logo">{% if kiosk_cfg and kiosk_cfg.effective_logo %}<img src="{{ kiosk_cfg.effective_logo.url }}" alt="{{ company.name }}">{% elif company.kiosk_logo %}<img src="{{ company.kiosk_logo.url }}" alt="{{ company.name }}">{% elif company.logo %}<img src="{{ company.logo.url }}" alt="{{ company.name }}">{% else %}<div class="kiosk-logo-fallback">{{ company.name|slice:":2"|upper }}</div>{% endif %}</div>
+    <div class="kiosk-copy">
+      <div class="kiosk-name">{% if kiosk_cfg %}{{ kiosk_cfg.effective_welcome_title }}{% else %}{{ company.name }}{% endif %}</div>
+      <div class="kiosk-sub">{% if kiosk_cfg %}{{ kiosk_cfg.effective_welcome_subtitle }}{% else %}{{ company.kiosk_welcome_text|default:'Touch to order' }}{% endif %}</div>
+      <div class="brand-chips"><span class="brand-chip brand-chip-meta"><i class="bi bi-display"></i>Self-order kiosk</span><span class="brand-chip brand-chip-status {% if company.is_store_open %}is-open{% else %}is-closed{% endif %}"><i class="bi bi-circle-fill" style="font-size:8px;"></i>{% if company.is_store_open %}Ordering open{% else %}Ordering closed{% endif %}</span>{% if selected_cafe %}<span class="brand-chip brand-chip-location"><i class="bi bi-shop"></i>{{ selected_cafe.name }}</span>{% elif selected_building %}<span class="brand-chip brand-chip-location"><i class="bi bi-building"></i>{{ selected_building.name }}</span>{% endif %}</div>
+    </div>
+  </div>
+  <div class="header-actions"><button type="button" class="tour-chip" onclick="window.NeverQPublicTourStart && window.NeverQPublicTourStart()"><i class="bi bi-stars"></i>Tour</button><a href="{% url 'orders:kiosk_cart' company_id=company_id %}{% if kiosk_slug %}?kiosk={{ kiosk_slug }}{% endif %}" class="cart-fab"><i class="bi bi-cart3"></i>Cart <span class="badge-count" id="cartCount">{{ cart_count }}</span></a></div>
+</div>
+<div class="shell stack">
+  <section class="hero">
+    <div class="hero-media panel" id="kioskHeroBanner"><div class="media-frame">
+      {% if adverts %}
+      <div id="kioskAdvertCarousel" class="carousel slide h-100" data-bs-ride="carousel" data-bs-interval="3800">
+        <div class="carousel-inner h-100">
+          {% for ad in adverts %}
+          <div class="carousel-item h-100 {% if forloop.first %}active{% endif %}">{% if ad.display_image %}<img src="{{ ad.display_image.url }}" alt="{{ ad.name|default:company.name }}">{% else %}<div class="fallback-grid"><div class="fallback-tile"><strong>{{ company.name }}</strong><span>Freshly prepared meals and faster pickup at the kiosk.</span></div><div class="fallback-tile"><strong>Featured picks</strong><span>Show the best dishes first so walk-in customers decide quickly.</span></div><div class="fallback-tile"><strong>QR pickup</strong><span>Every confirmed order prints a slip with the correct counter QR.</span></div><div class="fallback-tile"><strong>Built for rush hour</strong><span>Cleaner filters and easier add-to-cart controls.</span></div></div>{% endif %}</div>
+          {% endfor %}
+        </div>
+        {% if adverts|length > 1 %}<div class="indicators carousel-indicators">{% for ad in adverts %}<button type="button" data-bs-target="#kioskAdvertCarousel" data-bs-slide-to="{{ forloop.counter0 }}" class="{% if forloop.first %}active{% endif %}" aria-label="Slide {{ forloop.counter }}"></button>{% endfor %}</div>{% endif %}
+      </div>
+      {% elif kiosk_cfg and kiosk_cfg.hero_image %}
+      <img src="{{ kiosk_cfg.hero_image.url }}" alt="{{ company.name }}">
+      {% else %}
+      <div class="fallback-grid"><div class="fallback-tile"><strong>Live counters</strong><span>Building and cafe filters keep the menu scoped to the correct pickup point.</span></div><div class="fallback-tile"><strong>Featured products</strong><span>Use the kiosk featured flag to spotlight quick high-volume items.</span></div><div class="fallback-tile"><strong>Faster checkout</strong><span>Add items in one tap, capture the customer name, and print the QR slip immediately.</span></div><div class="fallback-tile"><strong>Cashier-ready</strong><span>Cashier and KOT views now carry the kiosk-entered customer name through the full flow.</span></div></div>
+      {% endif %}
+    </div></div>
+  </section>
+  <section class="controls panel">
+    <div class="controls-head"><div><h2 class="title">Refine this kiosk menu</h2><p class="sub">Use search, veg-only, calories, offerings, and categories to narrow the live menu.</p></div><div class="scope-chip-wrap"><span class="scope-chip"><i class="bi bi-box-seam"></i><strong id="kioskVisibleCount">{{ live_products_count }}</strong>&nbsp;available now</span>{% if selected_building %}<span class="scope-chip"><i class="bi bi-building"></i>{{ selected_building.name }}</span>{% endif %}{% if selected_cafe %}<span class="scope-chip"><i class="bi bi-shop"></i>{{ selected_cafe.name }}</span>{% endif %}</div></div>
+    {% if buildings or cafes %}
+    <form method="get" class="locations" id="filterForm">
+      {% if kiosk_slug %}<input type="hidden" name="kiosk" value="{{ kiosk_slug }}">{% endif %}{% if veg_filter %}<input type="hidden" name="veg" value="{{ veg_filter }}">{% endif %}{% if kiosk_calorie_max %}<input type="hidden" name="calorie_max" value="{{ kiosk_calorie_max }}">{% endif %}{% if selected_offering %}<input type="hidden" name="offering" value="{{ selected_offering.pk }}">{% endif %}{% if selected_category %}<input type="hidden" name="category" value="{{ selected_category.pk }}">{% endif %}
+      {% if buildings %}<div class="field-span"><select name="building" class="field" onchange="this.form.submit()"><option value="">All buildings</option>{% for b in buildings %}<option value="{{ b.pk }}" {% if selected_building and selected_building.pk == b.pk %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></div>{% endif %}
+      {% if cafes %}<div class="field-span"><select name="cafe" class="field" onchange="this.form.submit()"><option value="">All cafes</option>{% for c in cafes %}<option value="{{ c.pk }}" {% if selected_cafe and selected_cafe.pk == c.pk %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>{% endif %}
+      <div class="reset-span"><a href="{% url 'orders:kiosk_reset' company_id=company_id %}" class="btn btn-outline-secondary w-100 h-100 d-inline-flex align-items-center justify-content-center rounded-4 fw-bold">Reset filters</a></div>
+    </form>
+    {% endif %}
+    <div class="toolbar-shell" id="kioskQuickToolbar">
+      <div class="menu-toolbar-top">
+        <label class="search-shell" for="kioskSearchInput"><i class="bi bi-search"></i><input type="search" id="kioskSearchInput" class="search-input" placeholder="Search products or offerings"></label>
+        <a href="?{% if kiosk_slug %}kiosk={{ kiosk_slug }}&{% endif %}{% if selected_building %}building={{ selected_building.pk }}&{% endif %}{% if selected_cafe %}cafe={{ selected_cafe.pk }}&{% endif %}{% if selected_offering %}offering={{ selected_offering.pk }}&{% endif %}{% if selected_category %}category={{ selected_category.pk }}&{% endif %}{% if kiosk_calorie_max %}calorie_max={{ kiosk_calorie_max }}&{% endif %}veg={% if veg_filter == 'veg' %}{% else %}veg{% endif %}" class="veg-only-toggle {% if veg_filter == 'veg' %}active{% endif %}" aria-label="Toggle veg only items" title="Veg only"><span class="veg-toggle-mark" aria-hidden="true"><span class="veg-toggle-dot"></span></span><span class="veg-only-switch"><span class="veg-only-knob"></span></span></a>
+      </div>
+      <div class="menu-toolbar-bottom">
+        <div class="calorie-inline-group">
+          <span class="calorie-inline-label"><i class="bi bi-fire"></i>Calories</span>
+          {% for preset in kiosk_calorie_presets %}
+          <a href="?{% if kiosk_slug %}kiosk={{ kiosk_slug }}&{% endif %}{% if selected_building %}building={{ selected_building.pk }}&{% endif %}{% if selected_cafe %}cafe={{ selected_cafe.pk }}&{% endif %}{% if selected_offering %}offering={{ selected_offering.pk }}&{% endif %}{% if selected_category %}category={{ selected_category.pk }}&{% endif %}{% if veg_filter %}veg={{ veg_filter }}&{% endif %}{% if kiosk_calorie_max != preset %}calorie_max={{ preset }}{% endif %}" class="filter-pill compact {% if kiosk_calorie_max == preset %}active{% endif %}">&le;{{ preset }}</a>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="filter-stack">
+      {% if offerings %}{% if not kiosk_cfg or kiosk_cfg.show_offerings %}<div class="filter-label"><div class="filter-title">Offerings</div><div class="filter-note">Jump straight into the right meal window</div></div><div class="strip" id="offeringStrip"><a href="?{% if kiosk_slug %}kiosk={{ kiosk_slug }}&{% endif %}{% if selected_building %}building={{ selected_building.pk }}&{% endif %}{% if selected_cafe %}cafe={{ selected_cafe.pk }}&{% endif %}{% if veg_filter %}veg={{ veg_filter }}&{% endif %}{% if kiosk_calorie_max %}calorie_max={{ kiosk_calorie_max }}&{% endif %}" class="pill {% if not selected_offering %}active{% else %}is-neutral{% endif %}">All offerings</a>{% for off in offerings %}<a href="?{% if kiosk_slug %}kiosk={{ kiosk_slug }}&{% endif %}{% if selected_building %}building={{ selected_building.pk }}&{% endif %}{% if selected_cafe %}cafe={{ selected_cafe.pk }}&{% endif %}{% if veg_filter %}veg={{ veg_filter }}&{% endif %}{% if kiosk_calorie_max %}calorie_max={{ kiosk_calorie_max }}&{% endif %}offering={{ off.pk }}" class="pill {% if selected_offering and selected_offering.pk == off.pk %}active{% else %}is-neutral{% endif %}">{{ off.name }}</a>{% endfor %}</div>{% endif %}{% endif %}
+      {% if categories %}{% if not kiosk_cfg or kiosk_cfg.show_categories %}<div class="filter-label"><div class="filter-title">Categories</div><div class="filter-note">Narrow the visible menu even further</div></div><div class="strip" id="categoryStrip"><a href="?{% if kiosk_slug %}kiosk={{ kiosk_slug }}&{% endif %}{% if selected_building %}building={{ selected_building.pk }}&{% endif %}{% if selected_cafe %}cafe={{ selected_cafe.pk }}&{% endif %}{% if veg_filter %}veg={{ veg_filter }}&{% endif %}{% if kiosk_calorie_max %}calorie_max={{ kiosk_calorie_max }}&{% endif %}{% if selected_offering %}offering={{ selected_offering.pk }}&{% endif %}" class="pill {% if not selected_category %}active{% else %}is-neutral{% endif %}">All categories</a>{% for cat in categories %}<a href="?{% if kiosk_slug %}kiosk={{ kiosk_slug }}&{% endif %}{% if selected_building %}building={{ selected_building.pk }}&{% endif %}{% if selected_cafe %}cafe={{ selected_cafe.pk }}&{% endif %}{% if veg_filter %}veg={{ veg_filter }}&{% endif %}{% if kiosk_calorie_max %}calorie_max={{ kiosk_calorie_max }}&{% endif %}{% if selected_offering %}offering={{ selected_offering.pk }}&{% endif %}category={{ cat.pk }}" class="pill {% if selected_category and selected_category.pk == cat.pk %}active{% else %}is-neutral{% endif %}">{{ cat.name }}</a>{% endfor %}</div>{% endif %}{% endif %}
+    </div>
+  </section>
+  {% if featured_products %}
+  <section class="section panel {% if kiosk_cfg and kiosk_cfg.card_style == 'compact' %}cs-compact{% elif kiosk_cfg and kiosk_cfg.card_style == 'large' %}cs-large{% endif %}" id="kioskFeaturedSection">
+    <div class="section-head"><div><h2 class="section-title"><i class="bi bi-stars me-2" style="color:#f59e0b;"></i>Featured picks</h2><div class="section-copy">These items are pinned for the kiosk so customers can decide faster during busy pickup windows.</div></div><span class="section-badge"><i class="bi bi-star-fill"></i>{{ featured_products|length }} highlighted</span></div>
+    <div class="cards {% if featured_products|length == 1 %}single featured-grid-single{% endif %}" id="kioskFeaturedGrid">
+      {% for product in featured_products %}
+      <div data-product-col data-product-section="featured" data-calories="{{ product.calories|default:'' }}" data-search="{{ product.name|default:''|lower }} {{ product.category.name|default:''|lower }} {{ product.offering.name|default:''|lower }} {{ product.description|default:''|striptags|lower }}">
+        <article class="card featured" data-product-id="{{ product.pk }}" data-min-qty="{{ product.min_qty|default:1 }}" data-max-qty="{{ product.effective_web_qty|default:999999 }}">
+          <div class="media">
+            {% if product.image %}<img src="{{ product.image.url }}" alt="{{ product.name }}">{% else %}<div class="placeholder"><i class="bi bi-stars"></i></div>{% endif %}
+            <div class="badges">
+              <span class="product-badge featured"><i class="bi bi-star-fill"></i>Featured</span>
+              <span class="product-badge stock">{% if product.effective_web_qty > 0 %}<i class="bi bi-box-seam"></i>Max {{ product.effective_web_qty }}/order{% else %}<i class="bi bi-check-circle"></i>Available now{% endif %}</span>
+            </div>
+          </div>
+          <div class="body">
+            <div class="top">{% with ft=product.food_type.first %}{% if ft %}<span class="food-mark {% if 'veg' not in ft.name|lower or 'non' in ft.name|lower %}nonveg{% endif %}"></span>{% endif %}{% endwith %}<div class="meta-row"><div class="meta-pills">{% if product.category %}<span class="context-pill">{{ product.category.name }}</span>{% endif %}{% if product.offering %}<span class="context-pill secondary">{{ product.offering.name }}</span>{% endif %}</div>{% if product.calories %}<span class="calorie-note"><i class="bi bi-fire"></i>{{ product.calories }} kcal</span>{% endif %}</div></div>
+            <h3 class="name">{{ product.name }}</h3>
+            <p class="desc">{% if product.description %}{{ product.description|truncatechars:76 }}{% else %}Kiosk spotlight item picked to drive faster decisions and cleaner pickup during the rush.{% endif %}</p>
+            <div class="footer">
+              <div class="price-row"><div class="price-block"><div class="price">&#8377;{{ product.display_price|default:product.price }}</div><span class="product-availability"><i class="bi bi-lightning-charge"></i>{% if product.effective_web_qty > 0 %}Max {{ product.effective_web_qty }}/order{% else %}Ready to order{% endif %}</span></div></div>
+              <div class="actions">{% if company.is_store_open %}<div class="qty" data-qty-control data-product-id="{{ product.pk }}" hidden><button class="qty-btn" type="button" onclick="changeQty({{ product.pk }}, -1)">-</button><span class="qty-num" data-qty-display data-product-id="{{ product.pk }}">0</span><button class="qty-btn" type="button" onclick="changeQty({{ product.pk }}, 1)">+</button></div><button class="add-btn" type="button" data-add-button data-product-id="{{ product.pk }}" onclick="addToCart({{ product.pk }})"><i class="bi bi-plus-lg"></i>Add to cart</button>{% else %}<div class="unavail-tag"><i class="bi bi-lock"></i>Store closed</div>{% endif %}</div>
+            </div>
+          </div>
+        </article>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+  {% if not browse_products and not featured_products %}
+  <section class="section panel" id="kioskBrowseSection"><div class="empty"><i class="bi bi-clock-history"></i><h3>No items available right now</h3><p>The kiosk menu is currently empty{% if veg_filter == 'veg' %} for the veg-only filter{% endif %}. Reset the filters or adjust category and offering timings to bring products back.</p>{% if veg_filter or selected_offering or selected_category %}<a href="?{% if kiosk_slug %}kiosk={{ kiosk_slug }}&{% endif %}{% if selected_building %}building={{ selected_building.pk }}{% endif %}" class="hero-btn primary">Show all</a>{% endif %}</div></section>
+  {% else %}
+  <section class="section panel {% if kiosk_cfg and kiosk_cfg.card_style == 'compact' %}cs-compact{% elif kiosk_cfg and kiosk_cfg.card_style == 'large' %}cs-large{% endif %}" id="kioskBrowseSection">
+    <div class="section-head"><div><h2 class="section-title">{% if selected_category %}{{ selected_category.name }}{% elif selected_offering %}{{ selected_offering.name }}{% else %}Browse menu{% endif %}</h2><div class="section-copy">{% if featured_products %}Featured dishes stay above, and the rest of the live catalog continues below without duplicated cards.{% else %}Browse everything currently available at this kiosk location.{% endif %}</div></div><span class="section-badge" id="kioskBrowseBadge"><i class="bi bi-grid-3x3-gap"></i>{{ browse_products|length }} shown</span></div>
+    {% if browse_products %}
+    <div class="cards" id="kioskProductGrid">
+      {% for product in browse_products %}
+      <div data-product-col data-product-section="browse" data-calories="{{ product.calories|default:'' }}" data-search="{{ product.name|default:''|lower }} {{ product.category.name|default:''|lower }} {{ product.offering.name|default:''|lower }} {{ product.description|default:''|striptags|lower }}">
+        <article class="card" data-product-id="{{ product.pk }}" data-min-qty="{{ product.min_qty|default:1 }}" data-max-qty="{{ product.effective_web_qty|default:999999 }}">
+          <div class="media">
+            {% if product.image %}<img src="{{ product.image.url }}" alt="{{ product.name }}">{% else %}<div class="placeholder"><i class="bi bi-cup-hot"></i></div>{% endif %}
+            <div class="badges"><span class="product-badge stock">{% if product.effective_web_qty > 0 %}<i class="bi bi-box-seam"></i>Max {{ product.effective_web_qty }}/order{% else %}<i class="bi bi-check-circle"></i>Available now{% endif %}</span></div>
+          </div>
+          <div class="body">
+            <div class="top">{% with ft=product.food_type.first %}{% if ft %}<span class="food-mark {% if 'veg' not in ft.name|lower or 'non' in ft.name|lower %}nonveg{% endif %}"></span>{% endif %}{% endwith %}<div class="meta-row"><div class="meta-pills">{% if product.category %}<span class="context-pill">{{ product.category.name }}</span>{% endif %}{% if product.offering %}<span class="context-pill secondary">{{ product.offering.name }}</span>{% endif %}</div>{% if product.calories %}<span class="calorie-note"><i class="bi bi-fire"></i>{{ product.calories }} kcal</span>{% endif %}</div></div>
+            <h3 class="name">{{ product.name }}</h3>
+            <p class="desc">{% if product.description %}{{ product.description|truncatechars:76 }}{% else %}Freshly prepared for the current service window and ready to move through kiosk checkout quickly.{% endif %}</p>
+            <div class="footer">
+              <div class="price-row"><div class="price-block"><div class="price">&#8377;{{ product.display_price|default:product.price }}</div><span class="product-availability"><i class="bi bi-lightning-charge"></i>{% if product.effective_web_qty > 0 %}Max {{ product.effective_web_qty }}/order{% else %}Ready to order{% endif %}</span></div></div>
+              <div class="actions">{% if company.is_store_open %}<div class="qty" data-qty-control data-product-id="{{ product.pk }}" hidden><button class="qty-btn" type="button" onclick="changeQty({{ product.pk }}, -1)">-</button><span class="qty-num" data-qty-display data-product-id="{{ product.pk }}">0</span><button class="qty-btn" type="button" onclick="changeQty({{ product.pk }}, 1)">+</button></div><button class="add-btn" type="button" data-add-button data-product-id="{{ product.pk }}" onclick="addToCart({{ product.pk }})"><i class="bi bi-plus-lg"></i>Add to cart</button>{% else %}<div class="unavail-tag"><i class="bi bi-lock"></i>Store closed</div>{% endif %}</div>
+            </div>
+          </div>
+        </article>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="empty mt-3" id="kioskSearchEmpty" hidden><i class="bi bi-search"></i><h3>No products match this search</h3><p>Try a shorter keyword, switch the meal window, or clear some filters to bring more dishes back into view.</p></div>
+    {% else %}
+    <div class="empty"><i class="bi bi-stars"></i><h3>Only featured dishes are live</h3><p>All currently visible products are already showcased above, so the main catalog has nothing extra to list right now.</p></div>
+    {% endif %}
+  </section>
+  {% endif %}
+</div>
+<script>
+const CID={{ company_id }};
+const serverCart={ {% for pid,item in cart.items %}"{{ pid }}": {{ item.qty }},{% endfor %} };
+const nodes=(pid,selector)=>document.querySelectorAll(`${selector}[data-product-id="${pid}"]`);
+function setQtyState(pid,qty){nodes(pid,'[data-qty-display]').forEach(n=>n.textContent=qty);nodes(pid,'[data-qty-control]').forEach(n=>n.hidden=qty<=0);nodes(pid,'[data-add-button]').forEach(n=>n.hidden=qty>0);}
+function limitsFor(pid){const card=document.querySelector(`.card[data-product-id="${pid}"]`);const min=Math.max(1,parseInt(card?.dataset.minQty||'1',10)||1);const maxRaw=parseInt(card?.dataset.maxQty||'999999',10);const max=Number.isFinite(maxRaw)&&maxRaw>0?maxRaw:999999;return{min,max};}
+function addToCart(pid){const l=limitsFor(pid);updateCart(pid,serverCart[pid]?serverCart[pid]+1:l.min);}
+function changeQty(pid,delta){const l=limitsFor(pid);const next=(serverCart[pid]||0)+delta;updateCart(pid,next>0?Math.max(l.min,Math.min(next,l.max)):0);}
+async function updateCart(pid,qty){const before=serverCart[pid]||0;if(qty>0){serverCart[pid]=qty}else{delete serverCart[pid]}setQtyState(pid,qty);try{const response=await fetch(`/orders/kiosk/${CID}/cart/update/`,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':(document.cookie.match(/csrftoken=([^;]+)/)||[])[1]||''},body:JSON.stringify({product_id:pid,qty:qty})});const data=await response.json();if(!response.ok||!data.success){if(before>0){serverCart[pid]=before}else{delete serverCart[pid]}setQtyState(pid,before);alert(data.error||'Could not update cart.');return;}if(data.qty>0){serverCart[pid]=data.qty}else{delete serverCart[pid]}setQtyState(pid,data.qty||0);document.getElementById('cartCount').textContent=data.cart_count||0;}catch(error){console.error(error);window.location.reload();}}
+function updateSearchState(){const input=document.getElementById('kioskSearchInput');const query=(input?.value||'').trim().toLowerCase();const cards=[...document.querySelectorAll('[data-product-col]')];let total=0,featured=0,browse=0;cards.forEach((col)=>{const match=!query||(col.dataset.search||'').toLowerCase().includes(query);col.hidden=!match;if(match){total+=1;if(col.dataset.productSection==='featured'){featured+=1}else{browse+=1}}});const featuredSection=document.getElementById('kioskFeaturedSection');if(featuredSection){featuredSection.hidden=featured===0}const count=document.getElementById('kioskVisibleCount');if(count){count.textContent=total}const browseBadge=document.getElementById('kioskBrowseBadge');if(browseBadge&&document.getElementById('kioskProductGrid')){browseBadge.innerHTML=`<i class="bi bi-grid-3x3-gap"></i>${browse} shown`;}const searchEmpty=document.getElementById('kioskSearchEmpty');if(searchEmpty){searchEmpty.hidden=total!==0;}}
+window.addEventListener('DOMContentLoaded',function(){Object.entries(serverCart).forEach(([pid,qty])=>{if(qty>0){setQtyState(pid,qty)}});const search=document.getElementById('kioskSearchInput');const clear=document.getElementById('kioskSearchClear');search?.addEventListener('input',updateSearchState);clear?.addEventListener('click',function(){if(search){search.value='';search.focus()}updateSearchState()});updateSearchState();});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+window.NEVERQ_PUBLIC_TOUR_KEY='kiosk-home';
+window.NEVERQ_PUBLIC_TOUR=[
+  {selector:'.kiosk-header',title:'Kiosk home',copy:'This header keeps the kiosk branding visible and gives quick access to the live cart.',placement:'bottom'},
+  {selector:'.hero',title:'Banner and hero stage',copy:'The kiosk now mirrors the approved live web banners here, so the visual story matches what customers already see online.',placement:'bottom'},
+  {selector:'#filterForm',title:'Location filters',copy:'If the company serves multiple buildings or cafes, use these selectors to narrow the menu before ordering.',placement:'bottom'},
+  {selector:'#kioskQuickToolbar',title:'Search and quick filters',copy:'Use the compact search bar, veg switch, and calorie pills to narrow the menu quickly without leaving the kiosk flow.',placement:'bottom'},
+  {selector:'#offeringStrip, #categoryStrip',title:'Offerings and categories',copy:'These strips help customers jump directly into the right meal window or category without scrolling the full menu.',placement:'bottom'},
+  {selector:'#kioskFeaturedGrid, #kioskProductGrid',title:'Product cards',copy:'Featured picks stay on top, the main catalog stays de-duplicated, and add-to-cart controls are available on every live card.',placement:'top'},
+  {selector:'.cart-fab',title:'Open the cart',copy:'Use the cart button any time to review selected items and move toward checkout.',placement:'left'}
+];
+</script>
+{% include "includes/public_tour_widget.html" %}
+</body>
+</html>

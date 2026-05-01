@@ -1,0 +1,49 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  .company-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+  .company-actions form{margin:0}
+  .company-store-btn{min-width:76px;padding:6px 12px !important}
+</style>
+{% endblock %}
+{% block content %}
+<div class="cf-card">
+  <div class="cf-card-header">
+    <h5><i class="bi bi-building me-2"></i>Companies</h5>
+    {% if request.user.is_superadmin %}<a href="{% url 'dashboard:company_add' %}" class="btn btn-cf-danger btn-sm"><i class="bi bi-plus-circle me-1"></i>Add Company</a>{% endif %}
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="cf-table">
+      <thead>
+        <tr><th>#</th><th>Name</th><th>Billing</th><th>Subsidy</th><th>Schedule</th><th>Status</th><th>Customers</th><th>Orders</th><th style="width:160px;">Actions</th></tr>
+      </thead>
+      <tbody>
+      {% for co in companies %}
+        <tr>
+          <td class="text-muted">{{ co.pk }}</td>
+          <td><a href="{% url 'dashboard:company_detail' co.pk %}" class="fw-600 text-blue" style="text-decoration:none;">{{ co.name }}</a></td>
+          <td>{% if co.bill_company == 2 %}<span class="badge bg-info">Company Pays</span>{% else %}<span class="badge bg-secondary">Employee Pays</span>{% endif %}</td>
+          <td>{% if co.company_meal_amount %}₹{{ co.company_meal_amount }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td><span class="badge bg-light text-dark border">{{ co.order_window_label }}</span></td>
+          <td>{% if co.is_store_open %}<span class="badge bg-success">Open</span>{% else %}<span class="badge bg-danger">Closed</span>{% endif %}{% if not co.store_status %}<div class="small text-muted">Manually closed</div>{% elif co.has_order_schedule %}<div class="small text-muted">Auto by schedule</div>{% endif %}</td>
+          <td><span class="badge" style="background:var(--cf-blue-light);color:var(--cf-blue);">{{ co.customer_count }}</span></td>
+          <td><span class="badge" style="background:var(--cf-red-light);color:var(--cf-red);">{{ co.order_count }}</span></td>
+          <td>
+            <div class="company-actions">
+              <a href="{% url 'dashboard:company_edit' co.pk %}" class="btn btn-cf-outline btn-icon" title="Edit"><i class="bi bi-pencil"></i></a>
+              {% if request.user.is_superadmin or request.user.company_id == co.pk %}
+              <form method="post" action="{% url 'dashboard:company_store_toggle' co.pk %}">
+                {% csrf_token %}
+                {% if co.store_status %}<input type="hidden" name="action" value="close"><button type="submit" class="btn btn-sm btn-outline-danger company-store-btn">Close</button>
+                {% else %}<input type="hidden" name="action" value="open"><button type="submit" class="btn btn-sm btn-outline-success company-store-btn">Open</button>{% endif %}
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% empty %}<tr><td colspan="9" class="text-center text-muted py-4">No companies.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

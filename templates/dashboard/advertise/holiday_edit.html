@@ -1,0 +1,56 @@
+{% extends "base/dashboard_base.html" %}
+{% block page_heading %}{{ page_title }}{% endblock %}
+{% block content %}
+<div style="max-width:480px;">
+  <div class="cf-card">
+    <div class="cf-card-header">
+      <h5><i class="bi bi-calendar-heart me-2 text-blue"></i>{{ page_title }}</h5>
+      <a href="{% url 'dashboard:holiday_list' %}" class="btn btn-cf-outline btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back
+      </a>
+    </div>
+    <div class="cf-card-body">
+      <form method="post">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label">Holiday Name *</label>
+          <input type="text" name="name" class="form-control" value="{{ holiday.name }}" required>
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label">Month (1–12)</label>
+            <input type="number" name="month" class="form-control" min="1" max="12" value="{{ holiday.month }}" required>
+          </div>
+          <div class="col-6">
+            <label class="form-label">Day (1–31)</label>
+            <input type="number" name="day" class="form-control" min="1" max="31" value="{{ holiday.day }}" required>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <textarea name="description" class="form-control" rows="2">{{ holiday.description }}</textarea>
+        </div>
+        <div class="mb-4">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" name="is_active" id="isActive"
+                   {% if holiday.is_active %}checked{% endif %}
+                   style="width:44px;height:22px;">
+            <label class="form-check-label" for="isActive">Active</label>
+          </div>
+        </div>
+        {% if holiday.adverts.count %}
+        <div class="alert alert-info" style="font-size:12px;">
+          <i class="bi bi-megaphone me-1"></i>
+          {{ holiday.adverts.count }} banner{{ holiday.adverts.count|pluralize }} linked to this holiday.
+          They will automatically go live on {{ holiday.day }}/{{ holiday.month }} every year.
+        </div>
+        {% endif %}
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-cf-primary"><i class="bi bi-check-circle me-1"></i>Save</button>
+          <a href="{% url 'dashboard:holiday_list' %}" class="btn btn-cf-outline">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

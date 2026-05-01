@@ -1,0 +1,416 @@
+{% extends "base/customer_base.html" %}
+{% load core_extras %}
+{% block content %}
+
+<div class="page-strip">
+  <div class="container d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <a href="{% url 'menu:menu' %}" class="btn btn-cf-soft"><i class="bi bi-arrow-left me-1"></i>Continue shopping</a>
+      <div class="phase4-header-copy">
+        <h3>Your cart</h3>
+        <p>Check items, adjust quantity, and move to checkout when you are ready.</p>
+      </div>
+    </div>
+    <span class="pill-muted">{{ cart_count|default:0 }} item{{ cart_count|pluralize }}</span>
+  </div>
+</div>
+
+<div class="container mt-4 phase4-page">
+  {% if items %}
+    <div class="phase4-grid">
+      <div class="phase4-stack">
+        <div class="phase4-card">
+          <div class="phase4-card-body">
+            <div class="section-heading mb-0">
+              <div>
+                <h4 class="phase4-card-title"><i class="bi bi-basket2-fill me-2 text-danger"></i>Items in cart</h4>
+                <div class="phase4-card-note">Everything here updates instantly without leaving the page.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {% for item in items %}
+          <div class="phase4-cart-item" id="cart-item-{{ item.product.pk }}">
+            <div class="phase4-cart-grid">
+              {% if item.product.image %}
+                <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="phase4-thumb">
+              {% else %}
+                <div class="phase4-thumb-fallback">🍲</div>
+              {% endif %}
+
+              <div class="phase4-item-copy">
+                <div class="phase4-item-topline">
+                  <div>
+                    <h5 class="phase4-item-name">{{ item.product.name }}</h5>
+                    <div class="phase4-item-meta mt-2">
+                      {% with ft=item.product.food_type.first cat_icon=item.product.category.icon_type %}
+                      {% if cat_icon == 1 %}
+                        <span class="food-dot veg" aria-label="Veg"></span>
+                      {% elif cat_icon == 2 %}
+                        <span class="food-dot nonveg" aria-label="Non veg"></span>
+                      {% elif ft %}
+                        <span class="food-dot {% if 'non' in ft.name|lower %}nonveg{% else %}veg{% endif %}" aria-label="{% if 'non' in ft.name|lower %}Non veg{% else %}Veg{% endif %}"></span>
+                      {% endif %}
+                      {% endwith %}
+                      {% if item.is_available_now %}
+                        <span class="pill-soft availability-pill open"><i class="bi bi-check2-circle"></i>Available now</span>
+                      {% else %}
+                        <span class="pill-muted" style="background: var(--cf-red-light); color: var(--cf-red);"><i class="bi bi-exclamation-circle"></i>Unavailable now</span>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="phase4-item-submeta">
+                  ₹{{ item.product.display_price|default:item.product.price }} each{% if item.product.packing_price > 0 %} · Packing ₹{{ item.product.packing_price }}{% endif %}
+                </div>
+
+                <div class="phase4-item-actions">
+                  <div class="qty-control">
+                    <button type="button" class="qty-btn qty-minus js-qty-btn" data-pid="{{ item.product.pk }}" data-delta="-1">−</button>
+                    <span class="qty-display" id="qty-{{ item.product.pk }}">{{ item.qty }}</span>
+                    <button type="button" class="qty-btn qty-plus js-qty-btn" data-pid="{{ item.product.pk }}" data-delta="1">+</button>
+                  </div>
+                  <a href="{% url 'menu:product_detail' item.product.pk %}" class="btn btn-cf-outline btn-sm">View item</a>
+                  <form method="post" action="{% url 'menu:cart_remove' item.product.pk %}" class="js-remove-form" data-pid="{{ item.product.pk }}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-link btn-sm text-danger text-decoration-none fw-bold p-0">Remove</button>
+                  </form>
+                </div>
+              </div>
+
+              <div class="phase4-linebox">
+                <div class="line-label">Line total</div>
+                <div class="pprice" id="line-{{ item.product.pk }}">₹{{ item.line_total }}</div>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <div>
+        <div class="phase4-summary-card">
+          <div class="section-heading mb-3">
+            <div>
+              <h4 class="phase4-card-title"><i class="bi bi-receipt-cutoff me-2 text-danger"></i>Order summary</h4>
+              <div class="phase4-card-note">A clean total before you continue to payment.</div>
+            </div>
+          </div>
+
+          {% if company_cafes|length > 1 %}
+          <div class="phase4-section-block mb-3">
+            <div class="fw-bold mb-2" style="font-size:14px;color:var(--cf-navy);">Choose cafeteria</div>
+            <div class="phase4-card-note mb-2">Select the cafeteria for this order.</div>
+            <select id="cafePicker" class="form-select phase4-cafe-select" onchange="selectWebCafe(this.value)">
+              <option value="">— Select a cafe —</option>
+              {% for c in company_cafes %}
+              <option value="{{ c.pk }}" {% if c.pk == selected_cafe_id %}selected{% endif %}>
+                {{ c.name }}{% if c.building %} ({{ c.building.name }}){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+            <div id="cafePickerCheck" class="small mt-2" style="color:#2e7d32;display:{% if selected_cafe_id %}block{% else %}none{% endif %};">
+              <i class="bi bi-check-circle-fill me-1"></i>Cafeteria selected
+            </div>
+          </div>
+          {% elif company_cafes|length == 1 %}
+          <div class="phase4-inline-info mb-3">
+            <i class="bi bi-shop"></i>
+            <div>
+              <div class="fw-bold" style="font-size:14px;">{{ company_cafes.0.name }}</div>
+              <div class="small text-muted">{% if company_cafes.0.building %}{{ company_cafes.0.building.name }}{% else %}Selected cafeteria{% endif %}</div>
+            </div>
+          </div>
+          <div style="display:none;" id="singleCafeAutoSelect" data-cafe-id="{{ company_cafes.0.pk }}"></div>
+          {% endif %}
+
+          <div class="phase4-mini-stack mb-3">
+            {% for item in items %}
+              <div class="phase4-mini-row">
+                <div>
+                  <div class="name">{{ item.product.name }}</div>
+                  <div class="meta">Qty {{ item.qty }}</div>
+                </div>
+                <strong>₹{{ item.line_total }}</strong>
+              </div>
+            {% endfor %}
+          </div>
+
+          {% if bogo_nudges %}
+            {% for nudge in bogo_nudges %}
+            <div class="phase4-section-block mb-2" style="background:linear-gradient(135deg,#fef2f2,#fff5f5);border-color:#fca5a5;">
+              <div class="d-flex align-items-start justify-content-between gap-3">
+                <div>
+                  <div class="fw-bold" style="font-size:13px;color:#991b1b;"><i class="bi bi-gift-fill me-1"></i>{{ nudge.message }}</div>
+                  <div class="small mt-1" style="color:#b91c1c;">{% if nudge.type == 'bogo' %}Buy 1 get the second one free.{% endif %}</div>
+                </div>
+                <a href="{% url 'menu:product_detail' nudge.product.pk %}" class="btn btn-sm" style="background:#dc2626;color:#fff;white-space:nowrap;">+ Add</a>
+              </div>
+            </div>
+            {% endfor %}
+          {% endif %}
+
+          <div id="cart-offer-banner" {% if not cart_level_offer %}style="display:none;"{% endif %}>
+            <div class="phase4-section-block mb-2" style="background:linear-gradient(135deg,#fff3e0,#fff8f0);border-color:#ffcc80;">
+              <div class="d-flex align-items-start justify-content-between gap-3">
+                <div>
+                  <div class="fw-bold" style="font-size:13px;color:var(--cf-navy);" id="cart-offer-title">{% if cart_level_offer %}{{ cart_level_offer.title }}{% endif %}</div>
+                  <div class="small mt-1" style="color:#e65100;" id="cart-offer-desc">{% if cart_level_offer %}{% if cart_level_offer.offer_type == 'flat' %}₹{{ cart_level_offer.value|floatformat:0 }} off applied!{% else %}{{ cart_level_offer.value|floatformat:0 }}% off applied!{% endif %}{% endif %}</div>
+                </div>
+                <strong style="color:var(--cf-green);font-family:'Rajdhani',sans-serif;font-size:20px;" id="cart-offer-saving-amt">{% if cart_offer_saving %}−₹{{ cart_offer_saving|floatformat:2 }}{% endif %}</strong>
+              </div>
+            </div>
+          </div>
+
+          {% if cart_unlock_nudge and cart_unlock_nudge.remaining_value > 0 %}
+            <div class="phase4-section-block mb-2" id="cart-unlock-nudge" style="background:#e8f5e9;border-color:#a5d6a7;">
+              <div class="small" style="color:#2e7d32;"><i class="bi bi-tags-fill me-1"></i>Add <strong id="cart-unlock-remaining">₹{{ cart_unlock_nudge.remaining_value|floatformat:0 }}</strong> more to unlock <strong id="cart-unlock-title">{{ cart_unlock_nudge.title }}</strong></div>
+            </div>
+          {% endif %}
+
+          <div class="summary-row"><span class="text-muted">Subtotal</span><strong id="summary-subtotal">₹{{ subtotal }}</strong></div>
+          <div class="summary-row" id="summary-offer-row" style="color:var(--cf-green);{% if not offer_discount %}display:none;{% endif %}">
+            <span><i class="bi bi-megaphone-fill me-1"></i>Offer savings</span>
+            <strong id="summary-offer-discount">{% if offer_discount %}−₹{{ offer_discount|floatformat:2 }}{% else %}₹0.00{% endif %}</strong>
+          </div>
+          <div class="summary-row"><span class="text-muted">Packing</span><strong id="summary-packing">₹{{ packing }}</strong></div>
+          {% if bill_to_company > 0 %}
+            <div class="summary-row" style="color: var(--cf-success);"><span>{{ company_cover_label|default:"Company benefit" }}</span><strong id="summary-company">−₹{{ bill_to_company|floatformat:2 }}</strong></div>
+          {% else %}
+            <div class="summary-row" id="company-row" style="display:none;"><span>{{ company_cover_label|default:"Company benefit" }}</span><strong id="summary-company">₹0.00</strong></div>
+          {% endif %}
+          {% if benefit_used_today %}<div class="alert alert-warning mt-3 mb-2" style="font-size:12px;">Today's company meal benefit has already been used. This order is fully chargeable.</div>{% endif %}
+          <div class="summary-row total"><span>You pay</span><span id="summary-pay">₹{{ my_pay|floatformat:2 }}</span></div>
+
+          {% if ordering_closed_message %}
+            <div class="alert alert-danger mt-3 mb-0">{{ ordering_closed_message }}</div>
+            <button type="button" class="btn btn-cf-outline w-100 mt-3" disabled>Store closed</button>
+          {% else %}
+            {% if company_cafes|length > 1 %}
+              <button type="button" class="btn btn-cf-danger w-100 mt-3" id="checkoutBtn" onclick="proceedToCheckout()">
+                Proceed to checkout <i class="bi bi-arrow-right ms-1"></i>
+              </button>
+              <div id="cafeWarning" style="display:none;font-size:12px;color:#c62828;margin-top:6px;padding:8px 12px;background:#fdecea;border-radius:8px;text-align:center;">
+                <i class="bi bi-exclamation-circle me-1"></i>Please choose a cafeteria before proceeding.
+              </div>
+            {% else %}
+              <a href="{% url 'orders:checkout' %}" class="btn btn-cf-danger w-100 mt-3">
+                Proceed to checkout <i class="bi bi-arrow-right ms-1"></i>
+              </a>
+            {% endif %}
+          {% endif %}
+          <a href="{% url 'menu:menu' %}" class="btn btn-cf-outline w-100 mt-2">Add more items</a>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <div style="font-size:72px; margin-bottom:14px;">🛒</div>
+      <h4>Your cart is empty</h4>
+      <p class="text-muted">Browse the menu and add something delicious.</p>
+      <a href="{% url 'menu:menu' %}" class="btn btn-cf-primary">Browse menu</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+
+<script>
+  (function() {
+    function applySummary(data) {
+      document.getElementById('summary-subtotal')?.replaceChildren(document.createTextNode(NeverQUI.money(data.subtotal)));
+      document.getElementById('summary-packing')?.replaceChildren(document.createTextNode(NeverQUI.money(data.packing)));
+      document.getElementById('summary-pay')?.replaceChildren(document.createTextNode(NeverQUI.money(data.my_pay)));
+      const companyValue = parseFloat(data.bill_to_company || 0);
+      const companyRow = document.getElementById('company-row');
+      const companyEl = document.getElementById('summary-company');
+      if (companyEl) companyEl.textContent = '−' + NeverQUI.money(companyValue);
+      if (companyRow) companyRow.style.display = companyValue > 0 ? 'flex' : 'none';
+      NeverQUI.updateCartBadges(data.cart_count || 0);
+
+      // ── Update offer savings row in real time ──────────────────────────────
+      const offerDiscount = parseFloat(data.offer_discount || 0);
+      const cartSaving    = parseFloat(data.cart_offer_saving || 0);
+      const subtotalNow   = parseFloat(data.subtotal || 0);
+      const nudgeMinOrder = parseFloat(data.cart_offer_min_order || 0);
+
+      // ── Offer discount row ─────────────────────────────────────
+      const offerRow   = document.getElementById('summary-offer-row');
+      const offerAmt   = document.getElementById('summary-offer-discount');
+      if (offerRow) {
+        offerRow.style.display = offerDiscount > 0 ? '' : 'none';
+        if (offerAmt) offerAmt.textContent = '−' + NeverQUI.money(offerDiscount);
+      }
+
+      // ── Applied offer banner (shows when offer is active & applied) ──
+      const offerBanner = document.getElementById('cart-offer-banner');
+      const offerTitle  = document.getElementById('cart-offer-title');
+      const offerSaving = document.getElementById('cart-offer-saving-amt');
+      if (offerBanner) {
+        const offerTitle2 = data.cart_level_offer_title || '';
+        offerBanner.style.display = cartSaving > 0 ? '' : 'none';
+        if (offerTitle && offerTitle2) offerTitle.textContent = offerTitle2;
+        if (offerSaving && cartSaving > 0) offerSaving.textContent = '−' + NeverQUI.money(cartSaving);
+      }
+
+      // ── Unlock nudge (show only when offer exists but threshold not yet met) ──
+      const nudgeEl = document.getElementById('cart-unlock-nudge');
+      const nudgeRemainingEl = document.getElementById('cart-unlock-remaining');
+      const nudgeTitleEl = document.getElementById('cart-unlock-title');
+      const nudgeRemaining = parseFloat(data.cart_offer_remaining || 0);
+      const nudgeTitle = data.cart_offer_nudge_title || '';
+      if (nudgeEl) {
+        const thresholdMet = nudgeMinOrder > 0 && subtotalNow >= nudgeMinOrder;
+        if (cartSaving > 0 || thresholdMet || !(nudgeMinOrder > 0) || !(nudgeRemaining > 0)) {
+          nudgeEl.style.display = 'none';
+        } else {
+          nudgeEl.style.display = '';
+          if (nudgeRemainingEl) nudgeRemainingEl.textContent = NeverQUI.money(nudgeRemaining).replace('.00', '');
+          if (nudgeTitleEl && nudgeTitle) nudgeTitleEl.textContent = nudgeTitle;
+        }
+      }
+    }
+
+    document.querySelectorAll('.js-qty-btn').forEach(function(button) {
+      button.addEventListener('click', function() {
+        if (button.dataset.busy === '1') return;
+        button.dataset.busy = '1';
+        button.disabled = true;
+
+        const pid = button.dataset.pid;
+        const delta = parseInt(button.dataset.delta || '0', 10);
+        const qtyEl = document.getElementById('qty-' + pid);
+        const currentQty = parseInt(qtyEl ? qtyEl.textContent : '0', 10);
+        const nextQty = Math.max(0, currentQty + delta);
+
+        fetch(`/menu/cart/update/${pid}/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': NeverQUI.getCookie('csrftoken')
+          },
+          body: `qty=${nextQty}&csrfmiddlewaretoken=${NeverQUI.getCookie('csrftoken')}`
+        })
+        .then(resp => resp.json())
+        .then(data => {
+          if (!data.success) {
+            button.disabled = false;
+            alert(data.error || 'Could not update quantity.');
+            return;
+          }
+          if (data.qty <= 0) {
+            document.getElementById('cart-item-' + pid)?.remove();
+            if (!document.querySelector('[id^="cart-item-"]')) {
+              window.location.reload();
+              return;
+            }
+          } else {
+            if (qtyEl) qtyEl.textContent = data.qty;
+            const lineEl = document.getElementById('line-' + pid);
+            if (lineEl) lineEl.textContent = NeverQUI.money(data.line_total);
+          }
+          applySummary(data);
+        })
+        .catch(function() {
+          button.disabled = false;
+          alert('Network error. Please try again.');
+        })
+        .finally(function() {
+          window.setTimeout(function() {
+            button.dataset.busy = '0';
+            button.disabled = false;
+          }, 800);
+        });
+      });
+    });
+
+    document.querySelectorAll('.js-remove-form').forEach(function(form) {
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const pid = this.dataset.pid;
+        const formData = new FormData(this);
+        fetch(this.action, {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          body: formData
+        })
+        .then(resp => resp.json())
+        .then(data => {
+          if (!data.success) {
+            alert(data.error || 'Could not remove item.');
+            return;
+          }
+          document.getElementById('cart-item-' + pid)?.remove();
+          if (!document.querySelector('[id^="cart-item-"]')) {
+            window.location.reload();
+            return;
+          }
+          applySummary(data);
+        })
+        .catch(() => alert('Network error. Please try again.'));
+      });
+    });
+  })();
+
+// ── Checkout with cafe validation ──────────────────────────────────────────
+function proceedToCheckout() {
+  const picker = document.getElementById('cafePicker');
+  const warning = document.getElementById('cafeWarning');
+  if (picker && !picker.value) {
+    // No cafe selected — show warning and scroll to picker
+    if (warning) warning.style.display = 'block';
+    picker.closest('.phase4-section-block')?.scrollIntoView({behavior: 'smooth', block: 'center'});
+    picker.style.border = '2px solid #c62828';
+    picker.focus();
+    setTimeout(() => { picker.style.border = ''; }, 3000);
+    return;
+  }
+  if (warning) warning.style.display = 'none';
+  window.location.href = '{% url "orders:checkout" %}';
+}
+
+// ── Cafe picker ────────────────────────────────────────────────────────────
+function selectWebCafe(cafeId) {
+  const check = document.getElementById('cafePickerCheck');
+  fetch('{% url "orders:set_web_cafe" %}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || getCsrf(),
+    },
+    body: 'cafe_id=' + encodeURIComponent(cafeId),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success && check) {
+      check.style.display = cafeId ? 'block' : 'none';
+    }
+  })
+  .catch(() => {});
+  // Hide the warning once user selects
+  const warning = document.getElementById('cafeWarning');
+  if (warning && cafeId) warning.style.display = 'none';
+}
+
+// Auto-select single cafe on page load
+(function() {
+  const el = document.getElementById('singleCafeAutoSelect');
+  if (el) {
+    selectWebCafe(el.dataset.cafeId);
+  }
+})();
+
+</script>
+<script>
+window.NEVERQ_PAGE_TOUR_KEY = 'customer-cart';
+window.NEVERQ_PAGE_TOUR = [
+  {selector:'.page-strip', title:'Cart overview', copy:'This page shows what is currently in your cart before you move to checkout.', placement:'bottom'},
+  {selector:'.phase4-stack', title:'Edit items', copy:'Use the quantity controls here to increase, reduce, or remove products instantly.', placement:'right'},
+  {selector:'.phase4-summary-card', title:'Summary and next step', copy:'Review totals, pick the cafeteria if needed, then continue to checkout from this panel.', placement:'left'},
+  {selector:'.bottom-nav', title:'Move around quickly', copy:'The bottom navigation keeps home, orders, cart, profile, and checkout one tap away.', placement:'top'}
+];
+</script>
+{% endblock %}

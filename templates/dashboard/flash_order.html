@@ -1,0 +1,238 @@
+{% extends "base/dashboard_base.html" %}
+{% load core_extras %}
+{% block content %}
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-lightning-charge me-2 text-red"></i>Flash Order</h5>
+        <small class="text-muted">Place a quick order for walk-in web customers</small>
+      </div>
+      <div class="cf-card-body">
+        <form method="post" id="flashForm">
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Company *</label>
+              <select name="company" class="form-select" id="flashCompany" required>
+                <option value="">— Select company —</option>
+                {% for co in companies %}
+                <option value="{{ co.pk }}">{{ co.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Customer Name *</label>
+              <input type="text" name="customer_name" class="form-control"
+                     placeholder="Search or type name…" id="custSearch" required
+                     autocomplete="off">
+              <div id="custSuggestions"
+                   style="position:absolute;z-index:200;background:white;border:1px solid var(--cf-border);border-radius:6px;display:none;max-height:180px;overflow-y:auto;min-width:260px;box-shadow:var(--cf-shadow);"></div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Phone</label>
+              <input type="text" name="customer_phone" class="form-control"
+                     id="custPhone" placeholder="Auto-filled on customer select">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Delivery Date *</label>
+              <input type="date" name="delivery_date" class="form-control"
+                     value="{{ today }}" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Payment Mode</label>
+              <select name="payment_mode" class="form-select">
+                <option value="online">Online</option>
+                <option value="cash">Cash</option>
+                <option value="monthly">Monthly</option>
+                <option value="company">Bill to Company</option>
+              </select>
+            </div>
+
+            <!-- Products -->
+            <div class="col-12">
+              <label class="form-label">Products</label>
+              <div id="flashItems" style="border:1px solid var(--cf-border);border-radius:8px;padding:12px;background:var(--cf-surface);">
+                <div class="flash-item-row row g-2 mb-2">
+                  <div class="col-6">
+                    <select name="product_id[]" class="form-select form-select-sm prod-select">
+                      <option value="">— Select product —</option>
+                      {% for p in products %}
+                      <option value="{{ p.pk }}" data-price="{{ p.price }}">
+                        {{ p.name }} — ₹{{ p.price }}
+                      </option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="col-3">
+                    <input type="number" name="qty[]" class="form-control form-control-sm qty-input"
+                           value="1" min="1" max="20" placeholder="Qty">
+                  </div>
+                  <div class="col-3">
+                    <span class="form-control form-control-sm bg-light line-total text-blue fw-600">₹0</span>
+                  </div>
+                </div>
+              </div>
+              <button type="button" onclick="addFlashRow()"
+                      class="btn btn-sm btn-cf-outline mt-2">
+                <i class="bi bi-plus me-1"></i>Add Product
+              </button>
+            </div>
+
+            <div class="col-12 d-flex justify-content-between align-items-center"
+                 style="background:var(--cf-blue-light);border-radius:8px;padding:12px 16px;">
+              <span style="font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;color:var(--cf-navy);">
+                Total
+              </span>
+              <span id="flashTotal"
+                    style="font-family:'Rajdhani',sans-serif;font-size:26px;font-weight:700;color:var(--cf-blue);">
+                ₹0.00
+              </span>
+            </div>
+
+            <div class="col-12">
+              <button type="submit" class="btn btn-cf-primary w-100"
+                      style="font-size:16px;padding:12px;">
+                <i class="bi bi-lightning-charge me-2"></i>Place Flash Order
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent flash orders -->
+  <div class="col-lg-6">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-clock-history me-2 text-blue"></i>Today's Flash Orders</h5>
+        <span class="badge" style="background:var(--cf-blue-light);color:var(--cf-blue);">{{ recent_orders|length }}</span>
+      </div>
+      <div style="overflow-y:auto;max-height:500px;">
+        <table class="cf-table">
+          <thead><tr><th>Order#</th><th>Customer</th><th>Items</th><th>Amount</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for o in recent_orders %}
+            <tr>
+              <td><a href="{% url 'dashboard:order_detail' o.pk %}" class="text-blue fw-600">{{ o.order_number|short_order_no }}</a></td>
+              <td>
+                <div class="fw-500" style="font-size:13px;">{{ o.customer.name }}</div>
+                <small class="text-muted">{{ o.customer.phone }}</small>
+              </td>
+              <td>
+                <small>
+                  {% for item in o.items.all|slice:':3' %}
+                    {{ item.product.name|default:'Item' }} ×{{ item.qty }}{% if not forloop.last %}, {% endif %}
+                  {% endfor %}
+                </small>
+              </td>
+              <td><strong>₹{{ o.total_amount }}</strong></td>
+              <td><span class="badge bg-{{ o.status_color }}" style="font-size:10px;">{{ o.status_label }}</span></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted py-4">No flash orders today.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if messages %}
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:1100;">
+  {% for msg in messages %}
+  <div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show shadow" role="alert">
+    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function addFlashRow() {
+  const container = document.getElementById('flashItems');
+  const first = container.querySelector('.flash-item-row');
+  const clone = first.cloneNode(true);
+  clone.querySelectorAll('select,input').forEach(el => {
+    if (el.tagName === 'INPUT') el.value = el.type === 'number' ? 1 : '';
+    else el.selectedIndex = 0;
+  });
+  clone.querySelector('.line-total').textContent = '₹0';
+  const removeBtn = document.createElement('div');
+  removeBtn.className = 'col-12';
+  removeBtn.innerHTML = '<a href="#" onclick="this.closest(\'.flash-item-row\').remove();calcTotal();return false;" style="font-size:12px;color:var(--cf-red);">Remove</a>';
+  clone.appendChild(removeBtn);
+  container.appendChild(clone);
+  attachRowListeners(clone);
+}
+
+function attachRowListeners(row) {
+  row.querySelectorAll('.prod-select,.qty-input').forEach(el => {
+    el.addEventListener('change', () => { calcRow(row); calcTotal(); });
+    el.addEventListener('input', () => { calcRow(row); calcTotal(); });
+  });
+}
+
+function calcRow(row) {
+  const sel   = row.querySelector('.prod-select');
+  const qty   = parseInt(row.querySelector('.qty-input').value || 1);
+  const price = parseFloat(sel.options[sel.selectedIndex]?.dataset?.price || 0);
+  const total = price * qty;
+  row.querySelector('.line-total').textContent = '₹' + total.toFixed(2);
+  return total;
+}
+
+function calcTotal() {
+  let total = 0;
+  document.querySelectorAll('.flash-item-row').forEach(row => { total += calcRow(row); });
+  document.getElementById('flashTotal').textContent = '₹' + total.toFixed(2);
+}
+
+document.querySelectorAll('.flash-item-row').forEach(row => attachRowListeners(row));
+
+// Customer search autocomplete
+let searchTimeout;
+document.getElementById('custSearch')?.addEventListener('input', function() {
+  clearTimeout(searchTimeout);
+  const q = this.value.trim();
+  const company = document.getElementById('flashCompany').value;
+  if (q.length < 2) { hideSuggestions(); return; }
+  searchTimeout = setTimeout(() => {
+    fetch(`/dashboard/customers/search/?q=${encodeURIComponent(q)}&company=${company}`)
+      .then(r => r.json())
+      .then(data => {
+        const box = document.getElementById('custSuggestions');
+        box.innerHTML = '';
+        if (!data.customers?.length) { hideSuggestions(); return; }
+        data.customers.forEach(c => {
+          const item = document.createElement('div');
+          item.style.cssText = 'padding:8px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f0f0;';
+          item.innerHTML = `<strong>${c.name}</strong><span class="text-muted ms-2">${c.phone}</span>`;
+          item.addEventListener('mousedown', () => {
+            document.getElementById('custSearch').value = c.name;
+            document.getElementById('custPhone').value = c.phone;
+            document.getElementById('custSearch').dataset.customerId = c.id;
+            hideSuggestions();
+          });
+          item.addEventListener('mouseover', () => item.style.background = '#f8f9fa');
+          item.addEventListener('mouseout', () => item.style.background = '');
+          box.appendChild(item);
+        });
+        box.style.display = 'block';
+      });
+  }, 280);
+});
+
+function hideSuggestions() {
+  document.getElementById('custSuggestions').style.display = 'none';
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#custSearch')) hideSuggestions();
+});
+</script>
+{% endblock %}

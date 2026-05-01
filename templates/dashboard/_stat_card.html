@@ -1,0 +1,16 @@
+<div class="col-6 col-sm-4 col-xl-3">
+  <a href="{% url link %}" style="text-decoration:none;">
+    <div style="background:var(--cf-navy);border-radius:var(--cf-radius);padding:18px 16px;display:flex;align-items:center;gap:14px;transition:opacity .2s;cursor:pointer;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+      <div style="width:52px;height:52px;background:rgba(255,255,255,.12);border-radius:var(--cf-radius-sm);display:grid;place-items:center;flex-shrink:0;">
+        <i class="bi {{ icon }}" style="font-size:22px;color:white;"></i>
+      </div>
+      <div>
+        <div style="font-family:'Rajdhani',sans-serif;font-size:26px;font-weight:700;color:white;line-height:1;">
+          {% if rupee %}₹{% endif %}{{ value }}
+        </div>
+        <div style="font-size:10px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1px;margin-top:2px;">{{ label }}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:3px;">More info →</div>
+      </div>
+    </div>
+  </a>
+</div>

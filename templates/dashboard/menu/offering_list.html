@@ -1,0 +1,126 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<style>
+  .drag-handle { cursor: grab; color: var(--cf-muted); font-size: 17px; padding: 0 6px; user-select: none; }
+  .drag-handle:active { cursor: grabbing; }
+  .sortable-ghost { opacity: .35; background: var(--cf-blue-light); }
+  #sort-save-bar { display: none; position: sticky; top: 60px; z-index: 90; background: var(--cf-warning-light); border: 1px solid var(--cf-warning); border-radius: var(--cf-radius-sm); padding: 10px 16px; margin-bottom: 12px; align-items: center; gap: 12px; }
+  #sort-save-bar.visible { display: flex; }
+</style>
+{% endblock %}
+{% block content %}
+{% url 'dashboard:offering_bulk_delete' as bulk_delete_url %}
+
+<div id="sort-save-bar">
+  <i class="bi bi-arrows-move text-warning"></i>
+  <span style="flex:1;font-size:13.5px;font-weight:600;">Order changed — confirm to save.</span>
+  <button id="sort-confirm-btn" class="btn btn-cf-primary btn-sm"><i class="bi bi-check2 me-1"></i>Save Order</button>
+  <button id="sort-cancel-btn" class="btn btn-cf-ghost btn-sm">Cancel</button>
+</div>
+
+<div class="cf-card">
+  <div class="cf-card-header">
+    <div>
+      <h5><i class="bi bi-sunrise"></i>Offerings</h5>
+      <div style="font-size:13px;color:var(--cf-muted);margin-top:2px;">Breakfast, Lunch, Dinner, Snacks — time-based menu slots</div>
+    </div>
+    {% if lp.add %}<a href="{% url 'dashboard:offering_add' %}" class="btn btn-cf-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>Add Offering</a>{% endif %}
+  </div>
+
+  <div class="cf-card-body pb-0">
+    {% if lp.delete %}
+    {% include "dashboard/includes/bulk_delete_controls.html" with bulk_form_id='offering-bulk-delete-form' bulk_action=bulk_delete_url bulk_confirm_message='Delete selected offerings?' %}
+    {% endif %}
+  </div>
+
+  <div style="overflow-x:auto;">
+    <table class="cf-table">
+      <thead>
+        <tr>
+          <th style="width:44px;"></th>
+          <th style="width:32px;" title="Drag to reorder"></th>
+          <th>Company</th>
+          <th>Offering Name</th>
+          <th>Available Time</th>
+          <th>Days</th>
+          <th>Status</th>
+          <th style="width:160px;"></th>
+        </tr>
+      </thead>
+      <tbody id="offerings-tbody">
+        {% for off in offerings %}
+        <tr id="orow-{{ off.pk }}" data-pk="{{ off.pk }}">
+          <td><input type="checkbox" class="form-check-input bulk-item-check" data-bulk-form-input="offering-bulk-delete-form" form="offering-bulk-delete-form" name="ids" value="{{ off.pk }}"></td>
+          <td><span class="drag-handle" title="Drag to reorder"><i class="bi bi-grip-vertical"></i></span></td>
+          <td class="td-sub">{{ off.company.name }}</td>
+          <td><div class="td-main">{{ off.name }}</div></td>
+          <td>
+            {# Show Schedule windows if set; fall back to legacy available_from/to #}
+            {% with scheds=off.schedules.all %}
+            {% if scheds %}
+              {% for s in scheds %}
+              <span class="badge-cf badge-info" style="display:inline-block;margin:1px;font-size:10.5px;">{{ s.display_day }} {{ s.start_time|time:"H:i" }}–{{ s.end_time|time:"H:i" }}</span>
+              {% endfor %}
+            {% elif off.available_from or off.available_to %}
+            <span class="badge-cf badge-info">{{ off.available_from|time:"H:i"|default:"—" }} – {{ off.available_to|time:"H:i"|default:"—" }}</span>
+            {% else %}
+            <span class="td-sub">All day</span>
+            {% endif %}
+            {% endwith %}
+          </td>
+          <td class="td-sub">{% if off.open_days %}{{ off.open_days|join:", " }}{% else %}Every day{% endif %}</td>
+          <td>
+            <span class="badge-cf {% if off.is_active %}badge-active{% else %}badge-inactive{% endif %}">
+              {% if off.is_active %}Active{% else %}Inactive{% endif %}
+            </span>
+          </td>
+          <td>
+            <div class="d-flex gap-1 justify-content-end">
+              {% if lp.edit %}<a href="{% url 'dashboard:offering_edit' off.pk %}?return_to={{ request.get_full_path|urlencode }}&return_anchor=orow-{{ off.pk }}" class="btn btn-cf-ghost btn-icon" title="Edit"><i class="bi bi-pencil"></i></a>{% endif %}
+              {% if lp.toggle %}<button type="submit" form="offering-bulk-delete-form" formaction="{% url 'dashboard:offering_toggle' off.pk %}" formmethod="post" class="btn btn-cf-ghost btn-icon" title="Toggle"><i class="bi {% if off.is_active %}bi-toggle-on text-green{% else %}bi-toggle-off text-muted{% endif %}"></i></button>
+              {% endif %}{% if lp.delete %}<button type="submit" form="offering-bulk-delete-form" formaction="{% url 'dashboard:offering_delete' off.pk %}" formmethod="post" class="btn btn-icon" style="border:1.5px solid #fecaca;color:var(--cf-red);background:#fff;border-radius:var(--cf-radius-sm);width:34px;height:34px;" title="Delete" onclick="return confirm('Delete {{ off.name|escapejs }}?');"><i class="bi bi-trash"></i></button>{% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🌅</div><h6>No offerings yet</h6><p><a href="{% url 'dashboard:offering_add' %}">Add your first offering</a> — Breakfast, Lunch, Snacks, etc.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const CSRF = document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrftoken='))?.split('=')[1]||'';
+const tbody = document.getElementById('offerings-tbody');
+const sortBar = document.getElementById('sort-save-bar');
+let originalOrder = [...tbody.querySelectorAll('tr[data-pk]')].map(r=>r.dataset.pk);
+
+Sortable.create(tbody, {
+  handle: '.drag-handle',
+  animation: 150,
+  ghostClass: 'sortable-ghost',
+  onEnd: () => sortBar.classList.add('visible')
+});
+
+document.getElementById('sort-confirm-btn').addEventListener('click', function() {
+  if (!confirm('Save this new offering display order?')) return;
+  const ids = [...tbody.querySelectorAll('tr[data-pk]')].map(r=>parseInt(r.dataset.pk));
+  this.disabled = true; this.textContent = 'Saving…';
+  fetch('{% url "dashboard:offering_reorder" %}', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+    body: JSON.stringify({ids})
+  }).then(r=>r.json()).then(d=>{
+    if(d.success){ sortBar.classList.remove('visible'); originalOrder = ids.map(String); }
+    else alert('Save failed: ' + (d.error||'Unknown error'));
+    this.disabled=false; this.innerHTML='<i class="bi bi-check2 me-1"></i>Save Order';
+  }).catch(()=>{ alert('Network error.'); this.disabled=false; this.innerHTML='<i class="bi bi-check2 me-1"></i>Save Order'; });
+});
+
+document.getElementById('sort-cancel-btn').addEventListener('click', function() {
+  originalOrder.forEach(pk=>{ const r=document.getElementById('orow-'+pk); if(r) tbody.appendChild(r); });
+  sortBar.classList.remove('visible');
+});
+</script>
+{% endblock %}

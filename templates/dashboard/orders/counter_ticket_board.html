@@ -1,0 +1,124 @@
+{% extends "base/dashboard_base.html" %}
+{% load core_extras %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h5 class="mb-0"><i class="bi bi-grid-3x3-gap-fill me-2"></i>Counter Ticket Board</h5>
+  <div class="d-flex gap-2 flex-wrap">
+    <form method="get" class="d-flex gap-2">
+      <select name="counter" class="form-select form-select-sm" onchange="this.form.submit()">
+        <option value="">All Counters</option>
+        {% for c in counters %}<option value="{{ c.pk }}" data-route-key="{{ c.printer_route_key }}" data-route-label="{{ c.effective_printer_label }}" {% if counter_filter == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+      </select>
+    </form>
+    <button type="button" id="counterBoardPrinterBtn" class="btn btn-cf-outline btn-sm nq-bt-btn" onclick="connectBoardPrinter(this)">
+      <i class="bi bi-bluetooth me-1"></i><span class="nq-bt-label">Connect KOT Printer</span>
+    </button>
+    <a href="{% url 'dashboard:counter_ticket_board' %}" class="btn btn-cf-outline btn-sm"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</a>
+  </div>
+</div>
+
+{% if tickets %}
+<div class="row g-3">
+  {% for ticket in tickets %}
+  <div class="col-md-6 col-lg-4" id="ticket-{{ ticket.pk }}">
+    <div class="cf-card h-100">
+      <div class="cf-card-header py-2">
+        <div>
+          <div class="fw-bold" style="font-family:'Rajdhani',sans-serif;font-size:16px;">{{ ticket.ticket_number }}</div>
+          <div class="small text-muted">Order #{{ ticket.order.order_number|short_order_no }} · {{ ticket.counter.name|default:'Counter' }}</div>
+        </div>
+        <div class="d-flex gap-1 align-items-center">
+          <span class="badge badge-cf bg-{% if ticket.status == 'pending' %}warning{% elif ticket.status == 'preparing' %}primary{% elif ticket.status == 'ready' %}success{% else %}secondary{% endif %}">
+            {{ ticket.get_status_display }}
+          </span>
+          <button class="btn btn-sm btn-cf-outline" onclick="printTicket({{ ticket.pk }})" title="Print KOT">
+            <i class="bi bi-printer"></i>
+          </button>
+        </div>
+      </div>
+      <div class="cf-card-body p-2">
+        <div class="small fw-600 mb-1 text-muted"><i class="bi bi-upc-scan me-1"></i>{{ ticket.scan_code }}</div>
+        <div class="small text-muted mb-1"><i class="bi bi-printer me-1"></i>{{ ticket.counter.effective_printer_label|default:'Default browser printer' }}</div>
+        <div class="small text-muted mb-1"><i class="bi bi-diagram-3 me-1"></i>{{ ticket.counter.printer_route_key|default:'default' }}</div>
+        <div class="small mb-2">{{ ticket.order.display_customer_name }}</div>
+        <table class="table table-sm table-borderless mb-2" style="font-size:13px;">
+          {% for item in ticket.items %}
+          <tr>
+            <td>{{ item.product.name|default:"Item" }}</td>
+            <td class="text-end fw-bold">×{{ item.qty }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        <div class="d-flex gap-1 flex-wrap mt-2">
+          {% if ticket.status == 'pending' %}
+          <button class="btn btn-sm btn-outline-primary flex-fill" onclick="updateTicket({{ ticket.pk }},'preparing')">Start Prep</button>
+          {% elif ticket.status == 'preparing' %}
+          <button class="btn btn-sm btn-outline-success flex-fill" onclick="updateTicket({{ ticket.pk }},'ready')">Mark Ready</button>
+          {% elif ticket.status == 'ready' %}
+          <button class="btn btn-sm btn-cf-primary flex-fill" onclick="updateTicket({{ ticket.pk }},'collected')">Collected</button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="cf-card"><div class="cf-card-body text-center text-muted py-5">No active counter tickets.</div></div>
+{% endif %}
+
+<script>
+const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+
+function connectBoardPrinter(btn) {
+  const select = document.querySelector('select[name="counter"]');
+  const opt = select?.selectedOptions?.[0];
+  const routeKey = opt?.dataset?.routeKey || '';
+  const routeLabel = opt?.dataset?.routeLabel || '';
+  if (routeKey || routeLabel) {
+    window.setPreferredPrinterRoute(routeKey, routeLabel, false);
+  }
+  return connectBluetooth(btn, routeKey, routeLabel);
+}
+
+(function initBoardPrinterRoute() {
+  const select = document.querySelector('select[name="counter"]');
+  const btn = document.getElementById('counterBoardPrinterBtn');
+  const opt = select?.selectedOptions?.[0];
+  const routeKey = opt?.dataset?.routeKey || '';
+  const routeLabel = opt?.dataset?.routeLabel || '';
+  if (btn && (routeKey || routeLabel)) {
+    btn.dataset.routeKey = routeKey;
+    btn.dataset.routeLabel = routeLabel;
+    window.setPreferredPrinterRoute(routeKey, routeLabel, false);
+  }
+})();
+
+async function updateTicket(pk, status) {
+  const resp = await fetch(`/dashboard/counter-tickets/${pk}/update/`, {
+    method: 'POST',
+    headers: {'X-Requested-With':'XMLHttpRequest','X-CSRFToken':CSRF,
+               'Content-Type':'application/x-www-form-urlencoded'},
+    body: `status=${status}`,
+  });
+  const data = await resp.json();
+  if (data.success) {
+    if ((status === 'ready' || status === 'collected') && data.kot && window.printKOT && (data.auto_print || status === 'collected')) {
+      await window.printKOT(data.kot, status === 'collected' ? 'COUNTER TICKET' : 'READY TICKET', 'kotPrintFrame');
+    }
+    if (status === 'collected') {
+      document.getElementById(`ticket-${pk}`)?.remove();
+    } else {
+      location.reload();
+    }
+  }
+}
+
+async function printTicket(pk) {
+  const resp = await fetch(`/dashboard/counter-tickets/${pk}/kot/`);
+  const data = await resp.json();
+  if (window.printKOT) await window.printKOT(data, 'COUNTER TICKET', 'kotPrintFrame');
+}
+setTimeout(() => location.reload(), 30000);
+</script>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% load humanize %}
+<div class="product-row product-row-v2 phase3-browse-card js-product-card" data-search="{{ product.name|lower }} {{ product.description|default:''|lower }} {{ product.code|default:''|lower }} {{ product.category.name|default:''|lower }} {{ product.offering.name|default:''|lower }}">
+  <a href="{% url 'menu:product_detail' product.pk %}" class="product-thumb-wrap text-decoration-none phase3-browse-thumb-link">
+    <div class="phase3-browse-thumb-shell">
+      {% if product.image %}
+        <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-thumb phase3-browse-thumb">
+      {% else %}
+        <div class="product-thumb d-grid place-items-center product-thumb-fallback phase3-browse-thumb">🍲</div>
+      {% endif %}
+      <div class="phase3-browse-thumb-badges">
+        {% with ft=product.food_type.first %}
+          {% if ft %}
+            <span class="phase3-food-badge {% if 'non' in ft.name|lower %}nonveg{% else %}veg{% endif %}" aria-label="{% if 'non' in ft.name|lower %}Non-veg{% else %}Veg{% endif %}" title="{% if 'non' in ft.name|lower %}Non-veg{% else %}Veg{% endif %}">
+              <span class="food-mark-icon"><span class="food-mark-dot"></span></span>
+            </span>
+          {% endif %}
+        {% endwith %}
+      </div>
+    </div>
+  </a>
+
+  <div class="product-main-copy phase3-browse-copy" style="min-width:0;">
+    <div class="product-row-topline phase3-browse-topline">
+      <div class="min-w-0">
+        <div class="phase3-browse-kicker">
+          {% if product.category %}<span>{{ product.category.name }}</span>{% endif %}
+          {% if product.offering %}<span>{{ product.offering.name }}</span>{% endif %}
+        </div>
+        <h5 class="pname mb-0 phase3-browse-title">{{ product.name }}</h5>
+      </div>
+      {% if product.rating > 0 %}<span class="pill-soft product-rating-pill phase3-rating-pill"><i class="bi bi-star-fill"></i>{{ product.rating }}</span>{% endif %}
+    </div>
+
+    {% if product.description %}
+      <div class="pdesc phase3-browse-desc">{{ product.description|truncatechars:126 }}</div>
+    {% endif %}
+
+    <div class="product-meta-row mb-2 phase3-browse-meta">
+      <span class="availability-pill {% if product.is_available_now %}open{% else %}closed{% endif %} pill-muted">
+        {% if product.is_available_now %}<i class="bi bi-clock"></i>Available now{% else %}<i class="bi bi-pause-circle"></i>Unavailable{% endif %}
+      </span>
+      {% if product.calories %}<span class="pill-soft product-calorie-pill"><i class="bi bi-fire"></i>{{ product.calories }} kcal</span>{% endif %}
+      {% if product.effective_web_qty > 0 %}<span class="pill-outline">Max {{ product.effective_web_qty }}/order</span>{% endif %}
+      {% if product.packing_price > 0 %}<span class="pill-muted">+ ₹{{ product.packing_price }} packing</span>{% endif %}
+      {% if product.code %}<span class="pill-muted">#{{ product.code }}</span>{% endif %}
+    </div>
+
+    <div class="product-row-bottom phase3-browse-bottom">
+      <div class="product-price-block phase3-price-block">
+        <div class="pprice phase3-browse-price">₹{{ product.display_price|default:product.price }}</div>
+        {% if customer.company.bill_company == 2 and customer.meal_benefit == 'company_pay' and product.is_free_meal_eligible %}
+          <span class="pill-soft" style="background:rgba(46,125,50,.1);color:#2e7d32;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;">Company covered</span>
+        {% elif customer.company.bill_company == 2 and customer.meal_benefit == 'subsidy' %}
+          <span class="pill-soft" style="background:rgba(21,101,192,.08);color:#1565c0;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;">Subsidy eligible</span>
+        {% endif %}
+      </div>
+      <a href="{% url 'menu:product_detail' product.pk %}" class="product-inline-link phase3-inline-link">
+        View details <i class="bi bi-arrow-right-short"></i>
+      </a>
+    </div>
+  </div>
+
+  <div class="product-actions product-actions-v2 phase3-browse-actions d-flex align-items-center gap-2 justify-content-end flex-wrap">
+    <a href="{% url 'menu:product_detail' product.pk %}" class="btn btn-cf-outline phase3-mobile-details">Details</a>
+    {% if not customer.company.is_store_open %}
+      <button type="button" class="btn btn-cf-outline" disabled>Store closed</button>
+    {% elif product.effective_web_qty == 0 %}
+      <button type="button" class="btn btn-cf-outline" disabled>Sold out</button>
+    {% elif product.is_available_now %}
+      <button type="button" class="btn btn-cf-primary js-add-to-cart" data-pid="{{ product.pk }}">
+        <i class="bi bi-plus-lg me-1"></i>Add to cart
+      </button>
+    {% else %}
+      <button type="button" class="btn btn-cf-outline" disabled>Unavailable</button>
+    {% endif %}
+  </div>
+</div>

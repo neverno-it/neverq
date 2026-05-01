@@ -1,0 +1,434 @@
+{% extends "base/dashboard_base.html" %}
+{% load core_extras %}
+{% block content %}
+<div style="max-width:860px;">
+  <div class="cf-card">
+    <div class="cf-card-header">
+      <h5><i class="bi bi-megaphone-fill me-2 text-blue"></i>{{ page_title }}</h5>
+      <a href="{% url 'dashboard:offer_list' %}" class="btn btn-cf-outline btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back
+      </a>
+    </div>
+    <div class="cf-card-body">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        {# ── Section 1 — Identity ── #}
+        <div class="form-section">
+          <div class="form-section-title"><i class="bi bi-tag-fill text-blue"></i>Offer Identity</div>
+          <div class="row g-3">
+            {% if request.user.is_superadmin %}
+            <div class="col-md-6">
+              <label class="form-label">Company <span class="text-danger">*</span></label>
+              <select name="company" class="form-select" required id="companySelect" onchange="loadCafesForCompany(this.value)">
+                <option value="">— Select company —</option>
+                {% for co in companies %}
+                  <option value="{{ co.pk }}" {% if offer.company_id == co.pk %}selected{% endif %}>{{ co.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+            <div class="col-md-6">
+              <label class="form-label">Offer Title <span class="text-danger">*</span></label>
+              <input type="text" name="title" class="form-control" required
+                     value="{{ offer.title|default:'' }}"
+                     placeholder="e.g. Monday Special 20% Off">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Cafe <span class="text-muted">(optional)</span></label>
+              <select name="cafe" class="form-select" id="cafeSelect">
+                <option value="">— All cafes —</option>
+                {% for cafe in cafes %}
+                  <option value="{{ cafe.pk }}" {% if offer.cafe_id == cafe.pk %}selected{% endif %}>{{ cafe.name }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Limit this offer to one cafe only.</div>
+            </div>
+          </div>
+        </div>
+
+        {# ── Section 2 — Discount Type ── #}
+        <div class="form-section">
+          <div class="form-section-title"><i class="bi bi-percent text-green"></i>Discount Details</div>
+          <div class="row g-3">
+            <div class="col-md-5">
+              <label class="form-label">Offer Type <span class="text-danger">*</span></label>
+              <select name="offer_type" class="form-select" id="offerTypeSelect" onchange="syncOfferTypeUI()">
+                {% for value, label in offer_type_choices %}
+                  <option value="{{ value }}" {% if offer.offer_type == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3" id="valueField">
+              <label class="form-label">Value</label>
+              <div class="input-group">
+                <input type="number" name="value" step="0.01" min="0"
+                       class="form-control" value="{{ offer.value|default:'0' }}"
+                       id="offerValueInput">
+                <span class="input-group-text" id="valueUnit">%</span>
+              </div>
+              <div class="form-text" id="valueHelp">Percentage discount.</div>
+            </div>
+            <div class="col-md-3" id="minOrderField" style="display:none;">
+              <label class="form-label">Min Order Value <span class="text-muted">(₹)</span></label>
+              <div class="input-group">
+                <span class="input-group-text">₹</span>
+                <input type="number" name="min_order_value" step="0.01" min="0"
+                       class="form-control"
+                       value="{{ offer.min_order_value|default:'' }}"
+                       placeholder="e.g. 199">
+              </div>
+              <div class="form-text">Customer's cart must reach this amount to unlock offer. Leave blank for no minimum.</div>
+            </div>
+            <div class="col-md-3" id="maxDiscountField" style="display:none;">
+              <label class="form-label">Max Discount Cap <span class="text-muted">(₹)</span></label>
+              <div class="input-group">
+                <span class="input-group-text">₹</span>
+                <input type="number" name="max_discount" step="0.01" min="0"
+                       class="form-control"
+                       value="{{ offer.max_discount|default:'' }}"
+                       placeholder="e.g. 100">
+              </div>
+              <div class="form-text">Cap the maximum saving (₹). Leave blank for no cap.</div>
+            </div>
+          </div>
+
+          {# Offer type hint cards #}
+          <div class="row g-2 mt-1">
+            <div class="col-md-3">
+              <div class="p-2 rounded-3 text-center" style="background:#fef2f2;border:1px solid #fecaca;">
+                <div style="font-size:11px;font-weight:700;color:#c62828;text-transform:uppercase;">BOGO</div>
+                <div style="font-size:12px;color:#6b7280;">Customer buys 1, gets 1 free of the same item</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="p-2 rounded-3 text-center" style="background:#f0fdf4;border:1px solid #bbf7d0;">
+                <div style="font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;">FREE</div>
+                <div style="font-size:12px;color:#6b7280;">Product is 100% free (₹0)</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="p-2 rounded-3 text-center" style="background:#eff6ff;border:1px solid #bfdbfe;">
+                <div style="font-size:11px;font-weight:700;color:#1565c0;text-transform:uppercase;">PERCENT</div>
+                <div style="font-size:12px;color:#6b7280;">% off the product price</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="p-2 rounded-3 text-center" style="background:#faf5ff;border:1px solid #e9d5ff;">
+                <div style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;">CART</div>
+                <div style="font-size:12px;color:#6b7280;">% off the entire cart total</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="p-2 rounded-3 text-center" style="background:#fff3e0;border:1px solid #ffcc80;">
+                <div style="font-size:11px;font-weight:700;color:#e65100;text-transform:uppercase;">FLAT</div>
+                <div style="font-size:12px;color:#6b7280;">₹X off on orders above ₹Y (Zomato-style)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {# ── Section 3 — Applies To ── #}
+        <div class="form-section">
+          <div class="form-section-title"><i class="bi bi-bag-fill text-orange"></i>Applies To</div>
+
+          {# Cart-type notice #}
+          <div id="cartNotice" class="alert mb-3" style="display:none;background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;color:#5b21b6;">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>Cart Total Discount</strong> — applies to the customer's entire order subtotal. No product selection needed.
+          </div>
+
+          {# Product scope toggle #}
+          <div id="productScope">
+            <div class="mb-3">
+              <label class="form-label">Scope</label>
+              <div class="d-flex gap-3">
+                <label class="d-flex align-items-center gap-2" style="cursor:pointer;">
+                  <input type="radio" name="product_scope" value="none" id="scopeNone"
+                         {% if not offer or not offer.product_id and not offer.products.all %}checked{% endif %}
+                         onchange="switchScope(this.value)">
+                  <span>No specific product (site-wide)</span>
+                </label>
+                <label class="d-flex align-items-center gap-2" style="cursor:pointer;">
+                  <input type="radio" name="product_scope" value="single" id="scopeSingle"
+                         {% if offer and offer.product_id %}checked{% endif %}
+                         onchange="switchScope(this.value)">
+                  <span>Single product</span>
+                </label>
+                <label class="d-flex align-items-center gap-2" style="cursor:pointer;">
+                  <input type="radio" name="product_scope" value="multi" id="scopeMulti"
+                         {% if offer and offer.products.all %}checked{% endif %}
+                         onchange="switchScope(this.value)">
+                  <span>Multiple products</span>
+                </label>
+              </div>
+            </div>
+
+            {# Single product #}
+            <div id="singleProductField" style="display:none;">
+              <label class="form-label">Product</label>
+              <select name="product" class="form-select">
+                <option value="">— Select product —</option>
+                {% for p in products %}
+                  <option value="{{ p.pk }}" {% if offer.product_id == p.pk %}selected{% endif %}>
+                    {{ p.name }} — ₹{{ p.price }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            {# Multi products #}
+            <div id="multiProductField" style="display:none;">
+              <label class="form-label">Products <span class="text-muted small">(hold Ctrl/Cmd to select multiple)</span></label>
+              <select name="product_ids" class="form-select" multiple size="6">
+                {% for p in products %}
+                  <option value="{{ p.pk }}"
+                    {% if offer and p in offer.products.all %}selected{% endif %}>
+                    {{ p.name }} — ₹{{ p.price }}
+                  </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">The discount applies to any of the selected products.</div>
+            </div>
+          </div>
+        </div>
+
+        {# ── Section 4 — Schedule & Visibility ── #}
+        <div class="form-section">
+          <div class="form-section-title"><i class="bi bi-clock-fill text-muted"></i>Schedule & Visibility</div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Start Date &amp; Time</label>
+              <input type="datetime-local" name="start_datetime" class="form-control"
+                value="{% if offer.start_datetime %}{{ offer.start_datetime|date:'Y-m-d' }}T{{ offer.start_datetime|time:'H:i' }}{% endif %}">
+              <div class="form-text">Leave blank to make live immediately.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">End Date &amp; Time</label>
+              <input type="datetime-local" name="end_datetime" class="form-control"
+                value="{% if offer.end_datetime %}{{ offer.end_datetime|date:'Y-m-d' }}T{{ offer.end_datetime|time:'H:i' }}{% endif %}">
+              <div class="form-text">Leave blank for no expiry.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Popup Image</label>
+              <input type="file" name="popup_image" class="form-control" accept="image/*">
+              {% if offer.popup_image %}
+                <div class="mt-2 d-flex align-items-center gap-2">
+                  <img src="{{ offer.popup_image.url }}" style="height:52px;border-radius:8px;object-fit:cover;">
+                  <span class="small text-muted">Current image</span>
+                </div>
+              {% endif %}
+            </div>
+            <div class="col-md-6 d-flex flex-column gap-2 pt-1">
+              <div class="form-check form-switch mt-3">
+                <input class="form-check-input" type="checkbox" name="is_popup_enabled" id="isPopupEnabled"
+                  {% if not offer or offer.is_popup_enabled %}checked{% endif %}>
+                <label class="form-check-label" for="isPopupEnabled">
+                  <i class="bi bi-bell-fill me-1 text-blue"></i>Show as popup when customer visits menu
+                </label>
+              </div>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="is_active" id="isActiveOffer"
+                  {% if not offer or offer.is_active %}checked{% endif %}>
+                <label class="form-check-label" for="isActiveOffer">
+                  <i class="bi bi-toggle-on me-1 text-green"></i>Active
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {# ── Section 5 — Usage Stats (edit only) ── #}
+        {% if offer and offer.pk %}
+        <div class="form-section">
+          <div class="form-section-title"><i class="bi bi-bar-chart-fill text-blue"></i>Usage Stats</div>
+          <div class="row g-3">
+            <div class="col-md-3">
+              <div style="background:var(--cf-blue-light);border-radius:var(--cf-radius-sm);padding:14px;text-align:center;">
+                <div style="font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:var(--cf-blue);">
+                  {{ offer.usages.count }}
+                </div>
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--cf-muted);">
+                  Customers Used
+                </div>
+              </div>
+            </div>
+            <div class="col-md-9">
+              <label class="form-label">Recent Redemptions</label>
+              {% with recent=offer.usages.all|slice:":5" %}
+              {% if recent %}
+              <table class="cf-table">
+                <thead><tr><th>Customer</th><th>Order</th><th>Used At</th></tr></thead>
+                <tbody>
+                  {% for u in recent %}
+                  <tr>
+                    <td>{{ u.customer.name }}</td>
+                    <td>{% if u.order %}<a href="{% url 'dashboard:order_detail' u.order.pk %}" class="text-blue">#{{ u.order.order_number|short_order_no }}</a>{% else %}—{% endif %}</td>
+                    <td><small class="text-muted">{{ u.used_at|date:"d M Y, h:i A" }}</small></td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <div class="text-muted small">No redemptions yet.</div>
+              {% endif %}
+              {% endwith %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        {# ── Save ── #}
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+          <button type="submit" class="btn btn-cf-primary px-4">
+            <i class="bi bi-check-circle me-1"></i>{{ action }} Offer
+          </button>
+          <a href="{% url 'dashboard:offer_list' %}" class="btn btn-cf-outline">Cancel</a>
+          {% if offer and offer.pk and request.user.is_superadmin %}
+          <form method="post" action="{% url 'dashboard:offer_reset_usage' offer.pk %}"
+                class="ms-auto"
+                onsubmit="return confirm('Clear ALL usage records for this offer? Every customer who redeemed it will be able to use it again.');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-warning btn-sm">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Reset All Usage
+              <span class="badge bg-warning text-dark ms-1">{{ offer.usages.count }}</span>
+            </button>
+          </form>
+          {% endif %}
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function syncOfferTypeUI() {
+  const type             = document.getElementById('offerTypeSelect').value;
+  const valueField       = document.getElementById('valueField');
+  const valueUnit        = document.getElementById('valueUnit');
+  const valueHelp        = document.getElementById('valueHelp');
+  const cartNotice       = document.getElementById('cartNotice');
+  const productScope     = document.getElementById('productScope');
+  const maxDiscountField = document.getElementById('maxDiscountField');
+  const minOrderField    = document.getElementById('minOrderField');
+  const offerValueInput  = document.getElementById('offerValueInput');
+
+  // ── Value field: hide for bogo/free, show with correct label for others ──
+  if (type === 'bogo' || type === 'free') {
+    valueField.style.display = 'none';
+  } else if (type === 'flat') {
+    valueField.style.display = '';
+    valueUnit.textContent    = '₹';
+    valueHelp.textContent    = 'Flat rupee amount off the cart total (e.g. 20 = ₹20 off).';
+    offerValueInput.removeAttribute('max');  // flat amounts can exceed 100
+  } else {
+    valueField.style.display = '';
+    valueUnit.textContent    = '%';
+    offerValueInput.setAttribute('max', '100');  // percent capped at 100
+    valueHelp.textContent    = type === 'cart'
+      ? 'Percentage off the entire cart total (0–100).'
+      : 'Percentage off the product price (0–100).';
+  }
+
+  // ── Min order: show for flat, cart, percent (optional threshold) ──
+  // Hide for bogo/free (no threshold concept)
+  if (minOrderField) {
+    minOrderField.style.display = (type === 'bogo' || type === 'free') ? 'none' : '';
+  }
+
+  // ── Max discount cap: show for percent and cart only ──
+  if (maxDiscountField) {
+    maxDiscountField.style.display = (type === 'percent' || type === 'cart') ? '' : 'none';
+  }
+
+  // ── Cart-level notice + hide product scope for cart/flat ──
+  const isCartLevel = type === 'cart' || type === 'flat';
+  cartNotice.style.display   = isCartLevel ? '' : 'none';
+  productScope.style.display = isCartLevel ? 'none' : '';
+}
+
+function switchScope(val) {
+  document.getElementById('singleProductField').style.display = val === 'single' ? '' : 'none';
+  document.getElementById('multiProductField').style.display  = val === 'multi'  ? '' : 'none';
+}
+
+// Init on page load
+document.addEventListener('DOMContentLoaded', function () {
+  syncOfferTypeUI();
+  const checked = document.querySelector('input[name="product_scope"]:checked');
+  if (checked) switchScope(checked.value);
+  // On edit page: cascade cafes for the already-selected company
+  const companySel = document.getElementById('companySelect');
+  if (companySel && companySel.value) {
+    loadCafesForCompany(companySel.value, {{ offer.cafe_id|default:'null' }});
+  }
+});
+
+// ── Cafe cascade: load cafes for selected company ────────────────────────
+function loadCafesForCompany(companyId, selectedCafeId) {
+  const cafeSel = document.getElementById('cafeSelect');
+  if (!cafeSel) return;
+  // Clear existing options
+  cafeSel.innerHTML = '<option value="">— All cafes —</option>';
+  if (!companyId) return;
+  fetch('{% url "dashboard:offer_cafe_options" %}?company_id=' + encodeURIComponent(companyId))
+    .then(r => r.json())
+    .then(data => {
+      (data.cafes || []).forEach(function(c) {
+        const opt = document.createElement('option');
+        opt.value = c.pk;
+        opt.textContent = c.name;
+        if (selectedCafeId && parseInt(c.pk) === parseInt(selectedCafeId)) {
+          opt.selected = true;
+        }
+        cafeSel.appendChild(opt);
+      });
+    })
+    .catch(function() {
+      // Silently fail — user can still type/select
+    });
+}
+</script>
+{% if perm_level %}
+<script>
+(function(){
+  var LVL="{{ perm_level }}";
+  var LOCKED=new Set({{ locked_names_json|safe }});
+  var form=document.querySelector('form[method="post"]');
+  if(form&&LVL!=="full_edit"){
+    var html=LVL==="view"
+      ?'<div class="alert alert-warning py-2 mb-3" style="border-radius:10px;"><i class="bi bi-eye-fill me-2"></i><strong>View-only access</strong> — you can see this record but cannot save changes.</div>'
+      :'<div class="alert alert-info py-2 mb-3" style="border-radius:10px;"><i class="bi bi-shield-lock me-2"></i><strong>Limited edit access</strong> — fields marked 🔒 cannot be modified.</div>';
+    form.insertAdjacentHTML("afterbegin",html);
+  }
+  if(LVL==="view"){
+    document.querySelectorAll('button[type="submit"]').forEach(function(b){b.style.display="none";});
+  }
+  if(LOCKED.size){
+    document.querySelectorAll("input,select,textarea").forEach(function(el){
+      if(!LOCKED.has(el.name))return;
+      el.disabled=true;el.style.background="#f8f9fa";el.style.cursor="not-allowed";el.style.opacity="0.7";
+      var c=el.closest('[class*="col-"]');
+      if(c){
+        var lb=c.querySelector("label");
+        if(lb&&!lb.querySelector(".flock"))lb.insertAdjacentHTML("beforeend",' <span class="flock" style="font-size:11px;" title="You do not have permission to edit this field">🔒</span>');
+      }
+    });
+    if(LOCKED.has("__schedule_windows__")){
+      document.querySelectorAll('[name^="window_day_"],[name^="window_start_"],[name^="window_end_"]').forEach(function(el){
+        el.disabled=true;el.style.background="#f8f9fa";el.style.cursor="not-allowed";el.style.opacity="0.7";
+      });
+      var ab=document.getElementById("add-schedule-btn");if(ab)ab.style.display="none";
+      document.querySelectorAll(".btn-remove").forEach(function(b){b.style.display="none";});
+    }
+    if(LOCKED.has("food_types")){
+      document.querySelectorAll(".food-type-pill").forEach(function(p){
+        p.style.pointerEvents="none";p.style.opacity="0.65";
+      });
+    }
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

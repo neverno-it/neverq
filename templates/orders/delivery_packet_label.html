@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Packet Labels — {{ print_date }}</title>
+<style>
+  @page {
+    size: 55mm 40mm;
+    margin: 0;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    color: #000;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  body {
+    font-size: 11px;
+  }
+
+  .screen-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 12px;
+    background: #f5f5f5;
+    border-bottom: 1px solid #ddd;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  .btn-print {
+    border: 0;
+    background: #1e3a5f;
+    color: #fff;
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .btn-print:hover {
+    background: #163050;
+  }
+
+  .count-note {
+    font-size: 12px;
+    color: #555;
+  }
+
+  .label {
+    width: 55mm;
+    max-width: 55mm;
+    height: 40mm;
+    padding: 2.2mm 2.2mm 1.4mm 4.8mm;
+    margin: 0 auto;
+    page-break-after: always;
+    page-break-inside: avoid;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+
+  .label:last-child {
+    page-break-after: auto;
+  }
+
+  .company {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 1.2mm;
+    word-break: break-word;
+  }
+
+  .field {
+    margin-bottom: 1.0mm;
+    text-align: center;
+  }
+
+  .field-label {
+    font-size: 8px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: #222;
+    margin-bottom: 0;
+  }
+
+  .field-value {
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.08;
+    word-break: break-word;
+  }
+
+  .field-value.customer {
+    font-size: 14px;
+    font-weight: 800;
+  }
+
+  .field-value.order-no {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .1px;
+  }
+
+  .field-value.date {
+    font-size: 10px;
+    font-weight: 800;
+  }
+
+  .empty {
+    text-align: center;
+    padding: 30px 16px;
+    color: #777;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  @media print {
+    .screen-bar { display: none !important; }
+    body { background: #fff; }
+    .label { margin: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="screen-bar">
+  <button class="btn-print" onclick="window.print()">Print Labels</button>
+  <span class="count-note">{{ orders|length }} label(s) — {{ print_date }}</span>
+</div>
+
+{% for order in orders %}
+  <div class="label">
+    <div class="company">{{ order.company.name }}</div>
+
+    <div class="field">
+      <div class="field-label">Customer Name</div>
+      <div class="field-value customer">{{ order.display_customer_name }}</div>
+    </div>
+
+    {% if order.display_customer_phone %}
+    <div class="field">
+      <div class="field-label">Phone Number</div>
+      <div class="field-value">{{ order.display_customer_phone }}</div>
+    </div>
+    {% endif %}
+
+    <div class="field">
+      <div class="field-label">Order Number</div>
+      <div class="field-value order-no">{{ order.order_number }}</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">Order Date</div>
+      <div class="field-value date">{{ order.created_at|date:"d M Y" }}</div>
+    </div>
+  </div>
+{% empty %}
+  <div class="empty">No orders found for label printing.</div>
+{% endfor %}
+
+</body>
+</html>

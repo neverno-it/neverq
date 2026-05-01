@@ -1,0 +1,49 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+{% url 'dashboard:coupon_bulk_delete' as bulk_delete_url %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0" style="font-family:'Rajdhani',sans-serif;font-weight:700;">Coupons</h4>
+  {% if lp.add %}
+  <a href="{% url 'dashboard:coupon_add' %}" class="btn btn-sm" style="background:var(--cf-blue);color:white;border-radius:6px;"><i class="bi bi-plus-lg"></i> Add Coupon</a>
+  {% endif %}
+</div>
+{% if messages %}
+  {% for msg in messages %}
+  <div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}success{% endif %} alert-dismissible fade show" style="border-radius:8px;border:none;">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+  {% endfor %}
+{% endif %}
+<div class="card border-0 shadow-sm" style="border-radius:var(--cf-radius);">
+  <div class="card-body pb-0">
+    {% if lp.delete %}
+    {% include "dashboard/includes/bulk_delete_controls.html" with bulk_form_id='coupon-bulk-delete-form' bulk_action=bulk_delete_url bulk_confirm_message='Delete selected coupons?' %}
+    {% endif %}
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0" style="font-size:13.5px;">
+      <thead style="background:var(--cf-blue-light);">
+        <tr><th style="width:44px;"></th><th>Code</th><th>Type</th><th>Value</th><th>Min Order</th><th>Used</th><th>Valid</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for c in coupons %}
+        <tr>
+          <td>{% if lp.delete %}<input type="checkbox" class="form-check-input bulk-item-check" data-bulk-form-input="coupon-bulk-delete-form" form="coupon-bulk-delete-form" name="ids" value="{{ c.pk }}">{% endif %}</td>
+          <td><span class="badge bg-dark" style="font-size:12px;letter-spacing:1px;">{{ c.code }}</span></td>
+          <td>{{ c.get_discount_type_display }}</td>
+          <td>{% if c.discount_type == 'flat' %}Rs.{% endif %}{{ c.discount_value }}{% if c.discount_type == 'percent' %}%{% endif %}</td>
+          <td>Rs.{{ c.min_order }}</td>
+          <td>{{ c.used_count }}</td>
+          <td style="font-size:12px;">{% if c.valid_from %}From {{ c.valid_from|date:"d M Y" }}{% endif %}{% if c.valid_to %}<br>Until {{ c.valid_to|date:"d M Y" }}{% endif %}{% if not c.valid_from and not c.valid_to %}Always{% endif %}</td>
+          <td>{% if c.is_valid %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Inactive</span>{% endif %}</td>
+          <td>
+            {% if lp.edit %}<a href="{% url 'dashboard:coupon_edit' c.pk %}" class="btn btn-sm btn-outline-primary" style="border-radius:5px;"><i class="bi bi-pencil"></i></a>{% endif %}
+            {% if lp.delete %}<button type="submit" form="coupon-bulk-delete-form" formaction="{% url 'dashboard:coupon_delete' c.pk %}" formmethod="post" class="btn btn-sm btn-outline-danger" style="border-radius:5px;" onclick="return confirm('Delete this coupon?')"><i class="bi bi-trash"></i></button>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="text-center py-4 text-muted">No coupons yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

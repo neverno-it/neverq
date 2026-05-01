@@ -1,0 +1,71 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+{% url 'dashboard:offer_bulk_delete' as bulk_delete_url %}
+<div class="cf-card">
+  <div class="cf-card-header">
+    <div>
+      <h5><i class="bi bi-megaphone-fill"></i>Offers</h5>
+      <div style="font-size:13px;color:var(--cf-muted);margin-top:2px;">Discounts, BOGO, and popup promotions shown to customers</div>
+    </div>
+    {% if lp.add %}
+    <a href="{% url 'dashboard:offer_add' %}" class="btn btn-cf-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>Add Offer</a>
+    {% endif %}
+  </div>
+  <div class="cf-card-body pb-0">
+    {% if lp.delete %}
+    {% include "dashboard/includes/bulk_delete_controls.html" with bulk_form_id='offer-bulk-delete-form' bulk_action=bulk_delete_url bulk_confirm_message='Delete selected offers?' %}
+    {% endif %}
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="cf-table">
+      <thead>
+        <tr>
+          <th style="width:44px;"></th>
+          <th>Title</th>
+          <th>Type</th>
+          <th>Product / Scope</th>
+          <th>Popup</th>
+          <th>Status</th>
+          <th style="width:140px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for offer in offers %}
+        <tr>
+          <td>{% if lp.delete %}<input type="checkbox" class="form-check-input bulk-item-check" data-bulk-form-input="offer-bulk-delete-form" form="offer-bulk-delete-form" name="ids" value="{{ offer.pk }}">{% endif %}</td>
+          <td><div class="td-main">{{ offer.title }}</div><div class="td-sub">{{ offer.company.name }}</div></td>
+          <td>
+            <span class="badge-cf badge-warning">{{ offer.get_offer_type_display }}</span>
+            <div class="td-sub" style="margin-top:3px;">
+              {% if offer.offer_type == 'percent' or offer.offer_type == 'cart' %}{{ offer.value }}% off{% elif offer.offer_type == 'bogo' %}Buy 1 Get 1{% elif offer.offer_type == 'free' %}100% Free{% else %}{{ offer.value }}{% endif %}
+            </div>
+          </td>
+          <td>
+            {% if offer.offer_type == 'cart' %}
+              <span class="badge" style="background:var(--cf-purple-light);color:var(--cf-purple);">Cart Total</span>
+            {% elif offer.product %}
+              <div class="td-main" style="font-size:13.5px;">{{ offer.product.name }}</div>
+            {% elif offer.products.all %}
+              <div class="td-main" style="font-size:13px;">{% for p in offer.products.all|slice:":2" %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if offer.products.count > 2 %}<span class="text-muted"> +{{ offer.products.count|add:"-2" }} more</span>{% endif %}</div>
+            {% else %}
+              <span class="td-sub">Site-wide</span>
+            {% endif %}
+          </td>
+          <td>{% if offer.popup_image %}<span class="badge-cf badge-info"><i class="bi bi-image me-1"></i>Has image</span>{% else %}<span class="td-sub">-</span>{% endif %}</td>
+          <td><span class="badge-cf {% if offer.is_live %}badge-active{% else %}badge-inactive{% endif %}">{% if offer.is_live %}Live{% else %}Inactive{% endif %}</span></td>
+          <td>
+            <div class="d-flex gap-1 justify-content-end">
+              {% if lp.edit %}<a href="{% url 'dashboard:offer_edit' offer.pk %}" class="btn btn-cf-ghost btn-icon" title="Edit"><i class="bi bi-pencil"></i></a>{% endif %}
+              {% if lp.toggle %}<button type="submit" form="offer-bulk-delete-form" formaction="{% url 'dashboard:offer_toggle' offer.pk %}" formmethod="post" class="btn btn-cf-ghost btn-icon" title="Toggle"><i class="bi {% if offer.is_active %}bi-toggle-on text-green{% else %}bi-toggle-off text-muted{% endif %}"></i></button>{% endif %}
+              {% if lp.delete %}<button type="submit" form="offer-bulk-delete-form" formaction="{% url 'dashboard:offer_delete' offer.pk %}" formmethod="post" class="btn btn-icon" style="border:1.5px solid #fecaca;color:var(--cf-red);background:#fff;border-radius:var(--cf-radius-sm);width:34px;height:34px;" title="Delete" onclick="return confirm('Delete {{ offer.title|escapejs }}?');"><i class="bi bi-trash"></i></button>{% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7"><div class="empty-state"><div class="empty-icon">Offer</div><h6>No offers yet</h6><p>{% if lp.add %}<a href="{% url 'dashboard:offer_add' %}">Create your first offer</a> to boost customer orders.{% else %}No offers are available for your current scope.{% endif %}</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

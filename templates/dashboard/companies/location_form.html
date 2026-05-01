@@ -1,0 +1,38 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<div style="max-width:500px;">
+  <div class="cf-card">
+    <div class="cf-card-header">
+      <h5><i class="bi bi-geo-alt me-2"></i>{{ page_title }}</h5>
+      <a href="{% url 'dashboard:location_list' %}" class="btn btn-cf-outline btn-sm">← Back</a>
+    </div>
+    <div class="cf-card-body">
+      <form method="post">{% csrf_token %}
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Location Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required
+                   value="{{ location.name|default:'' }}" placeholder="e.g. Nariman Point, Block A">
+          </div>
+          {% if location %}
+          <div class="col-12">
+            <label class="form-label">Status</label>
+            <div class="form-check form-switch mt-1">
+              <input class="form-check-input" type="checkbox" name="is_active"
+                     {% if location.is_active %}checked{% endif %} style="width:44px;height:22px;">
+              <label class="form-check-label">Active</label>
+            </div>
+          </div>
+          {% endif %}
+          <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-cf-primary px-4">
+              <i class="bi bi-check-circle me-1"></i>Save Location
+            </button>
+            <a href="{% url 'dashboard:location_list' %}" class="btn btn-cf-outline">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

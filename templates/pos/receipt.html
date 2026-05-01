@@ -1,0 +1,79 @@
+{% load static %}
+{% load humanize %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Receipt - {{ order.order_number }}</title>
+{% include "includes/favicon_links.html" %}
+  <style>
+    body { font-family: 'Courier New', monospace; max-width: 320px; margin: 0 auto; padding: 16px; font-size: 12px; color: #000; }
+    .center { text-align: center; }
+    .divider { border: none; border-top: 1px dashed #333; margin: 8px 0; }
+    .row { display: flex; justify-content: space-between; gap: 8px; }
+    .bold { font-weight: bold; }
+    .logo { font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 2px; text-transform: uppercase; }
+    .company-name { font-size: 11px; font-weight: 700; line-height: 1.2; margin-bottom: 3px; }
+    .company-meta { font-size: 10px; line-height: 1.25; }
+    .items { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .items th, .items td { padding: 2px 0; vertical-align: top; }
+    .items th { border-bottom: 1px dashed #333; font-size: 11px; }
+    .items .name { width: 42%; text-align: left; word-break: break-word; }
+    .items .qty { width: 12%; text-align: right; }
+    .items .price, .items .amount { width: 23%; text-align: right; }
+    .paper-feed { height: 8px; }
+    @media print {
+      button { display: none; }
+      .paper-feed { height: 22mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">NEVERNO</div>
+  <div class="center company-name">{{ company.name }}</div>
+  {% if company.phone %}<div class="center company-meta">Phone: {{ company.phone }}</div>{% endif %}
+  {% if company.company_gst %}<div class="center company-meta">GSTIN: {{ company.company_gst }}</div>{% endif %}
+  {% if company.fssai_number %}<div class="center company-meta">FSSAI: {{ company.fssai_number }}</div>{% endif %}
+  <div class="center company-meta" style="margin-top:4px;">POS ORDER RECEIPT</div>
+  <hr class="divider">
+  <div class="row"><span>Order #</span><span class="bold">{{ order.order_number }}</span></div>
+  <div class="row"><span>Date</span><span>{{ order.created_at|date:"d M Y, h:i A" }}</span></div>
+  <div class="row"><span>Customer</span><span>{{ order.customer_name }}</span></div>
+  {% if order.customer_phone %}<div class="row"><span>Phone</span><span>{{ order.customer_phone }}</span></div>{% endif %}
+  <div class="row"><span>Type</span><span>{{ order.get_customer_type_display }}</span></div>
+  <hr class="divider">
+  <table class="items">
+    <thead>
+      <tr>
+        <th class="name">Item Name</th>
+        <th class="qty">Qty</th>
+        <th class="price">Price</th>
+        <th class="amount">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td class="name">{{ item.product_name }}</td>
+        <td class="qty">{{ item.qty }}</td>
+        <td class="price">Rs.{{ item.price }}</td>
+        <td class="amount">Rs.{{ item.amount }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <hr class="divider">
+  {% if order.card_fee_amount and order.card_fee_amount > 0 %}
+  <div class="row"><span>Subtotal</span><span>Rs.{{ order.base_amount }}</span></div>
+  <div class="row"><span>Card fee</span><span>Rs.{{ order.card_fee_amount }}</span></div>
+  {% endif %}
+  <div class="row bold" style="font-size:15px;"><span>TOTAL</span><span>Rs.{{ order.total_amount }}</span></div>
+  <div class="row" style="margin-top:4px;"><span>Payment</span><span>{{ order.get_payment_type_display }}</span></div>
+  <hr class="divider">
+  <div class="center" style="font-size:11px;margin-top:8px;">Thank you for your order!</div>
+  <div class="paper-feed"></div>
+  <div style="text-align:center;margin-top:16px;">
+    <button onclick="window.print()" style="padding:8px 20px;background:#1A237E;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;">Print</button>
+  </div>
+</body>
+</html>

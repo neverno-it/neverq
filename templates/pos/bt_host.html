@@ -1,0 +1,240 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+{% include "includes/favicon_links.html" %}
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  body { background: transparent; overflow: hidden; }
+
+  #btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    border: none;
+    outline: none;
+    white-space: nowrap;
+    transition: background .2s, color .2s;
+  }
+  #btn.disconnected { background: #FFF3E0; color: #E65100; }
+  #btn.connected    { background: #E8F5E9; color: #2E7D32; }
+  #btn:hover.disconnected { background: #FFE0B2; }
+  #btn:hover.connected    { background: #C8E6C9; }
+
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: currentColor; opacity: .7;
+  }
+</style>
+</head>
+<body>
+<button id="btn" class="disconnected" onclick="handleClick()">
+  <span class="dot"></span>
+  <span id="label">Connect KOT Printer</span>
+</button>
+
+<script>
+let btDevice = null;
+let btChar   = null;
+
+function post(msg) { window.parent.postMessage(msg, '*'); }
+
+function setStatus(connected, name) {
+  const btn   = document.getElementById('btn');
+  const label = document.getElementById('label');
+  btn.className = connected ? 'connected' : 'disconnected';
+  label.textContent = connected ? ('✓ ' + (name || 'KOT Printer')) : 'Connect KOT Printer';
+  post({ type: 'bt_status', connected, name: name || '' });
+}
+
+// ── Service / Characteristic UUIDs ────────────────────────
+const SERVICE_UUIDS = [
+  '000018f0-0000-1000-8000-00805f9b34fb',
+  '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+  '0000ff00-0000-1000-8000-00805f9b34fb',
+  '0000ffe0-0000-1000-8000-00805f9b34fb',
+  '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+];
+const CHAR_UUIDS = [
+  '00002af1-0000-1000-8000-00805f9b34fb',
+  '49535343-8841-43f4-a8d4-ecbe34729bb3',
+  '0000ff02-0000-1000-8000-00805f9b34fb',
+  '0000ffe1-0000-1000-8000-00805f9b34fb',
+  '6e400002-b5a3-f393-e0a9-e50e24dcca9e',
+];
+
+async function connectDevice(device) {
+  const server = await device.gatt.connect();
+
+  let service = null;
+  for (const uuid of SERVICE_UUIDS) {
+    try { service = await server.getPrimaryService(uuid); break; } catch {}
+  }
+  if (!service) {
+    try { const all = await server.getPrimaryServices(); service = all[0]; } catch {}
+  }
+  if (!service) throw new Error('No print service found. Is the printer powered on?');
+
+  let char = null;
+  for (const uuid of CHAR_UUIDS) {
+    try { char = await service.getCharacteristic(uuid); break; } catch {}
+  }
+  if (!char) {
+    try {
+      const all = await service.getCharacteristics();
+      char = all.find(c => c.properties.writeWithoutResponse || c.properties.write);
+    } catch {}
+  }
+  if (!char) throw new Error('No writable characteristic found on printer.');
+
+  btDevice = device;
+  btChar   = char;
+  device.removeEventListener('gattserverdisconnected', onDisconnected);
+  device.addEventListener('gattserverdisconnected', onDisconnected);
+  setStatus(true, device.name);
+}
+
+function onDisconnected() {
+  btChar = null;
+  setStatus(false, '');
+  // Auto-reconnect after 2s
+  setTimeout(async () => {
+    if (!btDevice) return;
+    try { await connectDevice(btDevice); } catch {}
+  }, 2000);
+}
+
+// ── Button click — DIRECT user gesture — picker will show ──
+async function handleClick() {
+  if (btChar) {
+    // Already connected — clicking disconnects
+    try { btDevice?.gatt?.disconnect(); } catch {}
+    btDevice = null; btChar = null;
+    setStatus(false, '');
+    return;
+  }
+
+  if (!navigator.bluetooth) {
+    alert('Web Bluetooth not supported.\nUse Google Chrome on Windows/Android.\nMust be on http://localhost or https://');
+    return;
+  }
+
+  const btn = document.getElementById('btn');
+  btn.textContent = 'Scanning...';
+  btn.disabled = true;
+
+  try {
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: SERVICE_UUIDS,
+    });
+    await connectDevice(device);
+  } catch (e) {
+    if (e.name !== 'NotFoundError') {
+      // NotFoundError = user cancelled picker, not a real error
+      post({ type: 'bt_error', error: e.message });
+    }
+    setStatus(false, '');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── ESC/POS builder ────────────────────────────────────────
+function buildEscPos(data, title) {
+  const ESC = 0x1B, GS = 0x1D, LF = 0x0A;
+  const enc = new TextEncoder();
+  const buf = [];
+  const push    = (...b) => buf.push(...b);
+  const pushStr = s     => buf.push(...enc.encode(String(s || '')));
+  const nl = () => push(LF);
+  const hr = () => { pushStr('-'.repeat(32)); nl(); };
+
+  push(ESC, 0x40);
+  push(ESC, 0x61, 0x01);
+  push(ESC, 0x45, 0x01, GS, 0x21, 0x11);
+  pushStr((data.company_name || '').substring(0, 24)); nl();
+  push(GS, 0x21, 0x00, ESC, 0x45, 0x00);
+  if (data.company_phone) { pushStr('Phone: ' + String(data.company_phone).substring(0, 25)); nl(); }
+  if (data.company_gst) { pushStr('GSTIN: ' + String(data.company_gst).substring(0, 24)); nl(); }
+  if (data.company_fssai) { pushStr('FSSAI: ' + String(data.company_fssai).substring(0, 24)); nl(); }
+  pushStr(title || 'ORDER RECEIPT'); nl();
+  push(ESC, 0x61, 0x00);
+  hr();
+  pushStr('Order : ' + data.order_number); nl();
+  pushStr('Date  : ' + data.created_at); nl();
+  pushStr('Name  : ' + data.customer_name); nl();
+  if (data.customer_phone) { pushStr('Phone : ' + data.customer_phone); nl(); }
+  if (data.scheduled_date) { pushStr('Deliv : ' + data.scheduled_date); nl(); }
+  hr();
+  push(ESC, 0x45, 0x01);
+  pushStr('ITEM                     QTY'); nl();
+  push(ESC, 0x45, 0x00);
+  hr();
+  for (const item of (data.items || [])) {
+    pushStr(item.name.substring(0, 24).padEnd(24) + String(item.qty).padStart(4)); nl();
+  }
+  hr();
+  push(ESC, 0x45, 0x01);
+  pushStr(('TOTAL: Rs.' + parseFloat(data.total).toFixed(2)).padEnd(32)); nl();
+  push(ESC, 0x45, 0x00);
+  pushStr('Payment: ' + data.payment_mode); nl();
+  push(ESC, 0x64, 0x05);
+  push(GS, 0x56, 0x41, 0x03);
+  return new Uint8Array(buf);
+}
+
+async function sendBytes(bytes) {
+  const CHUNK = 512;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    await btChar.writeValueWithoutResponse(bytes.slice(i, i + CHUNK));
+    await new Promise(r => setTimeout(r, 30));
+  }
+}
+
+// ── Handle messages from parent ────────────────────────────
+window.addEventListener('message', async (e) => {
+  const msg = e.data;
+  if (!msg || !msg.type) return;
+
+  if (msg.type === 'status_request') {
+    setStatus(!!btChar, btDevice?.name || '');
+    return;
+  }
+
+  if (msg.type === 'disconnect') {
+    try { btDevice?.gatt?.disconnect(); } catch {}
+    btDevice = null; btChar = null;
+    setStatus(false, '');
+    return;
+  }
+
+  if (msg.type === 'print') {
+    if (!btChar) {
+      post({ type: 'print_done', success: false, error: 'Printer not connected.' });
+      return;
+    }
+    try {
+      await sendBytes(buildEscPos(msg.data, msg.title));
+      post({ type: 'print_done', success: true });
+    } catch (ex) {
+      btChar = null;
+      setStatus(false, '');
+      post({ type: 'print_done', success: false, error: ex.message });
+    }
+  }
+});
+
+// Tell parent we exist
+window.addEventListener('load', () => {
+  post({ type: 'bt_host_ready' });
+});
+</script>
+</body>
+</html>

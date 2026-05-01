@@ -1,0 +1,86 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff Login — {{ APP_NAME }}</title>
+  {% include "includes/favicon_links.html" %}
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:'DM Sans',sans-serif;background:linear-gradient(135deg,#0d1b4b 0%,#1a237e 60%,#1565c0 100%);min-height:100vh;display:grid;place-items:center;padding:24px;overflow-x:hidden}
+    body::before{content:'';position:fixed;inset:-20%;background:radial-gradient(circle at 50% 36%,rgba(198,40,40,.24),transparent 17%),radial-gradient(circle at 18% 18%,rgba(255,255,255,.13),transparent 16%),radial-gradient(circle at 82% 82%,rgba(21,101,192,.32),transparent 22%);opacity:0;transform:scale(.84);pointer-events:none;animation:staffBloom 900ms cubic-bezier(.2,.8,.2,1) forwards}
+    .login-shell{width:100%;max-width:420px;position:relative;z-index:1;animation:staffShellRise 720ms cubic-bezier(.2,.8,.2,1) 120ms both}
+    .login-brand{text-align:center;margin-bottom:28px}
+    .brand-logo{width:min(210px,72vw);height:auto;display:block;margin:0 auto 12px;filter:drop-shadow(0 8px 24px rgba(198,40,40,.26));animation:staffLogoPop 760ms cubic-bezier(.18,.9,.24,1.22) both}
+    .brand-sub{font-size:13px;color:rgba(255,255,255,.55);margin-top:2px;animation:staffFadeUp 520ms ease 300ms both}
+    .login-card{background:#fff;border-radius:20px;padding:36px 32px;box-shadow:0 24px 64px rgba(0,0,0,.28);transform-origin:50% 12%;animation:staffCardUnfold 720ms cubic-bezier(.2,.8,.2,1) 260ms both}
+    .login-card h5{font-family:'Rajdhani',sans-serif;font-size:21px;font-weight:700;color:#1a237e;margin:0 0 20px;text-align:center}
+    .form-label{font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+    .form-control{border-radius:10px;border:1.5px solid #e5e7eb;padding:10px 14px;font-size:15px;transition:border-color .2s}
+    .form-control:focus{border-color:#1565c0;box-shadow:0 0 0 3px rgba(21,101,192,.1);outline:none}
+    .btn-login{background:linear-gradient(135deg,#1565c0,#1a237e);border:none;color:#fff;width:100%;padding:12px;border-radius:10px;font-size:15.5px;font-weight:700;font-family:'Rajdhani',sans-serif;letter-spacing:.4px;cursor:pointer;transition:all .2s;margin-top:8px}
+    .btn-login:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(21,101,192,.4)}
+    .alert{border-radius:10px;border:none;font-size:13.5px;padding:11px 14px}
+    .alert-danger{background:#ffebee;color:#c62828}
+    .input-group-text{border:1.5px solid #e5e7eb;border-right:none;background:#f8f9fa;border-radius:10px 0 0 10px;color:#9ca3af}
+    .input-group .form-control{border-left:none;border-radius:0 10px 10px 0}
+    .input-group .form-control:focus{border-left:none}
+    body.is-submit-handoff .login-shell{transform:translateY(-14px) scale(.97);opacity:.22;transition:transform .24s ease,opacity .24s ease}
+    body.is-submit-handoff::after{content:'Opening dashboard';position:fixed;left:50%;bottom:38px;z-index:4;transform:translateX(-50%);padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.92);color:#1a237e;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;box-shadow:0 16px 42px rgba(0,0,0,.22)}
+    @keyframes staffBloom{0%{opacity:0;transform:scale(.82) rotate(-4deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+    @keyframes staffShellRise{0%{opacity:0;transform:translateY(26px) scale(.96)}100%{opacity:1;transform:translateY(0) scale(1)}}
+    @keyframes staffLogoPop{0%{opacity:0;transform:translateY(22px) scale(.72)}58%{opacity:1;transform:translateY(-4px) scale(1.06)}100%{opacity:1;transform:translateY(0) scale(1)}}
+    @keyframes staffCardUnfold{0%{opacity:0;transform:translateY(34px) scale(.92) rotateX(8deg)}100%{opacity:1;transform:translateY(0) scale(1) rotateX(0)}}
+    @keyframes staffFadeUp{0%{opacity:0;transform:translateY(8px)}100%{opacity:1;transform:translateY(0)}}
+    @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+  </style>
+</head>
+<body>
+<div class="login-shell">
+  <div class="login-brand">
+    <img src="{% static "brand/neverq-logo.png" %}" alt="{{ APP_NAME }}" class="brand-logo">
+    <div class="brand-sub">{{ APP_TAGLINE|default:"Corporate Cafeteria Management" }}</div>
+  </div>
+  <div class="login-card">
+    <h5>Staff Sign In</h5>
+    {% if messages %}
+      {% for msg in messages %}
+      <div class="alert alert-danger mb-3"><i class="bi bi-exclamation-circle me-2"></i>{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+    <form method="post" novalidate id="staffLoginForm">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label">Email Address</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+          <input type="email" name="email" class="form-control" placeholder="your@email.com" value="{{ form.email.value|default:'' }}" autofocus required>
+        </div>
+      </div>
+      <div class="mb-4">
+        <label class="form-label">Password</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-lock"></i></span>
+          <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+        </div>
+      </div>
+      <button type="submit" class="btn-login">Sign In <i class="bi bi-arrow-right ms-2"></i></button>
+    </form>
+    <div style="text-align:center;margin-top:18px;">
+      <a href="{% url 'menu:menu' %}" style="font-size:13px;color:#6b7280;text-decoration:none;"><i class="bi bi-arrow-left me-1"></i>Back to Customer Portal</a>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.getElementById('staffLoginForm')?.addEventListener('submit', function() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  document.body.classList.add('is-submit-handoff');
+});
+</script>
+</body>
+</html>

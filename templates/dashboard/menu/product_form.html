@@ -1,0 +1,806 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<div style="max-width:860px;">
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h4 style="margin:0;font-family:'Rajdhani',sans-serif;color:var(--cf-navy);">{{ page_title }}</h4>
+      <div style="font-size:13px;color:var(--cf-muted);margin-top:2px;">Fill in the details below and save when done</div>
+    </div>
+    <a href="{% url 'dashboard:product_list' %}" class="btn btn-cf-ghost btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to Products</a>
+  </div>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="return_to" value="{{ request.GET.return_to|default:'' }}">
+    <input type="hidden" name="return_anchor" value="{{ request.GET.return_anchor|default:'' }}">
+
+    {# ── Section 1 — Identity ── #}
+    <div class="form-section">
+      <div class="form-section-title"><i class="bi bi-tag-fill text-blue"></i>Product Identity</div>
+      <div class="row g-3">
+        <div class="col-md-8">
+          <label class="form-label">Product Name <span class="text-danger">*</span></label>
+          <input type="text" name="name" id="productNameInput" class="form-control" required value="{{ product.name|default:'' }}" placeholder="e.g. Veg Thali, Chicken Biryani">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Code / SKU</label>
+          <input type="text" name="code" class="form-control" value="{{ product.code|default:'' }}" placeholder="e.g. VT-001">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Category <span class="text-danger">*</span></label>
+          <select name="category" id="productCategorySelect" class="form-select" required>
+            <option value="">— Select category —</option>
+            {% for cat in categories %}
+            <option value="{{ cat.pk }}"
+                    data-company-ids="{% for co in cat.companies.all %}{{ co.pk }}{% if not forloop.last %},{% endif %}{% endfor %}"
+                    {% if selected_category_id == cat.pk %}selected{% elif not selected_category_id and product and product.category_id == cat.pk %}selected{% endif %}>{{ cat.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text" id="categorySiteHint" style="display:none;">Only categories assigned to the selected site are shown.</div>
+        </div>
+        {# Sub-category removed — hierarchy is now: Offering → Category → Product #}
+        <div class="col-md-6">
+          <label class="form-label">Company</label>
+          <select name="company" id="productCompanySelect" class="form-select">
+            <option value="">— Select company —</option>
+            {% for co in companies %}
+            <option value="{{ co.pk }}" {% if selected_company_id == co.pk %}selected{% elif not selected_company_id and product and product.company_id == co.pk %}selected{% endif %}>{{ co.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Offering</label>
+          <select name="offering" id="productOfferingSelect" class="form-select">
+            <option value="">— None —</option>
+            {% for offering in offerings %}
+            <option value="{{ offering.pk }}" data-company-id="{{ offering.company_id }}" {% if selected_offering_id == offering.pk %}selected{% elif not selected_offering_id and product and product.offering_id == offering.pk %}selected{% endif %}>{{ offering.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text" id="offeringSiteHint" style="display:none;">Only offerings for the selected site are shown.</div>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Menu Date</label>
+          <input type="date" name="menu_date" class="form-control" value="{{ product.menu_date|date:'Y-m-d'|default:'' }}">
+        </div>
+        <div class="col-12">
+          <label class="form-label">Description</label>
+          <textarea name="description" id="productDescriptionInput" class="form-control" rows="2" placeholder="Short description shown to customers">{{ product.description|default:'' }}</textarea>
+        </div>
+      </div>
+    </div>
+
+    {# ── Section 2 — Pricing ── #}
+    <div class="form-section">
+      <div class="form-section-title"><i class="bi bi-currency-rupee text-green"></i>Pricing</div>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">Staff/Base Price (₹) <span class="text-danger">*</span></label>
+          <input type="number" name="price" class="form-control" step="0.01" min="0" required value="{{ product.price|default:'0' }}">
+          <div class="form-text">Shown on web, kiosk, and POS staff sales</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Visitor Price (₹)</label>
+          <input type="number" name="company_price" class="form-control" step="0.01" min="0" value="{{ product.company_price|default:'0' }}">
+          <div class="form-text">Used for POS visitor sales; leave 0 to hide Visitor in POS</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Room Service Extra (%)</label>
+          <input type="number" name="room_service_extra_percent" class="form-control" step="0.01" min="0" value="{{ product.room_service_extra_percent|default:'0' }}">
+          <div class="form-text">Added to room service orders; leave 0 to hide Room Svc in POS</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Packing Price (₹)</label>
+          <input type="number" name="packing_price" class="form-control" step="0.01" min="0" value="{{ product.packing_price|default:'0' }}">
+          <div class="form-text">Added on top at checkout</div>
+        </div>
+        <div class="col-12">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" name="is_free_meal_product" id="isFreeMealProduct" {% if is_free_meal_product %}checked{% endif %} style="width:40px;height:20px;cursor:pointer;">
+            <label class="form-check-label" for="isFreeMealProduct">
+              <i class="bi bi-gift me-1 text-green"></i><strong>Eligible for free meal / subsidy</strong>
+              <span class="form-text d-block" style="margin-top:2px;">When enabled, company subsidy covers this product. Packing charge stays payable by the customer.</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ── Section 3 — Stock & Logistics ── #}
+    <div class="form-section">
+      <div class="form-section-title"><i class="bi bi-box-seam text-orange"></i>Stock & Ordering</div>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">Min Qty per Order</label>
+          <input type="number" name="min_qty" class="form-control" min="1" value="{{ product.min_qty|default:'1' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Max Qty per Order</label>
+          <input type="number" name="max_qty" class="form-control" min="1" value="{{ product.max_qty|default:'10' }}">
+          <div class="form-text">Maximum units per single order</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Web Stock (web_qty)</label>
+          <input type="number" name="web_qty" class="form-control" min="-1" value="{{ product.web_qty|default_if_none:'-1' }}">
+          <div class="form-text">-1 = unlimited · 0 = sold out · N = capped</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">POS Stock (pos_qty)</label>
+          <input type="number" name="pos_qty" class="form-control" min="0" value="{{ product.pos_qty|default:'0' }}">
+          <div class="form-text">Units available at POS counter</div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Prep Time (minutes)</label>
+          <input type="number" name="preparation_time_minutes" class="form-control" min="0" value="{{ product.preparation_time_minutes|default:'10' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label d-flex align-items-center justify-content-between gap-2">
+            <span>Calories (kcal)</span>
+            <button type="button" class="btn btn-link btn-sm p-0 calorie-estimate-btn" id="estimateCaloriesBtn">
+              <i class="bi bi-lightning-charge me-1"></i>Estimate
+            </button>
+          </label>
+          <input type="number" name="calories" id="caloriesInput" class="form-control" min="0" value="{{ product.calories|default_if_none:'' }}" placeholder="e.g. 450">
+          <div class="form-text" id="calorieEstimateHint">Auto-estimated from name and description; editable.</div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Sort / Position Order</label>
+          <input type="number" name="position_order" class="form-control" value="{{ product.position_order|default:'0' }}">
+          <div class="form-text">Lower number = shown first</div>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Counters (Pickup Points)</label>
+          <div class="dropdown counter-picker">
+            <button class="form-select text-start counter-picker-btn" type="button" id="counterPickerBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+              <span id="counterPickerLabel">Select counters</span>
+            </button>
+            <div class="dropdown-menu w-100 p-2 counter-picker-menu" aria-labelledby="counterPickerBtn">
+            {% for counter in counters %}
+              <label class="counter-option" data-company-id="{{ counter.company_id }}">
+                <input type="checkbox" class="form-check-input counter-check" name="counter_ids" value="{{ counter.pk }}" {% if counter.pk in selected_counter_ids|default:'' %}checked{% endif %}>
+                <span>{{ counter.name }}{% if counter.cafe %} — {{ counter.cafe.name }}{% endif %}</span>
+              </label>
+            {% empty %}
+              <div class="text-muted small px-2 py-1">No active counters available.</div>
+            {% endfor %}
+            </div>
+          </div>
+          <div class="form-text">Selected counters become pickup points. The first selected counter is the default.</div>
+        </div>
+      </div>
+    </div>
+
+    {# ── Section 4 — Visibility & Status ── #}
+    <div class="form-section">
+      <div class="form-section-title"><i class="bi bi-eye-fill text-blue"></i>Visibility & Status</div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Food Type <span class="text-danger">*</span></label>
+          <div class="d-flex gap-2 flex-wrap mt-1" id="foodTypePills">
+            {% for ft in food_type_options %}
+            <label class="food-type-pill {% if ft.pk in selected_types|default:'' %}active{% endif %}"
+                   data-pk="{{ ft.pk }}" data-kind="{{ ft.kind }}">
+              <input type="radio" name="food_types" value="{{ ft.pk }}"
+                     {% if ft.pk in selected_types|default:'' %}checked{% endif %}
+                     style="display:none;">
+              {% if ft.kind == "nonveg" %}
+                <span class="food-dot-pill nonveg-dot"></span>
+              {% else %}
+                <span class="food-dot-pill veg-dot"></span>
+              {% endif %}
+              {{ ft.name }}
+            </label>
+            {% empty %}
+            <div class="alert alert-warning py-2 px-3 mb-0" style="font-size:13px;border-radius:8px;">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              No food types configured. Run <code>python manage.py migrate</code> to seed Veg &amp; Non-Veg options.
+            </div>
+            {% endfor %}
+          </div>
+          <div class="form-text mt-1">
+            <span class="food-dot-pill veg-dot" style="vertical-align:middle;"></span> Veg &nbsp;
+            <span class="food-dot-pill nonveg-dot" style="vertical-align:middle;"></span> Non-Veg
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label d-block">Switches</label>
+          <div class="product-switch-grid">
+            <div class="product-switch-row">
+              <input class="product-switch-input" type="checkbox" name="is_active" id="isActive" {% if not product or product.is_active %}checked{% endif %}>
+              <label class="product-switch-label" for="isActive"><span class="product-switch-track"></span><span><i class="bi bi-globe text-green"></i>Web ordering active</span></label>
+            </div>
+            <div class="product-switch-row">
+              <input class="product-switch-input" type="checkbox" name="is_kiosk_active" id="isKioskActive" {% if not product or product.is_kiosk_active %}checked{% endif %}>
+              <label class="product-switch-label" for="isKioskActive"><span class="product-switch-track"></span><span><i class="bi bi-display text-blue"></i>Kiosk ordering active</span></label>
+            </div>
+            <div class="product-switch-row">
+              <input class="product-switch-input" type="checkbox" name="is_pos_active" id="isPosActive" {% if not product or product.is_pos_active %}checked{% endif %}>
+              <label class="product-switch-label" for="isPosActive"><span class="product-switch-track"></span><span><i class="bi bi-cash-register" style="color:#f97316;"></i>POS ordering active</span></label>
+            </div>
+            <div class="product-switch-row">
+              <input class="product-switch-input" type="checkbox" name="featured_in_web" id="featWeb" {% if product and product.featured_in_web %}checked{% endif %}>
+              <label class="product-switch-label" for="featWeb"><span class="product-switch-track"></span><span><i class="bi bi-stars" style="color:#0ea5e9;"></i>Featured on web home</span></label>
+            </div>
+            <div class="product-switch-row">
+              <input class="product-switch-input" type="checkbox" name="featured_in_kiosk_extra" id="featKiosk" {% if product and product.featured_in_kiosk_extra %}checked{% endif %}>
+              <label class="product-switch-label" for="featKiosk"><span class="product-switch-track"></span><span><i class="bi bi-star-fill" style="color:#f59e0b;"></i>Featured in kiosk (max 10)</span></label>
+            </div>
+            {% if request.user.role == 'superadmin' %}
+            <div class="product-switch-row">
+              <input class="product-switch-input" type="checkbox" name="schedule_bypass" id="schedBypass" {% if product and product.schedule_bypass %}checked{% endif %}>
+              <label class="product-switch-label" for="schedBypass"><span class="product-switch-track"></span><span><i class="bi bi-lightning-charge-fill" style="color:#f59e0b;"></i>Schedule bypass <span class="form-text">(superadmin)</span></span></label>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ── Section 5 — Schedule ── #}
+    <div class="form-section">
+      <div class="form-section-title"><i class="bi bi-clock-fill text-muted"></i>Availability Schedule <span style="font-size:12px;font-weight:400;color:var(--cf-muted);">optional — leave blank for always available</span></div>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">Available From</label>
+          <input type="time" name="available_from" class="form-control" value="{{ product.available_from|time:'H:i'|default:'' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Available To</label>
+          <input type="time" name="available_to" class="form-control" value="{{ product.available_to|time:'H:i'|default:'' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Start Date</label>
+          <input type="date" name="start_date" class="form-control" value="{{ product.start_datetime|date:'Y-m-d'|default:'' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">End Date</label>
+          <input type="date" name="end_date" class="form-control" value="{{ product.end_datetime|date:'Y-m-d'|default:'' }}">
+        </div>
+      </div>
+    </div>
+
+    {# ── Section 6 — Image ── #}
+    <div class="form-section">
+      <div class="form-section-title"><i class="bi bi-image-fill text-blue"></i>Product Image</div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Upload Image</label>
+          <input type="file" name="image" id="imageUpload" class="form-control" accept="image/*" onchange="previewImage(this)">
+          <div class="form-text">Local uploads are also saved into Product Gallery automatically.</div>
+          {% if product and product.image %}
+          <div class="mt-2"><img src="{{ product.image.url }}" id="imgPreview" style="height:80px;border-radius:8px;object-fit:cover;"></div>
+          {% else %}
+          <img id="imgPreview" src="" style="height:80px;border-radius:8px;object-fit:cover;margin-top:8px;display:none;">
+          {% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Or Pick from Product Gallery</label>
+          <button type="button" class="btn btn-cf-ghost btn-sm" onclick="openGalleryPicker()"><i class="bi bi-grid me-1"></i>Choose from Gallery</button>
+          <input type="hidden" name="gallery_image_url" id="galleryImageUrl">
+          <div id="galleryPickedPreview" style="display:none;margin-top:8px;">
+            <img id="galleryPickedImg" src="" style="height:80px;border-radius:8px;object-fit:cover;">
+            <button type="button" class="btn btn-link btn-sm text-danger p-0 ms-2" onclick="clearGalleryPick()">Remove</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ── Save ── #}
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn btn-cf-primary px-4"><i class="bi bi-check-circle me-1"></i>{{ action|default:"Save" }} Product</button>
+      <a href="{% url 'dashboard:product_list' %}" class="btn btn-cf-ghost">Cancel</a>
+    </div>
+
+  </form>
+</div>
+
+{# Gallery Modal #}
+<div class="modal fade" id="galleryModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content border-0 rounded-4">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title"><i class="bi bi-images me-2"></i>Pick from Product Gallery</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="search" id="gallerySearchInput"
+               class="form-control mb-3"
+               placeholder="Search by image name…"
+               autocomplete="off"
+               oninput="filterGalleryImages(this.value)">
+        <div id="galleryGrid" class="row g-3">
+          <div class="col-12 text-center text-muted py-4" id="galleryLoading"><div class="spinner-border spinner-border-sm me-2"></div>Loading…</div>
+        </div>
+        <div id="galleryNoResults" class="col-12 text-center text-muted py-4" style="display:none;">
+          <i class="bi bi-search me-1"></i>No images match your search.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function previewImage(input){const p=document.getElementById('imgPreview');if(input.files&&input.files[0]){const r=new FileReader();r.onload=e=>{p.src=e.target.result;p.style.display='block';};r.readAsDataURL(input.files[0]);clearGalleryPick();}}
+function clearGalleryPick(){document.getElementById('galleryImageUrl').value='';document.getElementById('galleryPickedPreview').style.display='none';document.getElementById('galleryPickedImg').src='';}
+let _galleryAllImages = [];
+function openGalleryPicker(){
+  const modal = new bootstrap.Modal(document.getElementById('galleryModal'));
+  modal.show();
+  const grid = document.getElementById('galleryGrid');
+  const srch = document.getElementById('gallerySearchInput');
+  if (srch) srch.value = '';
+  const noRes = document.getElementById('galleryNoResults');
+  if (noRes) noRes.style.display = 'none';
+  grid.innerHTML = '<div class="col-12 text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading…</div>';
+  const co = document.querySelector('[name="company"]')?.value || '';
+  fetch(`/dashboard/menu/product-gallery/api/${co ? '?company=' + co : ''}`)
+    .then(r => r.json())
+    .then(data => {
+      if (!data.images || data.images.length === 0) {
+        grid.innerHTML = '<div class="col-12 text-center text-muted py-4">No images in gallery. <a href="/dashboard/menu/product-gallery/" target="_blank">Upload some →</a></div>';
+        _galleryAllImages = [];
+        return;
+      }
+      _galleryAllImages = data.images;
+      renderGalleryImages(_galleryAllImages);
+    })
+    .catch(() => { grid.innerHTML = '<div class="col-12 text-center text-danger py-4">Failed to load gallery.</div>'; });
+}
+function renderGalleryImages(images) {
+  const grid = document.getElementById('galleryGrid');
+  const noRes = document.getElementById('galleryNoResults');
+  if (!images || images.length === 0) {
+    grid.innerHTML = '';
+    if (noRes) noRes.style.display = 'block';
+    return;
+  }
+  if (noRes) noRes.style.display = 'none';
+  grid.innerHTML = images.map(img =>
+    `<div class="col-6 col-md-3 col-lg-2">
+      <div class="border rounded-3 overflow-hidden" style="cursor:pointer;"
+           onclick="pickGalleryImage('${img.url}','${img.name.replace(/'/g,"\'")}')" >
+        <img src="${img.url}" style="width:100%;height:110px;object-fit:cover;display:block;" loading="lazy">
+        <div class="p-1 small text-truncate" title="${img.name}">${img.name}</div>
+      </div></div>`
+  ).join('');
+}
+function filterGalleryImages(query) {
+  const q = (query || '').trim().toLowerCase();
+  renderGalleryImages(q ? _galleryAllImages.filter(img => img.name.toLowerCase().includes(q)) : _galleryAllImages);
+}
+function pickGalleryImage(url){document.getElementById('galleryImageUrl').value=url;const p=document.getElementById('galleryPickedPreview');document.getElementById('galleryPickedImg').src=url;p.style.display='block';document.getElementById('imageUpload').value='';document.getElementById('imgPreview').style.display='none';bootstrap.Modal.getInstance(document.getElementById('galleryModal'))?.hide();}
+
+(function () {
+  var companySelect = document.getElementById('productCompanySelect');
+  var categorySelect = document.getElementById('productCategorySelect');
+  var offeringSelect = document.getElementById('productOfferingSelect');
+  if (!companySelect) return;
+
+  function selectedCompanyId() {
+    return String(companySelect.value || '');
+  }
+
+  function setOptionState(option, allowed) {
+    option.hidden = !allowed;
+    option.disabled = !allowed;
+  }
+
+  function filterCategoryOptions() {
+    if (!categorySelect) return;
+    var companyId = selectedCompanyId();
+    var visibleCount = 0;
+    Array.from(categorySelect.options).forEach(function (option) {
+      if (!option.value) {
+        setOptionState(option, true);
+        return;
+      }
+      var ids = String(option.dataset.companyIds || '').split(',').filter(Boolean);
+      var allowed = !!companyId && ids.indexOf(companyId) !== -1;
+      if (allowed) visibleCount += 1;
+      setOptionState(option, allowed);
+    });
+    if (categorySelect.options.length) {
+      categorySelect.options[0].textContent = companyId
+        ? (visibleCount ? '— Select category —' : '— No categories assigned to this site —')
+        : '— Select company first —';
+    }
+    if (categorySelect.selectedOptions.length && categorySelect.selectedOptions[0].disabled) {
+      categorySelect.value = '';
+    }
+    var hint = document.getElementById('categorySiteHint');
+    if (hint) hint.style.display = companyId ? (visibleCount ? 'block' : 'block') : 'none';
+  }
+
+  function filterOfferingOptions() {
+    if (!offeringSelect) return;
+    var companyId = selectedCompanyId();
+    var visibleCount = 0;
+    Array.from(offeringSelect.options).forEach(function (option) {
+      if (!option.value) {
+        setOptionState(option, true);
+        return;
+      }
+      var allowed = !!companyId && String(option.dataset.companyId || '') === companyId;
+      if (allowed) visibleCount += 1;
+      setOptionState(option, allowed);
+    });
+    if (offeringSelect.options.length) {
+      offeringSelect.options[0].textContent = companyId
+        ? (visibleCount ? '— None —' : '— No offerings for this site —')
+        : '— Select company first —';
+    }
+    if (offeringSelect.selectedOptions.length && offeringSelect.selectedOptions[0].disabled) {
+      offeringSelect.value = '';
+    }
+    var hint = document.getElementById('offeringSiteHint');
+    if (hint) hint.style.display = companyId ? 'block' : 'none';
+  }
+
+  function filterCounterOptions() {
+    var companyId = selectedCompanyId();
+    document.querySelectorAll('.counter-option').forEach(function (label) {
+      var allowed = !!companyId && String(label.dataset.companyId || '') === companyId;
+      label.style.display = allowed ? '' : 'none';
+      var input = label.querySelector('input[type="checkbox"]');
+      if (input) {
+        input.disabled = !allowed;
+        if (!allowed) input.checked = false;
+      }
+    });
+    var label = document.getElementById('counterPickerLabel');
+    if (label) {
+      var selected = Array.from(document.querySelectorAll('.counter-check:checked')).map(function (input) {
+        return input.closest('.counter-option')?.innerText.trim();
+      }).filter(Boolean);
+      label.textContent = selected.length ? selected.join(', ') : 'Select counters';
+    }
+  }
+
+  function syncSiteScopedFields() {
+    filterCategoryOptions();
+    filterOfferingOptions();
+    filterCounterOptions();
+  }
+
+  companySelect.addEventListener('change', syncSiteScopedFields);
+  syncSiteScopedFields();
+})();
+
+(function () {
+  var nameInput = document.getElementById('productNameInput');
+  var descriptionInput = document.getElementById('productDescriptionInput');
+  var caloriesInput = document.getElementById('caloriesInput');
+  var estimateButton = document.getElementById('estimateCaloriesBtn');
+  var hint = document.getElementById('calorieEstimateHint');
+  if (!nameInput || !descriptionInput || !caloriesInput) return;
+
+  var lastAutoValue = '';
+  var manualCalories = !!caloriesInput.value.trim();
+  var debounceTimer = null;
+
+  function clampCalories(value, upperLimit) {
+    var max = upperLimit || 1800;
+    var rounded = Math.round(value / 10) * 10;
+    return Math.max(5, Math.min(max, rounded));
+  }
+
+  function countedEstimate(text) {
+    var countedRules = [
+      { re: /\b([1-9]\d?)\s*(idli|idlis)\b/, kcal: 70 },
+      { re: /\b([1-9]\d?)\s*(egg|eggs)\b/, kcal: 80 },
+      { re: /\b([1-9]\d?)\s*(roti|rotis|chapati|chapatis|phulka|phulkas)\b/, kcal: 110 },
+      { re: /\b([1-9]\d?)\s*(poori|pooris|puri|puris)\b/, kcal: 120 },
+      { re: /\b([1-9]\d?)\s*(momo|momos)\b/, kcal: 45 }
+    ];
+    for (var i = 0; i < countedRules.length; i++) {
+      var match = text.match(countedRules[i].re);
+      if (match) return parseInt(match[1], 10) * countedRules[i].kcal;
+    }
+    return null;
+  }
+
+  function estimateCaloriesFromText(rawText) {
+    var text = (rawText || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!text) return null;
+
+    var explicit = text.match(/\b(\d{2,4})\s*(kcal|calories|cal)\b/i);
+    if (explicit) return Math.max(0, Math.min(5000, parseInt(explicit[1], 10)));
+
+    var estimate = countedEstimate(text);
+    var rules = [
+      { re: /\b(mutton|lamb)\s+biryani\b/, kcal: 850 },
+      { re: /\bchicken\s+biryani\b/, kcal: 760 },
+      { re: /\bveg(etable)?\s+biryani\b/, kcal: 650 },
+      { re: /\bbiryani\b/, kcal: 720 },
+      { re: /\bfried\s+rice\b/, kcal: 620 },
+      { re: /\b(noodles|chowmein|chow mein)\b/, kcal: 590 },
+      { re: /\bpasta\b/, kcal: 620 },
+      { re: /\b(rice\s+bowl|bowl)\b/, kcal: 550 },
+      { re: /\b(thali|full\s+meal)\b/, kcal: 850 },
+      { re: /\b(combo|platter)\b/, kcal: 680 },
+      { re: /\b(pizza)\b/, kcal: 700 },
+      { re: /\b(burger)\b/, kcal: 560 },
+      { re: /\b(sandwich|toastie)\b/, kcal: 330 },
+      { re: /\b(wrap|roll|kathi)\b/, kcal: 430 },
+      { re: /\b(dosa)\b/, kcal: 190 },
+      { re: /\b(uttapam|uthappam)\b/, kcal: 300 },
+      { re: /\b(upma|poha)\b/, kcal: 280 },
+      { re: /\b(paratha|parotta)\b/, kcal: 330 },
+      { re: /\b(roti|rotis|chapati|chapatis|phulka|phulkas)\b/, kcal: 90 },
+      { re: /\b(samosa)\b/, kcal: 260 },
+      { re: /\b(vada|vadai)\b/, kcal: 180 },
+      { re: /\b(pakora|pakoda|bhaji)\b/, kcal: 350 },
+      { re: /\b(paneer)\b/, kcal: 450 },
+      { re: /\b(chicken)\b/, kcal: 460 },
+      { re: /\b(fish)\b/, kcal: 410 },
+      { re: /\b(dal|daal)\b/, kcal: 240 },
+      { re: /\b(chole|chana|channa|rajma)\b/, kcal: 360 },
+      { re: /\b(dahi|curd|yogurt|yoghurt|raita)\b/, kcal: 120 },
+      { re: /\b(jeera\s+rice|plain\s+rice|steamed\s+rice|basmati\s+rice|rice)\b/, kcal: 260 },
+      { re: /\b(soup|shorba)\b/, kcal: 140 },
+      { re: /\b(salad)\b/, kcal: 180 },
+      { re: /\b(cake|pastry|brownie|muffin)\b/, kcal: 450 },
+      { re: /\b(ice\s*cream|kulfi)\b/, kcal: 260 },
+      { re: /\b(gulab\s+jamun|rasgulla|sweet|dessert)\b/, kcal: 320 },
+      { re: /\b(lassi|smoothie|shake)\b/, kcal: 240 },
+      { re: /\b(juice)\b/, kcal: 140 },
+      { re: /\b(tea|chai|coffee)\b/, kcal: 90 }
+    ];
+
+    for (var i = 0; i < rules.length; i++) {
+      if (rules[i].re.test(text)) {
+        estimate = estimate ? Math.max(estimate, rules[i].kcal) : rules[i].kcal;
+        break;
+      }
+    }
+
+    if (!estimate) return null;
+
+    if (/\b(fried|crispy|cheesy|cheese|butter|cream|malai|mayo)\b/.test(text)) estimate += 100;
+    if (/\b(with\s+rice|rice\s+and|fries|extra|loaded)\b/.test(text)) estimate += 120;
+    if (/\b(gravy|masala|curry)\b/.test(text)) estimate += 60;
+    if (/\b(grilled|steamed|roasted|baked|tandoori)\b/.test(text)) estimate -= 50;
+    if (/\b(small|mini|half)\b/.test(text)) estimate -= 80;
+    if (/\b(large|jumbo|double|full)\b/.test(text)) estimate += 130;
+
+    return clampCalories(estimate, 1800);
+  }
+
+  window.estimateCaloriesFromText = estimateCaloriesFromText;
+
+  function setHint(message, isSuccess) {
+    if (!hint) return;
+    hint.textContent = message;
+    hint.classList.toggle('text-success', !!isSuccess);
+  }
+
+  function canWriteCalories() {
+    return !caloriesInput.disabled && !caloriesInput.readOnly;
+  }
+
+  function applyEstimate(force) {
+    if (!canWriteCalories()) return;
+    var estimate = estimateCaloriesFromText(nameInput.value + ' ' + descriptionInput.value);
+    if (!estimate) {
+      setHint('Add a clearer product name or description to estimate calories.', false);
+      return;
+    }
+    var current = caloriesInput.value.trim();
+    if (force || !manualCalories || !current || current === lastAutoValue) {
+      caloriesInput.value = estimate;
+      lastAutoValue = String(estimate);
+      manualCalories = false;
+      setHint('Estimated from name and description; edit if needed.', true);
+    }
+  }
+
+  function scheduleEstimate() {
+    window.clearTimeout(debounceTimer);
+    debounceTimer = window.setTimeout(function () { applyEstimate(false); }, 180);
+  }
+
+  nameInput.addEventListener('input', scheduleEstimate);
+  descriptionInput.addEventListener('input', scheduleEstimate);
+  caloriesInput.addEventListener('input', function () {
+    var current = caloriesInput.value.trim();
+    if (!current) {
+      manualCalories = false;
+      lastAutoValue = '';
+      scheduleEstimate();
+      return;
+    }
+    if (current !== lastAutoValue) manualCalories = true;
+  });
+  if (estimateButton) {
+    estimateButton.addEventListener('click', function () { applyEstimate(true); });
+  }
+  window.setTimeout(function () { applyEstimate(false); }, 0);
+})();
+</script>
+
+<style>
+/* ── Food Type pill selector ── */
+.food-type-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px 7px 10px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #4b5563;
+  background: #f9fafb;
+  transition: all .15s;
+  user-select: none;
+}
+.food-type-pill:hover { border-color: #9ca3af; background: #f3f4f6; }
+.food-type-pill.active.veg-active  { border-color: #16a34a; background: #f0fdf4; color: #15803d; font-weight: 600; }
+.food-type-pill.active.nonveg-active { border-color: #dc2626; background: #fef2f2; color: #b91c1c; font-weight: 600; }
+.counter-picker-menu { max-height: 240px; overflow-y: auto; border: 1.5px solid var(--cf-border); border-radius: 10px; box-shadow: 0 18px 34px rgba(15,23,42,.12); }
+.counter-picker-btn { cursor: pointer; min-height: 48px; }
+.counter-picker-btn span { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 18px; }
+.counter-option { display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.counter-option:hover { background: #f3f6fb; }
+.calorie-estimate-btn { color: var(--cf-blue); font-size: 12px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.calorie-estimate-btn:hover { color: var(--cf-navy); text-decoration: none; }
+.product-switch-grid { display: grid; gap: 8px; max-width: 420px; }
+.product-switch-row { min-width: 0; }
+.product-switch-input { position: absolute; opacity: 0; pointer-events: none; }
+.product-switch-label { display: flex; align-items: center; gap: 10px; min-height: 38px; margin: 0; cursor: pointer; color: var(--cf-navy); font-weight: 600; }
+.product-switch-label i { margin-right: 4px; }
+.product-switch-track { width: 46px; height: 24px; border-radius: 999px; background: #d8dee9; border: 1px solid #cbd5e1; position: relative; flex: 0 0 46px; transition: background .16s ease, border-color .16s ease; }
+.product-switch-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 999px; background: #fff; box-shadow: 0 2px 7px rgba(15,23,42,.22); transition: transform .16s ease; }
+.product-switch-input:checked + .product-switch-label .product-switch-track { background: var(--cf-blue); border-color: var(--cf-blue); }
+.product-switch-input:checked + .product-switch-label .product-switch-track::after { transform: translateX(22px); }
+.product-switch-input:focus + .product-switch-label .product-switch-track { box-shadow: 0 0 0 3px rgba(37,99,235,.16); }
+.food-dot-pill {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.veg-dot   { background: #16a34a; border: 1.5px solid #15803d; }
+.nonveg-dot { background: #dc2626; border: 1.5px solid #b91c1c; }
+</style>
+<script>
+(function () {
+  function syncFoodTypes() {
+    document.querySelectorAll('.food-type-pill').forEach(function (pill) {
+      var input = pill.querySelector('input[type="radio"]');
+      var isVeg = pill.dataset.kind !== 'nonveg';
+      pill.classList.toggle('active', !!(input && input.checked));
+      pill.classList.toggle('veg-active', !!(input && input.checked && isVeg));
+      pill.classList.toggle('nonveg-active', !!(input && input.checked && !isVeg));
+    });
+  }
+  document.querySelectorAll('.food-type-pill').forEach(function (pill) {
+    var cb = pill.querySelector('input[type="radio"]');
+    var dot = pill.querySelector('.food-dot-pill');
+    var isVeg = dot && dot.classList.contains('veg-dot');
+    pill.addEventListener('click', function () {
+      if (!cb) return;
+      cb.checked = true;
+      syncFoodTypes();
+    });
+  });
+  syncFoodTypes();
+
+  function syncCounterLabel() {
+    var label = document.getElementById('counterPickerLabel');
+    if (!label) return;
+    var selected = Array.from(document.querySelectorAll('.counter-check:checked')).map(function (input) {
+      return input.closest('.counter-option')?.innerText.trim();
+    }).filter(Boolean);
+    label.textContent = selected.length ? selected.join(', ') : 'Select counters';
+  }
+  document.querySelectorAll('.counter-check').forEach(function (input) {
+    input.addEventListener('change', syncCounterLabel);
+  });
+  syncCounterLabel();
+})();
+</script>
+{% if perm_level %}
+<script>
+(function(){
+  var LVL="{{ perm_level }}";
+  var LOCKED=new Set({{ locked_names_json|safe }});
+  var form=document.querySelector('form[method="post"]');
+  if(form&&LVL!=="full_edit"){
+    var html=LVL==="view"
+      ?'<div class="alert alert-warning py-2 mb-3" style="border-radius:10px;"><i class="bi bi-eye-fill me-2"></i><strong>View-only access</strong> — you can see this record but cannot save changes.</div>'
+      :'<div class="alert alert-info py-2 mb-3" style="border-radius:10px;"><i class="bi bi-shield-lock me-2"></i><strong>Limited edit access</strong> — fields marked 🔒 cannot be modified.</div>';
+    form.insertAdjacentHTML("afterbegin",html);
+  }
+  if(LVL==="view"){
+    document.querySelectorAll('button[type="submit"]').forEach(function(b){b.style.display="none";});
+  }
+  if(LOCKED.size){
+    document.querySelectorAll("input,select,textarea").forEach(function(el){
+      if(!LOCKED.has(el.name))return;
+      el.disabled=true;el.style.background="#f8f9fa";el.style.cursor="not-allowed";el.style.opacity="0.7";
+      var c=el.closest('[class*="col-"]');
+      if(c){
+        var lb=c.querySelector("label");
+        if(lb&&!lb.querySelector(".flock"))lb.insertAdjacentHTML("beforeend",' <span class="flock" style="font-size:11px;" title="You do not have permission to edit this field">🔒</span>');
+      }
+    });
+    if(LOCKED.has("__schedule_windows__")){
+      document.querySelectorAll('[name^="window_day_"],[name^="window_start_"],[name^="window_end_"]').forEach(function(el){
+        el.disabled=true;el.style.background="#f8f9fa";el.style.cursor="not-allowed";el.style.opacity="0.7";
+      });
+      var ab=document.getElementById("add-schedule-btn");if(ab)ab.style.display="none";
+      document.querySelectorAll(".btn-remove").forEach(function(b){b.style.display="none";});
+    }
+    if(LOCKED.has("food_types")){
+      document.querySelectorAll(".food-type-pill").forEach(function(p){
+        p.style.pointerEvents="none";p.style.opacity="0.65";
+      });
+    }
+    if(LOCKED.has("calories")){
+      var estimateBtn=document.getElementById("estimateCaloriesBtn");
+      if(estimateBtn){estimateBtn.disabled=true;estimateBtn.style.pointerEvents="none";estimateBtn.style.opacity="0.55";}
+    }
+  }
+})();
+</script>
+{% endif %}
+{% if perm_level %}
+<script>
+(function(){
+  var LVL="{{ perm_level }}";
+  var LOCKED=new Set({{ locked_names_json|safe }});
+  var form=document.querySelector('form[method="post"]');
+  if(form&&LVL!=="full_edit"){
+    var alert=form.querySelector(".alert");
+    if(alert){
+      alert.innerHTML=LVL==="view"
+        ?'<i class="bi bi-eye-fill me-2"></i><strong>View-only access</strong> - you can see this record but cannot save changes.'
+        :'<i class="bi bi-shield-lock me-2"></i><strong>Limited edit access</strong> - fields marked <i class="bi bi-lock-fill"></i> cannot be modified.';
+    }
+  }
+  document.querySelectorAll(".flock").forEach(function(lock){
+    lock.innerHTML='<i class="bi bi-lock-fill"></i>';
+  });
+  document.querySelectorAll(".product-switch-input").forEach(function(input){
+    if(!LOCKED.has(input.name))return;
+    input.style.opacity="";
+    input.style.background="";
+    input.style.cursor="";
+    var row=input.closest(".product-switch-row");
+    if(row){row.style.opacity="0.62";row.style.cursor="not-allowed";}
+    var label=row ? row.querySelector(".product-switch-label") : null;
+    if(label){label.style.cursor="not-allowed";}
+  });
+  if(LOCKED.has("counter_ids")){
+    var counterBtn=document.getElementById("counterPickerBtn");
+    var counterMenu=document.querySelector(".counter-picker-menu");
+    if(counterBtn){
+      counterBtn.disabled=true;
+      counterBtn.removeAttribute("data-bs-toggle");
+      counterBtn.setAttribute("aria-disabled","true");
+      counterBtn.style.background="#f8f9fa";
+      counterBtn.style.cursor="not-allowed";
+      counterBtn.style.opacity="0.7";
+      counterBtn.addEventListener("click",function(e){e.preventDefault();e.stopPropagation();},true);
+    }
+    if(counterMenu)counterMenu.style.display="none";
+    document.querySelectorAll(".counter-option").forEach(function(opt){
+      opt.style.pointerEvents="none";
+      opt.style.opacity="0.65";
+    });
+  }
+  if(LOCKED.has("image")||LOCKED.has("gallery_image_url")){
+    var galleryBtn=document.querySelector('button[onclick="openGalleryPicker()"]');
+    if(galleryBtn){
+      galleryBtn.disabled=true;
+      galleryBtn.style.pointerEvents="none";
+      galleryBtn.style.opacity="0.55";
+    }
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<h4 class="mb-4" style="font-family:'Rajdhani',sans-serif;font-weight:700;">Static Pages</h4>
+
+{% if messages %}{% for msg in messages %}<div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}success{% endif %} alert-dismissible fade show" style="border-radius:8px;border:none;">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}{% endif %}
+
+<div class="card border-0 shadow-sm mb-4" style="border-radius:var(--cf-radius);">
+  <div class="card-header bg-white py-3" style="border-bottom:1px solid var(--cf-border);">
+    <h6 class="mb-0 fw-bold">Add / Update Page</h6>
+  </div>
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Page Slug</label>
+          <select name="slug" class="form-select" required>
+            {% for val, label in slug_choices %}
+              <option value="{{ val }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-8">
+          <label class="form-label fw-semibold">Title</label>
+          <input type="text" name="title" class="form-control" required placeholder="Page title">
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-semibold">Content (HTML allowed)</label>
+          <textarea name="content" class="form-control" rows="6" placeholder="<p>Your content here...</p>"></textarea>
+        </div>
+      </div>
+      <button type="submit" class="btn mt-3 px-4" style="background:var(--cf-blue);color:white;border-radius:7px;">Save Page</button>
+    </form>
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm" style="border-radius:var(--cf-radius);">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0" style="font-size:13.5px;">
+      <thead style="background:var(--cf-blue-light);"><tr>
+        <th>Title</th><th>Slug</th><th>Status</th><th>Updated</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for p in pages %}
+        <tr>
+          <td class="fw-semibold">{{ p.title }}</td>
+          <td><code>{{ p.slug }}</code></td>
+          <td>{% if p.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Hidden</span>{% endif %}</td>
+          <td>{{ p.updated_at|date:"d M Y H:i" }}</td>
+          <td>
+            <a href="{% url 'dashboard:static_page_edit' p.pk %}" class="btn btn-sm btn-outline-primary" style="border-radius:5px;"><i class="bi bi-pencil"></i></a>
+            <form method="post" class="d-inline" onsubmit="return confirm('Delete this page?')">
+              {% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="pk" value="{{ p.pk }}">
+              <button class="btn btn-sm btn-outline-danger" style="border-radius:5px;"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-center py-4 text-muted">No pages yet. Add one above.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

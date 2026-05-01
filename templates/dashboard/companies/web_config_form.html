@@ -1,0 +1,108 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<div style="max-width:720px;">
+  <div class="cf-card">
+    <div class="cf-card-header">
+      <h5><i class="bi bi-window me-2"></i>{{ page_title }}</h5>
+      <a href="{% url 'dashboard:web_config_list' %}" class="btn btn-cf-outline btn-sm">← Back</a>
+    </div>
+    <div class="cf-card-body">
+      <form method="post" enctype="multipart/form-data">{% csrf_token %}
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Company <span class="text-danger">*</span></label>
+            <select name="company" class="form-select" id="web-config-company" required>
+              <option value="">— Select —</option>
+              {% for co in companies %}
+                <option value="{{ co.pk }}" {% if cfg.company_id == co.pk %}selected{% endif %}>{{ co.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Building <small class="text-muted">(optional)</small></label>
+            <select name="building" class="form-select" id="web-config-building">
+              <option value="">— Any building —</option>
+              {% for b in buildings %}
+                <option value="{{ b.pk }}" data-company="{{ b.company_id }}" {% if cfg.building_id == b.pk %}selected{% endif %}>{{ b.name }} · {{ b.company.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Web View Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required value="{{ cfg.name|default:'' }}" placeholder="e.g. IBM Bhubaneswar Web View">
+          </div>
+
+          <div class="col-12"><div class="p-2 rounded" style="background:#e3f2fd;"><small class="fw-bold" style="color:#1565c0;">Branding (leave blank = use company defaults)</small></div></div>
+
+          <div class="col-md-4">
+            <label class="form-label">Theme Colour</label>
+            <input type="color" name="theme_color" class="form-control form-control-color" value="{{ cfg.theme_color|default:'#1e3a5f' }}" style="width:60px;">
+            <div class="form-text">This updates the customer web view colour theme.</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Top Bar Colour</label>
+            <input type="color" name="navbar_color" class="form-control form-control-color" value="{{ cfg.navbar_color|default:'#15233b' }}" style="width:60px;">
+            <div class="form-text">Solid background colour for the customer top navigation bar.</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Logo Override</label>
+            {% if cfg and cfg.logo %}<img src="{{ cfg.logo.url }}" style="height:36px;border-radius:4px;display:block;margin-bottom:4px;">{% endif %}
+            <input type="file" name="logo" class="form-control" accept="image/*">
+            <div class="form-text">This logo will show in the customer page top-left brand area.</div>
+          </div>
+
+          {% if not cfg or cfg.show_offerings %}<input type="hidden" name="show_offerings" value="on">{% endif %}
+          {% if not cfg or cfg.show_categories %}<input type="hidden" name="show_categories" value="on">{% endif %}
+          <input type="hidden" name="card_style" value="{{ cfg.card_style|default:'standard' }}">
+
+          <div class="col-md-3">
+            <label class="form-label">Active</label>
+            <div class="form-check form-switch mt-1">
+              <input class="form-check-input" type="checkbox" name="is_active" {% if cfg.is_active %}checked{% endif %} style="width:44px;height:22px;">
+              <label class="form-check-label small">Enabled</label>
+            </div>
+          </div>
+
+          {% if cfg %}
+          <div class="col-12">
+            <div class="p-2 rounded border" style="background:#f8f9fa;">
+              <small class="text-muted">Web preview param: <code>?web={{ cfg.slug }}</code></small>
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-cf-primary px-4"><i class="bi bi-check-circle me-1"></i>Save</button>
+            <a href="{% url 'dashboard:web_config_list' %}" class="btn btn-cf-outline">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const companySelect  = document.getElementById('web-config-company');
+  const buildingSelect = document.getElementById('web-config-building');
+  if (!companySelect || !buildingSelect) return;
+
+  const allOptions = Array.from(buildingSelect.options).slice(1);
+
+  function filterBuildings() {
+    const companyId = companySelect.value;
+    const currentVal = buildingSelect.value;
+    while (buildingSelect.options.length > 1) buildingSelect.remove(1);
+    allOptions.forEach(function(opt) {
+      if (!companyId || opt.dataset.company === companyId) {
+        buildingSelect.appendChild(opt.cloneNode(true));
+      }
+    });
+    buildingSelect.value = currentVal;
+    if (buildingSelect.value !== currentVal) buildingSelect.value = '';
+  }
+
+  companySelect.addEventListener('change', filterBuildings);
+  filterBuildings();
+})();
+</script>
+{% endblock %}

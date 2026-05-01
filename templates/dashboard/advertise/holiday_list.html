@@ -1,0 +1,143 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  .hday-card{background:white;border:1px solid var(--cf-border);border-radius:var(--cf-radius);padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;transition:box-shadow .15s;}
+  .hday-card:hover{box-shadow:var(--cf-shadow);}
+  .hday-date{font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:var(--cf-blue);min-width:64px;text-align:center;line-height:1;}
+  .hday-month{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--cf-muted);}
+  .today-badge{background:#E8F5E9;color:#2E7D32;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:6px;}
+</style>
+{% endblock %}
+
+{% block page_heading %}Holiday Schedules{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  <!-- Add new -->
+  <div class="col-lg-4">
+    <div class="cf-card" style="position:sticky;top:76px;">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-calendar-plus me-2 text-blue"></i>Add Holiday</h5>
+      </div>
+      <div class="cf-card-body">
+        <div class="alert alert-info" style="font-size:12px;margin-bottom:14px;">
+          <i class="bi bi-info-circle me-1"></i>
+          Holidays repeat <strong>every year</strong> on the same date. Any banner linked to a holiday automatically goes live that day — no need to update the schedule annually.
+        </div>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add">
+          <div class="mb-3">
+            <label class="form-label">Holiday Name *</label>
+            <input type="text" name="name" class="form-control" placeholder="e.g. Independence Day" required>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label">Month *</label>
+              <select name="month" class="form-select" required>
+                <option value="">— Month —</option>
+                {% for num, label in months %}
+                <option value="{{ num }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Day *</label>
+              <input type="number" name="day" class="form-control" min="1" max="31" placeholder="1–31" required>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description <span style="font-weight:400;color:var(--cf-muted);">(optional)</span></label>
+            <textarea name="description" class="form-control" rows="2" placeholder="Brief note about this holiday…"></textarea>
+          </div>
+          <button type="submit" class="btn btn-cf-primary w-100">
+            <i class="bi bi-plus-circle me-1"></i>Add Holiday
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- List -->
+  <div class="col-lg-8">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <div style="font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;color:var(--cf-navy);">
+        {{ holidays|length }} holiday{{ holidays|length|pluralize }} configured
+      </div>
+      <a href="{% url 'dashboard:advertise_list' %}" class="btn btn-cf-outline btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Banners
+      </a>
+    </div>
+
+    {% if holidays %}
+    <div class="d-flex flex-column gap-2">
+      {% for h in holidays %}
+      <div class="hday-card">
+        <div style="display:flex;align-items:center;gap:16px;flex:1;min-width:0;">
+          <div style="text-align:center;">
+            <div class="hday-date">{{ h.day|stringformat:"02d" }}</div>
+            <div class="hday-month">
+              {% with m=h.month %}
+              {% if m == 1 %}Jan{% elif m == 2 %}Feb{% elif m == 3 %}Mar
+              {% elif m == 4 %}Apr{% elif m == 5 %}May{% elif m == 6 %}Jun
+              {% elif m == 7 %}Jul{% elif m == 8 %}Aug{% elif m == 9 %}Sep
+              {% elif m == 10 %}Oct{% elif m == 11 %}Nov{% else %}Dec{% endif %}
+              {% endwith %}
+            </div>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:14px;font-weight:700;color:var(--cf-navy);">
+              {{ h.name }}
+              {% if h.is_today %}<span class="today-badge">🎉 Today!</span>{% endif %}
+            </div>
+            {% if h.description %}
+            <div style="font-size:12px;color:var(--cf-muted);margin-top:2px;">{{ h.description|truncatechars:60 }}</div>
+            {% endif %}
+            <div style="font-size:11px;color:var(--cf-muted);margin-top:3px;">
+              <i class="bi bi-megaphone me-1"></i>{{ h.adverts.count }} banner{{ h.adverts.count|pluralize }} linked
+              {% if h.next_occurrence %}&nbsp;·&nbsp;Next: {{ h.next_occurrence|date:"d M Y" }}{% endif %}
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+          {% if h.is_active %}
+            <span class="badge" style="background:#E8F5E9;color:#2E7D32;font-size:11px;">Active</span>
+          {% else %}
+            <span class="badge" style="background:#F3F4F6;color:#6B7280;font-size:11px;">Inactive</span>
+          {% endif %}
+          <a href="{% url 'dashboard:holiday_edit' h.pk %}" class="btn btn-sm btn-cf-outline" style="padding:4px 10px;font-size:12px;">
+            <i class="bi bi-pencil"></i>
+          </a>
+          <form method="post" style="margin:0;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="toggle">
+            <input type="hidden" name="pk" value="{{ h.pk }}">
+            <button type="submit" class="btn btn-sm" title="Toggle active"
+                    style="padding:4px 10px;font-size:12px;background:{% if h.is_active %}#FFF3E0{% else %}#E8F5E9{% endif %};color:{% if h.is_active %}#E65100{% else %}#2E7D32{% endif %};border:none;">
+              {% if h.is_active %}<i class="bi bi-pause-circle"></i>{% else %}<i class="bi bi-play-circle"></i>{% endif %}
+            </button>
+          </form>
+          <form method="post" onsubmit="return confirm('Delete {{ h.name }}?');" style="margin:0;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="pk" value="{{ h.pk }}">
+            <button type="submit" class="btn btn-sm btn-cf-danger" style="padding:4px 10px;font-size:12px;">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="cf-card">
+      <div class="cf-card-body text-center py-5 text-muted">
+        <i class="bi bi-calendar-x" style="font-size:48px;display:block;margin-bottom:12px;opacity:.3;"></i>
+        No holidays configured yet. Add one using the form on the left.
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

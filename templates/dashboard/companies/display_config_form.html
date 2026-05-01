@@ -1,0 +1,117 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<div style="max-width:860px;">
+  <div class="cf-card">
+    <div class="cf-card-header">
+      <h5><i class="bi bi-tv me-2"></i>{{ page_title }}</h5>
+      <a href="{% url 'dashboard:display_config_list' %}" class="btn btn-cf-outline btn-sm">← Back</a>
+    </div>
+    <div class="cf-card-body">
+      <form method="post" enctype="multipart/form-data">{% csrf_token %}
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Company <span class="text-danger">*</span></label>
+            <select name="company" class="form-select" required id="displayCompanySelect">
+              <option value="">— Select —</option>
+              {% for co in companies %}<option value="{{ co.pk }}" {% if cfg and cfg.company_id == co.pk or selected_company_id == co.pk|stringformat:'s' %}selected{% endif %}>{{ co.name }}</option>{% endfor %}
+            </select>
+            <small class="text-muted">Changing company reloads this form to show only that company’s buildings.</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Building <small class="text-muted">(optional)</small></label>
+            <select name="building" class="form-select">
+              <option value="">— Any building —</option>
+              {% for b in buildings %}<option value="{{ b.pk }}" {% if cfg and cfg.building_id == b.pk %}selected{% endif %}>{{ b.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Display Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required value="{{ cfg.name|default:'' }}" placeholder="e.g. Main Cafeteria Display">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Theme Colour</label>
+            <input type="color" name="theme_color" class="form-control form-control-color" value="{{ cfg.theme_color|default:'#1e3a5f' }}" style="width:60px;">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Large Side Text</label>
+            <input type="text" name="side_text" class="form-control" value="{{ cfg.side_text|default:'' }}" placeholder="e.g. SHYAM">
+          </div>
+
+          <div class="col-12"><div class="p-2 rounded" style="background:#fff4e5;"><small class="fw-bold" style="color:#b45309;">Hero / Branding</small></div></div>
+          <div class="col-md-6">
+            <label class="form-label">Main Heading</label>
+            <input type="text" name="heading_text" class="form-control" value="{{ cfg.heading_text|default:'' }}" placeholder="SERVING HAPPINESS">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Top Waiting Text</label>
+            <input type="text" name="waiting_text" class="form-control" value="{{ cfg.waiting_text|default:'' }}" placeholder="Waiting for orders...">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Logo Override</label>
+            {% if cfg and cfg.logo %}<img src="{{ cfg.logo.url }}" style="height:36px;border-radius:4px;display:block;margin-bottom:4px;">{% endif %}
+            <input type="file" name="logo" class="form-control" accept="image/*">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Footer Logo</label>
+            {% if cfg and cfg.footer_logo %}<img src="{{ cfg.footer_logo.url }}" style="height:36px;border-radius:4px;display:block;margin-bottom:4px;">{% endif %}
+            <input type="file" name="footer_logo" class="form-control" accept="image/*">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Background Image</label>
+            {% if cfg and cfg.background_image %}<img src="{{ cfg.background_image.url }}" style="height:36px;border-radius:4px;display:block;margin-bottom:4px;">{% endif %}
+            <input type="file" name="background_image" class="form-control" accept="image/*">
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">Promo Video URL</label>
+            <input type="url" name="promo_embed_url" class="form-control" value="{{ cfg.promo_embed_url|default:'' }}" placeholder="YouTube watch/share/embed URL">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Footer Text</label>
+            <input type="text" name="footer_text" class="form-control" value="{{ cfg.footer_text|default:'' }}" placeholder="Neverno Allied Services Pvt Ltd">
+          </div>
+
+          <div class="col-12"><div class="p-2 rounded" style="background:#e8f5e9;"><small class="fw-bold" style="color:#2e7d32;">Status Button Labels</small></div></div>
+          <div class="col-md-3"><label class="form-label">Pending</label><input type="text" name="pending_label" class="form-control" value="{{ cfg.pending_label|default:'Pending' }}"></div>
+          <div class="col-md-3"><label class="form-label">Order Placed</label><input type="text" name="confirmed_label" class="form-control" value="{{ cfg.confirmed_label|default:'Order Placed' }}"></div>
+          <div class="col-md-3"><label class="form-label">Preparing</label><input type="text" name="preparing_label" class="form-control" value="{{ cfg.preparing_label|default:'Preparing' }}"></div>
+          <div class="col-md-3"><label class="form-label">Food Ready</label><input type="text" name="ready_label" class="form-control" value="{{ cfg.ready_label|default:'Food Ready' }}"></div>
+
+          <div class="col-12"><div class="p-2 rounded" style="background:#e3f2fd;"><small class="fw-bold" style="color:#1565c0;">Display & Audio Toggles</small></div></div>
+          <div class="col-md-2"><label class="form-label">Clock</label><div class="form-check form-switch mt-1"><input class="form-check-input" type="checkbox" name="show_clock" {% if not cfg or cfg.show_clock %}checked{% endif %} style="width:44px;height:22px;"><label class="form-check-label small">Show</label></div></div>
+          <div class="col-md-3"><label class="form-label">Company Filter</label><div class="form-check form-switch mt-1"><input class="form-check-input" type="checkbox" name="show_company_filter" {% if not cfg or cfg.show_company_filter %}checked{% endif %} style="width:44px;height:22px;"><label class="form-check-label small">Show</label></div></div>
+          <div class="col-md-3"><label class="form-label">Status Legend</label><div class="form-check form-switch mt-1"><input class="form-check-input" type="checkbox" name="show_status_legend" {% if not cfg or cfg.show_status_legend %}checked{% endif %} style="width:44px;height:22px;"><label class="form-check-label small">Show</label></div></div>
+          <div class="col-md-2"><label class="form-label">Buzzer</label><div class="form-check form-switch mt-1"><input class="form-check-input" type="checkbox" name="sound_enabled" {% if not cfg or cfg.sound_enabled %}checked{% endif %} style="width:44px;height:22px;"><label class="form-check-label small">On</label></div></div>
+          <div class="col-md-2"><label class="form-label">Voice</label><div class="form-check form-switch mt-1"><input class="form-check-input" type="checkbox" name="voice_enabled" {% if not cfg or cfg.voice_enabled %}checked{% endif %} style="width:44px;height:22px;"><label class="form-check-label small">On</label></div></div>
+          <div class="col-md-2"><label class="form-label">Active</label><div class="form-check form-switch mt-1"><input class="form-check-input" type="checkbox" name="is_active" {% if not cfg or cfg.is_active %}checked{% endif %} style="width:44px;height:22px;"><label class="form-check-label small">Enabled</label></div></div>
+
+          {% if cfg %}
+          <div class="col-12">
+            <div class="p-2 rounded border" style="background:#f8f9fa;">
+              <small class="text-muted">Display preview param: <code>?board={{ cfg.slug }}</code></small>
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-cf-primary px-4"><i class="bi bi-check-circle me-1"></i>Save</button>
+            <a href="{% url 'dashboard:display_config_list' %}" class="btn btn-cf-outline">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const el = document.getElementById('displayCompanySelect');
+  if (!el) return;
+  el.addEventListener('change', function(){
+    const url = new URL(window.location.href);
+    if (this.value) url.searchParams.set('company', this.value);
+    else url.searchParams.delete('company');
+    window.location.href = url.toString();
+  });
+})();
+</script>
+{% endblock %}

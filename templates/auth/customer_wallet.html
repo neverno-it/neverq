@@ -1,0 +1,58 @@
+{% extends "base/customer_base.html" %}
+{% block content %}
+<style>
+  .wallet-shell{max-width:720px;margin:0 auto;padding:20px 0 28px;}
+  .wallet-hero{background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 100%);border-radius:24px;padding:20px;display:flex;gap:16px;align-items:center;color:#fff;box-shadow:0 14px 40px rgba(15,23,42,.18);}
+  .wallet-avatar{width:64px;height:64px;border-radius:20px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;}
+  .wallet-hero h1{margin:0;font-size:clamp(24px,4vw,34px);line-height:.95;}
+  .wallet-hero p{margin:4px 0 0;color:rgba(255,255,255,.82);font-size:14px;}
+  .wallet-card{background:#fff;border:1px solid var(--cf-border);border-radius:22px;padding:22px;box-shadow:var(--cf-shadow-soft);margin-top:18px;}
+  .wallet-label{font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--cf-muted);margin-bottom:8px;}
+  .wallet-balance{font-family:'Rajdhani',sans-serif;font-size:48px;line-height:1;font-weight:700;color:var(--cf-blue-dark);margin:0;}
+  .wallet-note{margin-top:14px;padding:14px 16px;border-radius:16px;background:#fff8e1;border:1px solid #ffe082;color:#8d6e00;font-size:14px;font-weight:600;}
+  .wallet-meta{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px;}
+  .wallet-meta-box{border:1px solid var(--cf-border);border-radius:16px;background:#f8fbff;padding:16px;}
+  .wallet-meta-box h6{margin:0 0 6px;font-size:14px;}
+  .wallet-meta-box p{margin:0;color:var(--cf-muted);font-size:13px;}
+  @media (max-width: 767.98px){
+    .wallet-shell{padding:14px 0 18px;}
+    .wallet-hero{padding:16px;border-radius:20px;}
+    .wallet-avatar{width:54px;height:54px;border-radius:16px;font-size:24px;}
+    .wallet-card{padding:16px;border-radius:18px;margin-top:14px;}
+    .wallet-balance{font-size:40px;}
+    .wallet-meta{grid-template-columns:1fr;}
+  }
+</style>
+
+<div class="container wallet-shell">
+  <div class="wallet-hero">
+    <div class="wallet-avatar"><i class="bi bi-wallet2"></i></div>
+    <div>
+      <h1>My Wallet</h1>
+      <p>{{ customer.company.name }}</p>
+      <p>Check your current available wallet balance here.</p>
+    </div>
+  </div>
+
+  <div class="wallet-card">
+    <div class="wallet-label">Current Balance</div>
+    <p class="wallet-balance">₹{{ customer.wallet_balance|default:0|floatformat:2 }}</p>
+
+    <div class="wallet-note">
+      <i class="bi bi-info-circle me-1"></i>
+      To Recharge please contact Neverno Cashier
+    </div>
+
+    <div class="wallet-meta">
+      <div class="wallet-meta-box">
+        <h6><i class="bi bi-star me-1"></i>Royalty Points</h6>
+        <p>{{ customer.royalty_points|default:0 }} points</p>
+      </div>
+      <div class="wallet-meta-box">
+        <h6><i class="bi bi-person me-1"></i>Customer</h6>
+        <p>{{ customer.name }}</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

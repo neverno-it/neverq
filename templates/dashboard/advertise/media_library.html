@@ -1,0 +1,287 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  .ml-tile { background:white; border:1px solid var(--cf-border); border-radius:var(--cf-radius); overflow:hidden; transition:box-shadow .2s; }
+  .ml-tile:hover { box-shadow:var(--cf-shadow-lg); }
+  .ml-thumb { width:100%; aspect-ratio:62/33; object-fit:cover; display:block; }
+  .ml-body { padding:10px 12px; }
+  .ml-meta { font-size:10px; color:var(--cf-muted); margin-top:2px; }
+  .drop-zone { border:2px dashed var(--cf-border); border-radius:var(--cf-radius); padding:32px 24px; text-align:center; transition:border-color .2s, background .2s; cursor:pointer; }
+  .drop-zone.drag-over { border-color:var(--cf-blue); background:var(--cf-blue-light); }
+  .bulk-check-wrap { position:absolute; top:10px; left:10px; z-index:3; background:rgba(255,255,255,.96); border-radius:999px; padding:5px 7px; box-shadow:0 4px 12px rgba(15,23,42,.14); }
+</style>
+{% endblock %}
+
+{% block page_heading %}Media Library{% endblock %}
+
+{% block content %}
+{% if can_upload %}{% url 'dashboard:media_library_bulk_delete' as bulk_delete_url %}{% endif %}
+<div class="row g-4">
+
+  <div class="col-lg-4">
+
+    {% if can_upload %}
+    <div class="cf-card" style="position:sticky;top:76px;">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-cloud-upload me-2 text-blue"></i>Upload Image</h5>
+      </div>
+      <div class="cf-card-body">
+        <form method="post" enctype="multipart/form-data" id="uploadForm">
+          {% csrf_token %}
+          <div class="alert alert-info py-2 mb-3" style="font-size:13px;">
+            <i class="bi bi-info-circle me-1"></i>
+            Upload banner artwork once here, then choose which sites it runs on inside the Banner form.
+            File names are used automatically, so no separate image name is required.
+          </div>
+
+          <input
+            type="file"
+            name="image"
+            id="fileInput"
+            accept="image/*"
+            required
+            style="display:none;"
+            onchange="previewFile(this)"
+            data-banner-width="{{ banner_width|default:'1240' }}"
+            data-banner-height="{{ banner_height|default:'660' }}"
+          >
+
+          <div class="drop-zone mb-3" id="dropZone">
+            <div id="dropText">
+              <i class="bi bi-image" style="font-size:36px;color:var(--cf-blue);opacity:.6;display:block;margin-bottom:8px;"></i>
+              <div style="font-weight:600;font-size:14px;color:var(--cf-navy);">Click or drag image here</div>
+              <div style="font-size:12px;color:var(--cf-muted);margin-top:4px;">Original banner size: {{ banner_size_label|default:"1240 x 660 px" }} or larger in the same ratio. Tiny export rounding is accepted.</div>
+              <div style="font-size:12px;color:var(--cf-muted);margin-top:4px;">JPG, PNG, WEBP · Max 5 MB · Recommended {{ banner_size_label|default:"1240 × 660 px" }}</div>
+            </div>
+            <div id="dropPreview" style="display:none;">
+              <img id="previewImg" src="" style="width:100%;max-width:100%;aspect-ratio:62/33;border-radius:8px;object-fit:cover;">
+              <div id="previewName" style="font-size:12px;margin-top:6px;color:var(--cf-navy);font-weight:600;"></div>
+              <div id="previewMeta" style="font-size:12px;margin-top:4px;color:var(--cf-muted);"></div>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-cf-primary w-100">
+            <i class="bi bi-cloud-upload me-1"></i>Upload to Library
+          </button>
+        </form>
+      </div>
+    </div>
+
+    {% else %}
+    <div class="cf-card" style="position:sticky;top:76px;">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-images me-2 text-blue"></i>Media Library</h5>
+      </div>
+      <div class="cf-card-body">
+        <div class="alert alert-info" style="font-size:13px;">
+          <i class="bi bi-lock me-1"></i>
+          Image uploads are managed by <strong>superadmin</strong>.
+          You can browse images here and pick one when submitting a banner request.
+        </div>
+        <a href="{% url 'dashboard:advertise_add' %}" class="btn btn-cf-primary btn-sm">
+          <i class="bi bi-plus-circle me-1"></i>Submit a Banner Request
+        </a>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <div class="col-lg-8">
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+      <div style="font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;color:var(--cf-navy);">
+        {{ assets|length }} image{{ assets|length|pluralize }} in library
+      </div>
+      <a href="{% url 'dashboard:advertise_list' %}" class="btn btn-cf-outline btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Banners
+      </a>
+    </div>
+
+    {% if can_upload %}
+    <div class="cf-card mb-3">
+      <div class="cf-card-body pb-0">
+        {% include "dashboard/includes/bulk_delete_controls.html" with bulk_form_id='media-library-bulk-delete-form' bulk_action=bulk_delete_url bulk_confirm_message='Delete selected media files?' %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if assets %}
+    <div class="row g-3">
+      {% for asset in assets %}
+      <div class="col-sm-6 col-md-4">
+        <div class="ml-tile position-relative h-100">
+          {% if can_upload %}
+          <label class="bulk-check-wrap" title="Select image">
+            <input type="checkbox" class="form-check-input bulk-item-check" data-bulk-form-input="media-library-bulk-delete-form" form="media-library-bulk-delete-form" name="ids" value="{{ asset.pk }}" {% if asset.adverts.count %}disabled{% endif %}>
+          </label>
+          {% endif %}
+          <img src="{{ asset.image.url }}" alt="{{ asset.name }}" class="ml-thumb">
+          <div class="ml-body">
+            {% if can_upload %}
+            <input class="form-control form-control-sm media-name-input" value="{{ asset.name }}" data-id="{{ asset.pk }}" data-url="{% url 'dashboard:media_library_rename' asset.pk %}">
+            <button type="button" class="btn btn-sm btn-cf-outline w-100 mt-2 media-rename-btn" data-id="{{ asset.pk }}">Rename & Save</button>
+            {% else %}
+            <div style="font-size:13px;font-weight:600;color:var(--cf-navy);">{{ asset.name }}</div>
+            {% endif %}
+            <div class="ml-meta">Available for banner selection</div>
+            <div class="ml-meta">
+              Uploaded {% if asset.uploaded_by %}by {{ asset.uploaded_by.name|default:asset.uploaded_by.email|truncatechars:16 }}{% endif %}
+              · {{ asset.created_at|date:"d M Y" }}
+            </div>
+            {% if asset.adverts.count %}
+            <div class="ml-meta" style="color:var(--cf-blue);">
+              <i class="bi bi-megaphone me-1"></i>Used in {{ asset.adverts.count }} banner{{ asset.adverts.count|pluralize }}
+            </div>
+            {% endif %}
+            <div class="d-flex gap-1 mt-2">
+              <a href="{{ asset.image.url }}" target="_blank"
+                 class="btn btn-sm btn-cf-outline flex-fill" style="font-size:12px;padding:4px;">
+                <i class="bi bi-eye"></i>
+              </a>
+              {% if can_upload %}
+                {% if not asset.adverts.count %}
+                <button type="submit" form="media-library-bulk-delete-form" formaction="{% url 'dashboard:media_library_delete' asset.pk %}" formmethod="post" class="btn btn-sm btn-cf-danger" style="padding:4px 8px;font-size:12px;" onclick="return confirm('Delete this image permanently?');">
+                  <i class="bi bi-trash"></i>
+                </button>
+                {% else %}
+                <button class="btn btn-sm" disabled title="In use — cannot delete"
+                        style="padding:4px 8px;font-size:12px;background:#F3F4F6;color:#9CA3AF;border:none;">
+                  <i class="bi bi-lock"></i>
+                </button>
+                {% endif %}
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="cf-card">
+      <div class="cf-card-body text-center py-5 text-muted">
+        <i class="bi bi-images" style="font-size:48px;display:block;margin-bottom:12px;opacity:.3;"></i>
+        {% if can_upload %}
+          No images yet. Upload your first image using the panel on the left.
+        {% else %}
+          No images in the library yet. Ask your superadmin to upload some.
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function setPreviewMeta(message, isError=false) {
+  const el = document.getElementById('previewMeta');
+  if (!el) return;
+  el.textContent = message || '';
+  el.style.color = isError ? '#DC2626' : 'var(--cf-muted)';
+}
+
+function previewFile(input) {
+  if (!input.files || !input.files[0]) return;
+
+  const file = input.files[0];
+  const reqW = parseInt(input.dataset.bannerWidth || '1240', 10);
+  const reqH = parseInt(input.dataset.bannerHeight || '660', 10);
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const imageWidth = img.naturalWidth || img.width;
+      const imageHeight = img.naturalHeight || img.height;
+      const actualRatio = imageWidth / imageHeight;
+      const requiredRatio = reqW / reqH;
+      const ratioError = Math.abs(actualRatio - requiredRatio) / requiredRatio;
+      const ratioOk = ratioError <= 0.01;
+
+      document.getElementById('dropText').style.display = 'none';
+      document.getElementById('dropPreview').style.display = '';
+      document.getElementById('previewImg').src = e.target.result;
+      document.getElementById('previewName').textContent = file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)';
+
+      if (!ratioOk) {
+        setPreviewMeta(
+          `Selected image is ${imageWidth} x ${imageHeight}px. Required banner ratio is ${reqW}:${reqH}. The server will reject it unless it is close to this ratio.`,
+          true
+        );
+      } else if (imageWidth < reqW || imageHeight < reqH) {
+        setPreviewMeta(
+          `Selected image is ${imageWidth} x ${imageHeight}px. Minimum size is ${reqW} x ${reqH}px. The server will reject smaller images.`,
+          true
+        );
+      } else {
+        setPreviewMeta(`Selected image: ${imageWidth} x ${imageHeight}px. Ready to upload.`);
+      }
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+{% if can_upload %}
+function getCsrf(){return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';}
+
+document.querySelectorAll('.media-rename-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const id = btn.dataset.id;
+    const input = document.querySelector('.media-name-input[data-id="' + id + '"]');
+    if (!input) return;
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    try {
+      const resp = await fetch(input.dataset.url, {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({name: input.value})
+      });
+      const data = await resp.json();
+      if (!data.success) throw new Error(data.error || 'Rename failed');
+      btn.textContent = 'Saved';
+      setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1200);
+    } catch (err) {
+      alert(err.message || 'Rename failed');
+      btn.textContent = original;
+      btn.disabled = false;
+    }
+  });
+});
+
+const dz = document.getElementById('dropZone');
+const fi = document.getElementById('fileInput');
+
+if (dz && fi) {
+  dz.addEventListener('click', function() {
+    fi.click();
+  });
+
+  dz.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    dz.classList.add('drag-over');
+  });
+
+  dz.addEventListener('dragleave', function() {
+    dz.classList.remove('drag-over');
+  });
+
+  dz.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dz.classList.remove('drag-over');
+
+    if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+
+    const dt = new DataTransfer();
+    dt.items.add(e.dataTransfer.files[0]);
+    fi.files = dt.files;
+    previewFile(fi);
+  });
+}
+{% endif %}
+</script>
+{% endblock %}

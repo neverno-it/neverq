@@ -1,0 +1,157 @@
+{% extends "base/dashboard_base.html" %}
+{% load core_extras %}
+{% block extra_head %}
+<style>
+  .orders-page-filter .form-control-sm,
+  .orders-page-filter .form-select-sm { min-height: 34px; }
+  .orders-list-wrap { overflow-x: auto; }
+  .orders-list-table thead th { padding: 11px 10px; font-size: 11.5px; }
+  .orders-list-table tbody td { padding: 12px 10px; font-size: 13px; }
+  .orders-list-table .company-badge { display: inline-flex; max-width: 118px; justify-content: center; }
+  .orders-list-table .payment-cell,
+  .orders-list-table .date-cell { white-space: normal; min-width: 84px; line-height: 1.35; }
+  .orders-list-table .order-no { white-space: nowrap; }
+  @media (max-width: 1440px) {
+    .orders-page-filter { padding: 14px 16px; }
+    .orders-list-table thead th { padding: 10px 8px; }
+    .orders-list-table tbody td { padding: 10px 8px; font-size: 12.5px; }
+    .orders-list-table .company-badge { max-width: 98px; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="filter-bar orders-page-filter">
+  <form class="d-flex flex-wrap gap-2 w-100 align-items-end" method="get">
+    <div>
+      <label class="form-label">Search</label>
+      <input type="search" name="q" value="{{ q }}" class="form-control form-control-sm"
+             placeholder="Order#, customer name/phone…" style="width:200px;">
+    </div>
+    <div>
+      <label class="form-label">Status</label>
+      <select name="status" class="form-select form-select-sm" style="width:140px;" onchange="this.form.submit()">
+        <option value="">All</option>
+        <option value="1" {% if status_filter == '1' %}selected{% endif %}>Pending</option>
+        <option value="2" {% if status_filter == '2' %}selected{% endif %}>Confirmed</option>
+        <option value="3" {% if status_filter == '3' %}selected{% endif %}>Preparing</option>
+        <option value="4" {% if status_filter == '4' %}selected{% endif %}>Ready</option>
+        <option value="5" {% if status_filter == '5' %}selected{% endif %}>Delivered</option>
+        <option value="6" {% if status_filter == '6' %}selected{% endif %}>Cancelled</option>
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Date</label>
+      <input type="date" name="date" value="{{ date_filter }}" class="form-control form-control-sm">
+    </div>
+    <div>
+      <label class="form-label">Subsidy</label>
+      <select name="subsidy" class="form-select form-select-sm" style="width:150px;" onchange="this.form.submit()">
+        <option value="">All Orders</option>
+        <option value="1" {% if subsidy_filter == '1' %}selected{% endif %}>Company Covered</option>
+      </select>
+    </div>
+    {% if request.user.is_superadmin or companies|length > 1 %}
+    <div>
+      <label class="form-label">Site</label>
+      <select name="company" class="form-select form-select-sm" style="width:160px;" onchange="this.form.submit()">
+        <option value="">All Sites</option>
+        {% for co in companies %}
+        <option value="{{ co.pk }}" {% if company_filter == co.pk|stringformat:'s' %}selected{% endif %}>
+          {{ co.name|truncatechars:22 }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div class="d-flex gap-2 flex-wrap">
+      <button type="submit" class="btn btn-cf-primary btn-sm">Filter</button>
+      <a href="{% url 'dashboard:order_list' %}" class="btn btn-cf-outline btn-sm">Clear</a>
+      <a href="?q={{ q }}&status={{ status_filter }}&date={{ date_filter }}&company={{ company_filter }}&subsidy={{ subsidy_filter }}&export=excel"
+         class="btn btn-sm" style="background:var(--cf-green);color:white;border-radius:var(--cf-radius-sm);">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </a>
+      <a href="?q={{ q }}&status={{ status_filter }}&date={{ date_filter }}&company={{ company_filter }}&subsidy={{ subsidy_filter }}&export=pdf"
+         class="btn btn-sm" style="background:#8B5CF6;color:white;border-radius:var(--cf-radius-sm);">
+        <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+      </a>
+      <a href="?q={{ q }}&status={{ status_filter }}&date={{ date_filter }}&company={{ company_filter }}&subsidy={{ subsidy_filter }}&export=csv"
+         class="btn btn-cf-danger btn-sm">
+        <i class="bi bi-download me-1"></i>CSV
+      </a>
+    </div>
+    <div class="ms-auto text-muted" style="font-size:12px;align-self:center;">
+      {{ page_obj.paginator.count }} order{{ page_obj.paginator.count|pluralize }}
+      {% if subsidy_filter == '1' %}<span class="badge bg-success ms-1">Company Covered</span>{% endif %}
+    </div>
+  </form>
+</div>
+
+<div class="cf-card">
+  <div class="orders-list-wrap">
+    <table class="cf-table orders-list-table">
+      <thead>
+        <tr>
+          <th>#</th><th>Order</th><th>Customer</th><th>Company</th>
+          <th>Total</th><th>Customer Paid</th><th>Company Covered</th>
+          <th>Payment</th><th>Status</th><th>Date</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for order in orders %}
+        <tr {% if order.bill_to_company > 0 %}style="background:rgba(39,174,96,0.05);"{% endif %}>
+          <td class="text-muted" style="font-size:12px;">{{ forloop.counter|add:page_obj.start_index|add:"-1" }}</td>
+          <td><span class="fw-600 text-blue order-no" title="{{ order.order_number }}">{{ order.display_order_number|default:order.order_number|short_order_no }}</span></td>
+          <td>
+            <div class="fw-500">{{ order.display_customer_name }}</div>
+            {% if order.display_customer_phone %}<small class="text-muted">{{ order.display_customer_phone }}</small>{% endif %}
+          </td>
+          <td>
+            <span class="badge company-badge" style="background:var(--cf-blue-light);color:var(--cf-blue);font-size:10px;">
+              {{ order.company.name|truncatechars:18 }}
+            </span>
+          </td>
+          <td><strong>₹{{ order.total_amount }}</strong></td>
+          <td>
+            {% if order.bill_to_company > 0 %}
+              <span class="text-danger fw-600">₹{{ order.my_pay }}</span>
+            {% else %}
+              <span>₹{{ order.total_amount }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if order.bill_to_company > 0 %}
+              <span class="badge bg-success">₹{{ order.bill_to_company }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="payment-cell"><small>{{ order.get_payment_mode_display }}</small></td>
+          <td><span class="badge badge-cf bg-{{ order.status_color }}">{{ order.status_label }}</span></td>
+          <td class="date-cell"><small class="text-muted">{{ order.created_at|date:"d M, h:i A"|default:"—" }}</small></td>
+          <td>
+            <a href="{% url 'dashboard:order_detail' order.pk %}" class="btn btn-sm btn-cf-outline">View</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="11" class="text-center text-muted py-5">No orders found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if page_obj.has_other_pages %}
+<nav class="mt-3">
+  <ul class="pagination pagination-sm justify-content-center">
+    {% if page_obj.has_previous %}
+    <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&status={{ status_filter }}&date={{ date_filter }}&company={{ company_filter }}&subsidy={{ subsidy_filter }}">‹ Prev</a></li>
+    {% endif %}
+    <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+    {% if page_obj.has_next %}
+    <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&status={{ status_filter }}&date={{ date_filter }}&company={{ company_filter }}&subsidy={{ subsidy_filter }}">Next ›</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

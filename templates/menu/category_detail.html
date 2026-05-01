@@ -1,0 +1,183 @@
+{% extends "base/customer_base.html" %}
+{% block content %}
+
+<div class="container mt-3 mt-md-4 phase2-shell">
+  <div class="surface-card phase2-hero-card overflow-hidden mb-3 mb-md-4">
+    <div class="row g-0 align-items-stretch">
+      {% if category.image %}
+      <div class="col-md-4 col-lg-3">
+        <div class="phase2-hero-media">
+          <img src="{{ category.image.url }}" alt="{{ category.name }}" class="phase2-hero-image">
+        </div>
+      </div>
+      <div class="col-md-8 col-lg-9">
+      {% else %}
+      <div class="col-12">
+      {% endif %}
+        <div class="phase2-hero-body">
+          <div class="phase2-breadcrumb-row">
+            <a href="{% url 'menu:menu' %}{% if food_pref or offering_filter or calorie_max %}?{% endif %}{% if food_pref %}food={{ food_pref|urlencode }}{% endif %}{% if food_pref and offering_filter %}&{% endif %}{% if offering_filter %}offering={{ offering_filter|urlencode }}{% endif %}{% if calorie_max %}{% if food_pref or offering_filter %}&{% endif %}calorie_max={{ calorie_max }}{% endif %}" class="btn btn-cf-soft btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to menu</a>
+            <span class="pill-soft">Category</span>
+            {% if selected_offering %}<span class="pill-outline">{{ selected_offering.name }}</span>{% endif %}
+          </div>
+          <h2 class="phase2-hero-title">{{ category.name }}</h2>
+          <div class="section-subtitle phase2-hero-subtitle">{{ category.tagline|default:"Browse everything available in this category." }}</div>
+          <div class="phase2-stat-row">
+            <span class="pill-muted"><i class="bi bi-grid"></i>{{ visible_count }} item{{ visible_count|pluralize }}</span>
+            {% if food_pref == 'veg' %}<span class="pill-soft phase2-veg-chip"><i class="bi bi-check2-circle"></i>Veg only</span>{% endif %}
+            {% if calorie_max %}<span class="pill-soft phase2-calorie-chip"><i class="bi bi-fire"></i>Up to {{ calorie_max }} kcal</span>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="surface-card p-3 p-md-4 mb-3 mb-md-4 soft-shadow menu-toolbar-card compact-toolbar phase2-toolbar-card">
+    <div class="menu-toolbar-top">
+      <div class="search-shell flex-grow-1">
+        <i class="bi bi-search"></i>
+        <input type="text" id="categorySearchInput" class="search-input" placeholder="Search items in {{ category.name }}" value="{{ search_query }}">
+      </div>
+      <button type="button" class="veg-only-toggle {% if food_pref == 'veg' %}active{% endif %}" onclick="toggleVegOnly()" aria-label="Toggle veg only items" title="Veg only">
+        <span class="veg-toggle-mark" aria-hidden="true"><span class="veg-toggle-dot"></span></span>
+        <span class="veg-only-switch"><span class="veg-only-knob"></span></span>
+      </button>
+    </div>
+    <div class="menu-toolbar-bottom compact-only">
+      <div class="calorie-inline-group">
+        <span class="calorie-inline-label"><i class="bi bi-fire"></i>Calories</span>
+        {% for preset in calorie_presets %}
+        <button type="button" class="filter-pill filter-pill-btn compact {% if calorie_max == preset %}active{% endif %}" onclick="setCaloriePreset('{{ preset }}')">≤{{ preset }}</button>
+        {% endfor %}
+        {% if calorie_max %}
+        <button type="button" class="filter-pill filter-pill-btn compact" onclick="setCaloriePreset('')">Clear</button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if products %}
+  <div class="phase2-results-head">
+    <div>
+      <h4 class="mb-1">Products</h4>
+      <div class="section-subtitle">Tap any item to view details or add it straight to the cart.</div>
+    </div>
+  </div>
+  <div class="phase2-product-stack">
+    {% for product in products %}
+      {% include "menu/_product_row.html" %}
+    {% endfor %}
+  </div>
+  {% else %}
+    <div class="empty-state phase2-empty-state">
+      <div style="font-size:64px; margin-bottom:12px;">🥘</div>
+      <h4>No items available right now</h4>
+      <p class="text-muted mb-3">Try another category or clear your filters to see more products.</p>
+      <a href="{% url 'menu:menu' %}" class="btn btn-cf-primary">Browse full menu</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block sticky_cart_bar %}
+  {% if cart_count %}
+    <div class="floating-cart-bar d-flex align-items-center justify-content-between gap-3">
+      <div>
+        <div class="small text-white-50">Ready when you are</div>
+        <div class="fw-bold">{{ cart_count }} item{{ cart_count|pluralize }} in cart</div>
+      </div>
+      <a href="{% url 'menu:cart' %}" class="btn btn-cf-danger"><i class="bi bi-cart3 me-1"></i>View Cart</a>
+    </div>
+  {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function toggleVegOnly() {
+    const current = '{{ food_pref|default:"" }}';
+    const url = new URL(window.location.href);
+    if (current === 'veg') url.searchParams.delete('food');
+    else url.searchParams.set('food', 'veg');
+    window.location.href = url.toString();
+  }
+
+  function setCaloriePreset(val) {
+    const url = new URL(window.location.href);
+    const current = url.searchParams.get('calorie_max') || '';
+    if (!val || current === String(val)) url.searchParams.delete('calorie_max');
+    else url.searchParams.set('calorie_max', val);
+    window.location.href = url.toString();
+  }
+
+  (function() {
+    const searchInput = document.getElementById('categorySearchInput');
+    const cards = Array.from(document.querySelectorAll('.js-product-card'));
+    function normalizedText(value) {
+      return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    function applySearch() {
+      const term = normalizedText(searchInput?.value || '');
+      cards.forEach(function(card) {
+        const hay = normalizedText(card.dataset.search || card.textContent || '');
+        card.style.display = !term || hay.includes(term) ? '' : 'none';
+      });
+    }
+
+    searchInput?.addEventListener('input', function() {
+      applySearch();
+    });
+    applySearch();
+
+  document.querySelectorAll('.js-add-to-cart').forEach(function(button) {
+    button.addEventListener('click', function() {
+      if (button.dataset.busy === '1') return;
+      button.dataset.busy = '1';
+      button.disabled = true;
+      const pid = button.dataset.pid;
+      const original = button.innerHTML;
+      const formData = new FormData();
+      formData.append('qty', '1');
+      formData.append('csrfmiddlewaretoken', NeverQUI.getCookie('csrftoken'));
+
+      fetch(`/menu/cart/add/${pid}/`, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': NeverQUI.getCookie('csrftoken')
+        },
+        body: formData
+      })
+      .then(resp => resp.json())
+      .then(data => {
+        if (!data.success) {
+          button.disabled = false;
+          alert(data.error || 'Could not add item to cart.');
+          return;
+        }
+        NeverQUI.updateCartBadges(data.cart_count || 0);
+        NeverQUI.flashButtonState(button, original, '<i class="bi bi-check2 me-1"></i>Added');
+      })
+      .catch(() => {
+        button.disabled = false;
+        alert('Network error. Please try again.');
+      })
+      .finally(() => {
+        window.setTimeout(function() {
+          button.dataset.busy = '0';
+        }, 1350);
+      });
+    });
+  });
+  })();
+</script>
+<script>
+window.NEVERQ_PAGE_TOUR_KEY = 'category-detail';
+window.NEVERQ_PAGE_TOUR = [
+  {selector:'.phase2-hero-card', title:'Category page', copy:'This header tells you which category you are browsing and how many products are visible.', placement:'bottom'},
+  {selector:'.phase2-toolbar-card', title:'Search and filters', copy:'Use these controls to search inside the category, switch veg-only, or filter by calories.', placement:'bottom'},
+  {selector:'.phase2-product-stack', title:'Products in this category', copy:'Open a product for full details or add items directly from this list.', placement:'top'},
+  {selector:'.floating-cart-bar', title:'Quick cart access', copy:'When you already have items in cart, this floating bar gives you a fast way to continue.', placement:'top'}
+];
+</script>
+{% endblock %}

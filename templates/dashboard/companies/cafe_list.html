@@ -1,0 +1,51 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  .cafe-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .cafe-actions .btn{min-width:auto}
+</style>
+{% endblock %}
+{% block content %}
+{% url 'dashboard:cafe_bulk_delete' as bulk_delete_url %}
+<div class="cf-card">
+  <div class="cf-card-header">
+    <h5><i class="bi bi-building-fill me-2"></i>Cafeterias</h5>
+    <a href="{% url 'dashboard:cafe_add' %}" class="btn btn-cf-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>Add Cafeteria</a>
+  </div>
+  <div class="cf-card-body">
+    <form method="get" class="row g-2 mb-3">
+      <div class="col-md-4"><select name="company" class="form-select form-select-sm" onchange="this.form.submit()"><option value="">All Companies</option>{% for co in companies %}<option value="{{ co.pk }}" {% if company_id == co.pk|stringformat:'s' %}selected{% endif %}>{{ co.name }}</option>{% endfor %}</select></div>
+      <div class="col-md-4"><select name="building" class="form-select form-select-sm" onchange="this.form.submit()"><option value="">All Buildings</option>{% for b in buildings %}<option value="{{ b.pk }}" {% if building_id == b.pk|stringformat:'s' %}selected{% endif %}>{{ b.name }} — {{ b.company.name }}</option>{% endfor %}</select></div>
+      <div class="col-md-2"><a href="{% url 'dashboard:cafe_list' %}" class="btn btn-cf-outline btn-sm w-100">Clear</a></div>
+    </form>
+    {% include "dashboard/includes/bulk_delete_controls.html" with bulk_form_id='cafe-bulk-delete-form' bulk_action=bulk_delete_url bulk_confirm_message='Delete selected cafeterias?' %}
+    <div style="overflow-x:auto;">
+      <table class="cf-table">
+        <thead><tr><th style="width:44px;"></th><th>Company</th><th>Location</th><th>Building</th><th>Cafeteria</th><th>Counters</th><th>Status</th><th style="width:150px;">Actions</th></tr></thead>
+        <tbody>
+          {% for item in cafes %}
+          <tr>
+            <td><input type="checkbox" class="form-check-input bulk-item-check" data-bulk-form-input="cafe-bulk-delete-form" form="cafe-bulk-delete-form" name="ids" value="{{ item.pk }}"></td>
+            <td><span class="fw-bold">{{ item.company.name }}</span></td>
+            <td class="text-muted small">{{ item.building.location.name|default:'—' }}</td>
+            <td class="text-muted small">{{ item.building.name|default:'—' }}</td>
+            <td><div class="fw-bold">{{ item.name }}</div></td>
+            <td><span class="badge bg-secondary">{{ item.counters.count }} counter{{ item.counters.count|pluralize }}</span></td>
+            <td>{% if item.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Inactive</span>{% endif %}</td>
+            <td>
+              <div class="cafe-actions">
+                <a href="{% url 'dashboard:cafe_edit' item.pk %}" class="btn btn-cf-outline btn-icon" title="Edit"><i class="bi bi-pencil"></i></a>
+                <button type="submit" form="cafe-bulk-delete-form" formaction="{% url 'dashboard:cafe_toggle' item.pk %}" formmethod="post" class="btn btn-cf-ghost btn-icon" title="{% if item.is_active %}Deactivate{% else %}Activate{% endif %}"><i class="bi bi-{% if item.is_active %}pause-circle{% else %}play-circle{% endif %}"></i></button>
+                <button type="submit" form="cafe-bulk-delete-form" formaction="{% url 'dashboard:cafe_delete' item.pk %}" formmethod="post" class="btn btn-icon" style="border:1.5px solid #fecaca;color:var(--cf-red);background:#fff;" title="Delete" onclick="return confirm('Delete cafeteria {{ item.name|escapejs }}?')"><i class="bi bi-trash"></i></button>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="text-center text-muted py-5"><i class="bi bi-building" style="font-size:2rem;display:block;opacity:.3;"></i>No cafeterias found. <a href="{% url 'dashboard:cafe_add' %}">Add one →</a></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

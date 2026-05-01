@@ -1,0 +1,822 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pickup Slip — {{ order.order_number }}</title>
+{% include "includes/favicon_links.html" %}
+  <!-- QRious: renders QR codes to canvas — used for BT thermal printing -->
+  <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+  <style>
+    /* ── Screen styles ─────────────────────────────────── */
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; color: #111; margin: 0; background: #f5f5f5; }
+    .sheet { max-width: 860px; margin: 0 auto; padding: 20px; }
+    .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 0 0 24px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 10px;
+           text-decoration: none; border: 2px solid #333; color: #111; font-size: 15px; font-weight: 700;
+           cursor: pointer; background: #fff; }
+    .btn.primary { background: #111; color: #fff; border-color: #111; }
+    .btn.bt { background: #0d47a1; color: #fff; border-color: #0d47a1; }
+    #btStatus { text-align: center; font-size: 13px; padding: 4px 0; min-height: 20px; display: none; }
+    .slip-header { text-align: center; border-bottom: 2px dashed #888; padding-bottom: 14px; margin-bottom: 16px; }
+    .slip-header h1 { margin: 0; font-size: 28px; }
+    .slip-header p { margin: 4px 0 0; font-size: 13px; color: #555; }
+    .meta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+    .meta-box { border: 1px solid #ddd; border-radius: 8px; padding: 10px 14px; flex: 1; min-width: 140px; }
+    .meta-box .lbl { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .7px; margin-bottom: 3px; }
+    .meta-box .val { font-size: 20px; font-weight: 800; }
+
+    /* ── Each counter ticket ─────────────────────────── */
+    .ticket {
+      border: 2px solid #222;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 18px;
+      background: #fff;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .ticket-body { display: flex; gap: 16px; align-items: flex-start; }
+    .ticket-info { flex: 1; }
+    .ticket-counter-lbl { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
+    .ticket-counter { font-size: 28px; font-weight: 900; margin: 4px 0 4px; }
+    .ticket-cafe { font-size: 13px; color: #555; margin-bottom: 8px; }
+    .ticket-code { font-size: 13px; font-weight: 700; color: #333; margin: 2px 0; }
+    .ticket-qr { text-align: center; flex-shrink: 0; }
+    .ticket-qr img {
+      width: 160px;
+      height: 160px;
+      border: 2px solid #222;
+      border-radius: 8px;
+      padding: 6px;
+      background: #fff;
+      display: block;          /* critical for print */
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .ticket-qr .qr-label { font-size: 12px; font-weight: 700; margin-top: 6px; text-align: center; }
+    .ticket-items { margin-top: 12px; border-top: 1px dashed #aaa; padding-top: 10px; }
+    .ticket-items table { width: 100%; border-collapse: collapse; }
+    .ticket-items th, .ticket-items td { padding: 6px 4px; border-bottom: 1px solid #eee; text-align: left; font-size: 14px; }
+    .ticket-items th:last-child, .ticket-items td:last-child { text-align: right; }
+    .ticket-items tfoot { display:none; }
+    .ticket-items tfoot td { font-weight: 800; border-top: 2px solid #ccc; border-bottom: none; }
+    .ticket-total-line { margin-top: 10px; text-align: right; font-size: 14px; font-weight: 800; color: #111; }
+
+    .slip-note { font-size: 12px; color: #555; text-align: center; margin-top: 16px; padding: 12px;
+                 border: 1px dashed #ccc; border-radius: 8px; }
+
+    /* ── Print styles ─────────────────────────────────── */
+    @media print {
+      body { background: #fff; }
+      .actions, #btStatus { display: none !important; }
+      .sheet { max-width: none; padding: 6px; }
+      .ticket { border: 2px solid #000; margin-bottom: 12px; page-break-inside: avoid; }
+      .ticket-qr img {
+        width: 160px !important;
+        height: 160px !important;
+        display: block !important;
+        visibility: visible !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  
+    /* FT-SURGICAL-THERMAL */
+    @page{size:80mm auto;margin:3mm}
+    html,body{
+      width:80mm !important;
+      max-width:80mm !important;
+      margin:0 auto !important;
+      padding:0 !important;
+      overflow-x:hidden !important;
+      background:#fff !important;
+      -webkit-print-color-adjust:exact;
+      print-color-adjust:exact;
+    }
+    .sheet{
+      width:74mm !important;
+      max-width:74mm !important;
+      margin:0 auto !important;
+      padding:0 !important;
+      box-shadow:none !important;
+      border:none !important;
+      background:#fff !important;
+    }
+    .ticket,.ticket-row,.ticket-card{
+      page-break-inside:avoid !important;
+      break-inside:avoid !important;
+    }
+    .ticket-qr,
+    .ticket-qr canvas,
+    .ticket-qr img{
+      display:block !important;
+      margin:0 auto !important;
+      visibility:visible !important;
+      opacity:1 !important;
+      -webkit-print-color-adjust:exact !important;
+      print-color-adjust:exact !important;
+    }
+    .ticket-qr img{
+      width:38mm !important;
+      height:38mm !important;
+      max-width:38mm !important;
+      max-height:38mm !important;
+      object-fit:contain !important;
+      image-rendering:auto !important;
+    }
+    .actions,.action-buttons,.no-print{
+      display:none !important;
+    }
+    @media print{
+      html,body{
+        width:80mm !important;
+        max-width:80mm !important;
+        margin:0 !important;
+      }
+      .sheet{
+        width:74mm !important;
+        max-width:74mm !important;
+      }
+      .actions,.action-buttons,.no-print{
+        display:none !important;
+      }
+    }
+
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <!-- Action buttons (hidden on print) -->
+  <div class="actions">
+    <button class="btn primary" id="sysPrintBtn" onclick="systemPrint()">🖨 Print Slip</button>
+    <button class="btn bt" id="btPrintBtn" onclick="btPrint()">📶 Bluetooth Print</button>
+    <a class="btn" href="{% url 'orders:kiosk_confirmation' company_id=company_id pk=order.pk %}{% if kiosk_slug %}?kiosk={{ kiosk_slug }}{% endif %}">Back</a>
+    <a class="btn" href="{% url 'orders:kiosk_home' company_id=company_id %}{% if kiosk_slug %}?kiosk={{ kiosk_slug }}{% endif %}">New Order</a>
+  </div>
+  <div id="btStatus"></div>
+
+  <!-- Slip header -->
+  <div class="slip-header">
+    <h1>{{ company.name }}</h1>
+    <p>Customer Pickup Slip</p>
+  </div>
+
+  <!-- Order meta -->
+  <div class="meta">
+    <div class="meta-box">
+      <div class="lbl">Order ID</div>
+      <div class="val" style="font-size:18px;">{{ order.order_number }}</div>
+    </div>
+    <div class="meta-box">
+      <div class="lbl">Customer</div>
+      <div class="val" style="font-size:16px;">{{ order.display_customer_name }}</div>
+      {% if order.display_customer_phone %}<div class="small text-muted mt-1">{{ order.display_customer_phone }}</div>{% endif %}
+    </div>
+    <div class="meta-box">
+      <div class="lbl">Placed At</div>
+      <div class="val" style="font-size:16px;">{{ order.created_at|date:"d M Y, h:i A" }}</div>
+    </div>
+    <div class="meta-box">
+      <div class="lbl">Total</div>
+      <div class="val">₹{{ order.total_amount }}</div>
+    </div>
+    {% if selected_cafe %}
+    <div class="meta-box">
+      <div class="lbl">Cafe</div>
+      <div class="val" style="font-size:16px;">{{ selected_cafe.name }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Counter tickets — ONE PER COUNTER, each with its own QR -->
+  {% for ticket in tickets %}
+  <div class="ticket">
+    <div class="ticket-body">
+      <div class="ticket-info">
+        <div class="ticket-counter-lbl">Go to counter →</div>
+        {% if ticket.counter %}
+          <div class="ticket-counter">{{ ticket.counter.name }}</div>
+          {% if ticket.counter.cafe %}
+          <div class="ticket-cafe">📍 {{ ticket.counter.cafe.name }}</div>
+          {% endif %}
+        {% else %}
+          <div class="ticket-counter" style="color:#c00;">Main Counter</div>
+        {% endif %}
+        <div class="ticket-code">Ticket: <strong>{{ ticket.ticket_number }}</strong></div>
+        <div class="ticket-code">Scan Code: <strong>{{ ticket.scan_code }}</strong></div>
+        <div class="ticket-code">Customer: <strong>{{ order.display_customer_name }}</strong>{% if order.display_customer_phone %} | {{ order.display_customer_phone }}{% endif %}</div>
+      </div>
+
+      <!-- QR CODE — rendered server-side as base64 PNG -->
+      <div class="ticket-qr">
+        {% if ticket.pickup_qr_data_uri %}
+          <img src="{{ ticket.pickup_qr_data_uri }}"
+               alt="QR {{ ticket.ticket_number }}"
+               width="160" height="160"
+               id="qr-{{ ticket.pk }}">
+          <div class="qr-label">
+            Show at {% if ticket.counter %}{{ ticket.counter.name }}{% else %}Counter{% endif %}
+          </div>
+        {% else %}
+          <div style="width:160px;height:160px;border:2px dashed #aaa;border-radius:8px;
+                      display:flex;align-items:center;justify-content:center;font-size:12px;
+                      color:#888;text-align:center;padding:10px;">
+            QR not available.<br>Use scan code above.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Items for this counter -->
+    <div class="ticket-items">
+      <table>
+        <thead>
+          <tr><th>Item</th><th style="text-align:center;">Qty</th><th>Line Total</th></tr>
+        </thead>
+        <tbody>
+          {% for item in ticket.items %}
+          <tr>
+            <td>{{ item.product.name|default:'Item' }}</td>
+            <td style="text-align:center;">{{ item.qty }}</td>
+            <td>₹{{ item.line_total }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr><td colspan="2">Counter total</td><td>₹{% for item in ticket.items %}{{ item.line_total|add:0 }}{% endfor %}</td></tr>
+        </tfoot>
+      </table>
+      <div class="ticket-total-line">Counter total: Rs. {{ ticket.total_amount }}</div>
+    </div>
+  </div>
+  {% empty %}
+  <div style="border:1px solid #ddd;border-radius:8px;padding:16px;text-align:center;color:#888;">
+    No counter tickets found. Please contact staff.
+  </div>
+  {% endfor %}
+
+  <div class="slip-note">
+    Please go to the correct counter and show the QR code above. Counter staff will scan the QR and hand over your food.
+    Your order is complete only after all counter tickets are collected.
+    <br><strong>T&amp;C Applied.</strong> QR codes are valid for same-day use only and cannot be reused.
+  </div>
+
+</div><!-- /sheet -->
+
+<script>
+// ── Wait for ALL QR images to load, THEN auto-print ─────────────
+window.addEventListener('load', function() { if (window.__neverqReceiptAutoStarted) return; window.__neverqReceiptAutoStarted = true;
+  // FT-8: return to kiosk home after the print dialog is dismissed
+  var homeUrl = '{% url "orders:kiosk_home" company_id=company_id %}{% if kiosk_slug %}?kiosk={{ kiosk_slug }}{% endif %}';
+  var redirected = false;
+  function goHome() {
+    if (redirected) return;
+    redirected = true;
+    window.location.href = homeUrl;
+  }
+  function doPrintThenHome() {
+    systemPrint(goHome);
+  }
+  const images = Array.from(document.querySelectorAll('.ticket-qr img'));
+  if (images.length === 0) {
+    setTimeout(doPrintThenHome, 300);
+    return;
+  }
+  Promise.all(
+    images.map(function(img) {
+      if (img.complete) return Promise.resolve();
+      return new Promise(function(resolve) {
+        img.onload  = resolve;
+        img.onerror = resolve;
+      });
+    })
+  ).then(function() {
+    setTimeout(doPrintThenHome, 400);
+  });
+});
+
+function systemPrint(onDone) {
+  if (window.__neverqKioskMini55Printing) return;
+  window.__neverqKioskMini55Printing = true;
+
+  function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function finish() {
+    if (finish.__done) return;
+    finish.__done = true;
+    window.__neverqKioskMini55Printing = false;
+    if (typeof onDone === 'function') onDone();
+  }
+
+  async function buildHtml() {
+    const slips = [];
+
+    for (const t of ticketsData) {
+      let qrDataUrl = '';
+      try {
+        const qrCanvas = await qrToCanvas(t.scan_code, 170);
+        qrDataUrl = qrCanvas.toDataURL('image/png');
+      } catch (e) {
+        qrDataUrl = '';
+      }
+
+      const itemsHtml = (t.items || []).map(function(it) {
+        return `
+          <div class="item-row">
+            <div class="item-name">${esc(it.name || 'Item')}</div>
+            <div class="item-qty">${esc(it.qty || '')}</div>
+          </div>
+        `;
+      }).join('');
+
+      slips.push(`
+        <section class="slip">
+          <div class="company">${esc(t.company_name || '')}</div>
+
+          <div class="label">Customer</div>
+          <div class="customer">${esc(t.customer_name || 'Customer')}</div>
+
+          <div class="label">Go To Counter</div>
+          <div class="counter">${esc(t.counter_name || 'Counter')}</div>
+
+          <div class="rule"></div>
+
+          <div class="items-head">
+            <span>Item</span>
+            <span>Qty</span>
+          </div>
+
+          <div class="items-block">
+            ${itemsHtml || '<div class="item-row"><div class="item-name">-</div><div class="item-qty"></div></div>'}
+          </div>
+
+          <div class="rule"></div>
+
+          ${qrDataUrl ? `
+            <div class="qr-wrap">
+              <img src="${qrDataUrl}" alt="QR">
+            </div>
+          ` : `<div class="qr-fallback">${esc(t.scan_code || '')}</div>`}
+        </section>
+      `);
+    }
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Kiosk 55mm Slip</title>
+<style>
+  @page { size: 55mm auto; margin: 2mm; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    width: 55mm;
+    max-width: 55mm;
+    overflow-x: hidden;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #000;
+  }
+
+  .slip {
+    width: 51mm;
+    max-width: 51mm;
+    margin: 0 auto;
+    padding: 1mm 0 2mm;
+    page-break-after: always;
+    break-after: page;
+    box-sizing: border-box;
+  }
+
+  .slip:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  .company {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.2;
+    word-break: break-word;
+    margin-bottom: 6px;
+  }
+
+  .label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: #444;
+    margin-top: 2px;
+  }
+
+  .customer {
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.25;
+    word-break: break-word;
+    margin-top: 2px;
+  }
+
+  .counter {
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.2;
+    word-break: break-word;
+    margin-top: 2px;
+  }
+
+  .rule {
+    border-top: 1px dashed #777;
+    margin: 6px 0;
+  }
+
+  .items-head,
+  .item-row {
+    display: grid;
+    grid-template-columns: 1fr 22px;
+    gap: 4px;
+    align-items: start;
+  }
+
+  .items-head {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+    margin-bottom: 4px;
+  }
+
+  .items-block {
+    margin-top: 2px;
+  }
+
+  .item-row {
+    font-size: 11px;
+    line-height: 1.25;
+    padding: 2px 0;
+  }
+
+  .item-name {
+    word-break: break-word;
+  }
+
+  .item-qty {
+    text-align: right;
+    font-weight: 700;
+  }
+
+  .qr-wrap {
+    text-align: center;
+    margin-top: 6px;
+  }
+
+  .qr-wrap img {
+    width: 28mm;
+    height: 28mm;
+    display: inline-block;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .qr-fallback {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 800;
+    word-break: break-word;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+${slips.join('')}
+</body>
+</html>`;
+  }
+
+  buildHtml().then(function(html) {
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
+    document.body.appendChild(frame);
+
+    let doneCalled = false;
+    function done() {
+      if (doneCalled) return;
+      doneCalled = true;
+      setTimeout(function() {
+        try {
+          if (frame.parentNode) frame.parentNode.removeChild(frame);
+        } catch (e) {}
+        finish();
+      }, 100);
+    }
+
+    frame.onload = function() {
+      try {
+        frame.contentWindow.addEventListener('afterprint', done, { once: true });
+      } catch (e) {}
+      setTimeout(done, 7000);
+      setTimeout(function() {
+        try {
+          frame.contentWindow.focus();
+          frame.contentWindow.print();
+        } catch (e) {
+          done();
+        }
+      }, 350);
+    };
+
+    frame.contentDocument.open();
+    frame.contentDocument.write(html);
+    frame.contentDocument.close();
+  }).catch(function(err) {
+    console.error('Kiosk 55mm print failed:', err);
+    window.__neverqKioskMini55Printing = false;
+    setTimeout(finish, 1000);
+  });
+}
+
+
+
+// ── Bluetooth ESC/POS printing ─────────────────────────────────
+// Uses canvas→raster bitmap (GS v 0) — works on ALL ESC/POS printers
+// including cheap GOOJPRT / Xprinter Bluetooth models that don't support GS ( k
+
+let btDevice = null;
+let btChar   = null;
+
+const ticketsData = [
+  {% for ticket in tickets %}
+  {
+    order_number:  "{{ order.order_number }}",
+    ticket_number: "{{ ticket.ticket_number }}",
+    scan_code:     "{{ ticket.scan_code }}",
+    counter_name:  "{% if ticket.counter %}{{ ticket.counter.name|escapejs }}{% else %}Main Counter{% endif %}",
+    cafe_name:     "{% if ticket.counter and ticket.counter.cafe %}{{ ticket.counter.cafe.name|escapejs }}{% endif %}",
+    company_name:  "{{ company.name|escapejs }}",
+    customer_name: "{{ order.display_customer_name|escapejs }}",
+    customer_phone: "{{ order.display_customer_phone|escapejs }}",
+    payment_mode:  "{{ order.get_payment_mode_display }}",
+    created_at:    "{{ order.created_at|date:'d-m-Y H:i' }}",
+    total:         "{{ order.total_amount }}",
+    items: [
+      {% for item in ticket.items %}
+      { name: "{{ item.product.name|escapejs|default:'Item' }}", qty: {{ item.qty }}, total: "{{ item.line_total }}" }{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    ]
+  }{% if not forloop.last %},{% endif %}
+  {% endfor %}
+];
+
+function setStatus(msg, color) {
+  const el = document.getElementById('btStatus');
+  el.style.display = '';
+  el.style.color   = color || '#555';
+  el.textContent   = msg;
+}
+
+// ── Render QR string to canvas, return ImageData ─────────────
+function qrToCanvas(text, size) {
+  return new Promise(function(resolve, reject) {
+    const canvas = document.createElement('canvas');
+    canvas.width  = size;
+    canvas.height = size;
+    // Use the QRious library (loaded below) to draw QR onto canvas
+    try {
+      const qr = new QRious({
+        element: canvas,
+        value:   text,
+        size:    size,
+        level:   'M',
+        background: 'white',
+        foreground: 'black',
+        padding: 4
+      });
+      resolve(canvas);
+    } catch(e) {
+      reject(e);
+    }
+  });
+}
+
+// ── Convert canvas pixels to ESC/POS raster bytes (GS v 0) ───
+function canvasToRaster(canvas) {
+  const ctx  = canvas.getContext('2d');
+  const img  = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const w    = canvas.width;
+  const h    = canvas.height;
+  // Each row: ceil(w/8) bytes
+  const bytesPerRow = Math.ceil(w / 8);
+  const raster = new Uint8Array(bytesPerRow * h);
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const pixelIdx = (y * w + x) * 4;
+      const r = img.data[pixelIdx];
+      const g = img.data[pixelIdx + 1];
+      const b = img.data[pixelIdx + 2];
+      // Dark pixel = 1 bit (black ink)
+      const isDark = (r + g + b) < 384;
+      if (isDark) {
+        const byteIdx = y * bytesPerRow + Math.floor(x / 8);
+        const bitPos  = 7 - (x % 8);
+        raster[byteIdx] |= (1 << bitPos);
+      }
+    }
+  }
+
+  // GS v 0: print raster bit image
+  // GS 'v' '0' m xL xH yL yH [data]
+  // m=0 = normal size
+  const xL = bytesPerRow & 0xFF;
+  const xH = (bytesPerRow >> 8) & 0xFF;
+  const yL = h & 0xFF;
+  const yH = (h >> 8) & 0xFF;
+  const header = new Uint8Array([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH]);
+  const out = new Uint8Array(header.length + raster.length);
+  out.set(header, 0);
+  out.set(raster, header.length);
+  return out;
+}
+
+function strToBytes(str) {
+  return new TextEncoder().encode(str);
+}
+
+function concat(...arrays) {
+  const total = arrays.reduce((s, a) => s + a.length, 0);
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const a of arrays) { out.set(a, pos); pos += a.length; }
+  return out;
+}
+
+// ── Send bytes in chunks with delay (critical for BT printers) ─
+async function sendBytes(bytes) {
+  if (!btChar) return false;
+  const CHUNK = 128;   // smaller chunks = more reliable on cheap printers
+  const DELAY = 60;    // ms between chunks
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    try {
+      await btChar.writeValue(bytes.slice(i, i + CHUNK));
+    } catch(e) {
+      console.error('BT write error:', e);
+      return false;
+    }
+    await new Promise(r => setTimeout(r, DELAY));
+  }
+  return true;
+}
+
+async function connectBT() {
+  setStatus('Searching for Bluetooth printer…', '#888');
+  try {
+    btDevice = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
+    });
+    setStatus('Connecting to ' + btDevice.name + '…', '#888');
+    const server  = await btDevice.gatt.connect();
+    const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+    btChar = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
+    setStatus('✓ Connected: ' + btDevice.name, 'green');
+    return true;
+  } catch(e) {
+    setStatus('Bluetooth: ' + e.message, '#c00');
+    return false;
+  }
+}
+
+async function printTicket(t) {
+  const ESC = 0x1B;
+  const enc    = txt => strToBytes(txt + '\n');
+  const center = new Uint8Array([ESC, 0x61, 0x01]);
+  const left   = new Uint8Array([ESC, 0x61, 0x00]);
+  const bold1  = new Uint8Array([ESC, 0x45, 0x01]);
+  const bold0  = new Uint8Array([ESC, 0x45, 0x00]);
+  const dbl1   = new Uint8Array([ESC, 0x21, 0x30]); // double width+height
+  const dbl0   = new Uint8Array([ESC, 0x21, 0x00]);
+  const cut    = new Uint8Array([0x1D, 0x56, 0x42, 0x00]);
+  const init   = new Uint8Array([ESC, 0x40]);
+  const line   = enc('--------------------------------');
+
+  // Build text portion first
+  const textPart = concat(
+    init,
+    center, dbl1, bold1, enc(t.company_name), bold0, dbl0,
+    center, enc('PICKUP SLIP'), enc(''),
+    line,
+    left,
+    bold1, enc('GO TO COUNTER:'), bold0,
+    dbl1, bold1, enc(t.counter_name), bold0, dbl0,
+    t.cafe_name ? enc('Cafe: ' + t.cafe_name) : new Uint8Array(0),
+    enc(''),
+    enc('Order : ' + t.order_number),
+    enc('Guest : ' + (t.customer_name || 'Customer')),
+    t.customer_phone ? enc('Phone : ' + t.customer_phone) : new Uint8Array(0),
+    enc('Ticket: ' + t.ticket_number),
+    enc('Code  : ' + t.scan_code),
+    line,
+    bold1, enc('ITEM                  QTY'), bold0,
+    line
+  );
+
+  let itemsPart = new Uint8Array(0);
+  for (const it of t.items) {
+    const name = (it.name || 'Item').substring(0, 20).padEnd(22);
+    itemsPart = concat(itemsPart, enc(name + String(it.qty).padStart(3)));
+  }
+
+  const totalPart = concat(
+    line,
+    bold1, enc('Total: Rs.' + parseFloat(t.total || 0).toFixed(2)), bold0,
+    line,
+    enc('')
+  );
+
+  // ── QR: render to canvas → raster bitmap ──────────────────
+  // 240px = good size for 80mm paper (300dpi-ish)
+  let qrPart = new Uint8Array(0);
+  try {
+    const qrSize = 240;
+    const canvas = await qrToCanvas(t.scan_code, qrSize);
+    const raster = canvasToRaster(canvas);
+    // Center alignment + raster image + label
+    qrPart = concat(
+      center,
+      raster,
+      enc(''),
+      bold1, enc('Scan QR at: ' + t.counter_name), bold0,
+      enc(''), enc(''), enc('')
+    );
+  } catch(e) {
+    // Fallback: print scan code as large text if QR rendering fails
+    console.error('QR render failed:', e);
+    qrPart = concat(
+      center,
+      dbl1, bold1, enc(t.scan_code), bold0, dbl0,
+      enc('Show code above at counter'),
+      enc(''), enc(''), enc('')
+    );
+  }
+
+  const fullReceipt = concat(textPart, itemsPart, totalPart, qrPart, left, cut);
+
+  // Send text and QR separately to avoid chunking issues mid-command
+  const textBytes = concat(textPart, itemsPart, totalPart);
+  if (!(await sendBytes(textBytes))) return false;
+  await new Promise(r => setTimeout(r, 200));
+  if (!(await sendBytes(qrPart))) return false;
+  await new Promise(r => setTimeout(r, 200));
+  if (!(await sendBytes(concat(left, cut)))) return false;
+  return true;
+}
+
+async function btPrint() {
+  if (!navigator.bluetooth) {
+    setStatus('Bluetooth not supported. Use Chrome on Android or PC.', '#c00');
+    return;
+  }
+  if (!btChar) {
+    const ok = await connectBT();
+    if (!ok) return;
+  }
+  setStatus('Generating QR codes and printing…', '#888');
+  let printed = 0;
+  for (const t of ticketsData) {
+    try {
+      const ok = await printTicket(t);
+      if (!ok) {
+        setStatus('Print failed at ticket ' + (printed + 1) + '. Try reconnecting.', '#c00');
+        btChar = null;
+        return;
+      }
+      printed++;
+      await new Promise(r => setTimeout(r, 500));
+    } catch(e) {
+      setStatus('Error: ' + e.message, '#c00');
+      btChar = null;
+      return;
+    }
+  }
+  setStatus('✓ Printed ' + printed + ' ticket(s) with QR codes!', 'green');
+}
+</script>
+</body>
+</html>

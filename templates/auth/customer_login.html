@@ -1,0 +1,306 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Sign In — {{ APP_NAME }}</title>
+  {% include "includes/favicon_links.html" %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+    body {
+      font-family:'DM Sans',sans-serif;
+      min-height:100vh;
+      background:linear-gradient(135deg,#0d1b2e 0%, #15233b 48%, #1a4d91 100%);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px 16px;
+      color:#172033;
+      overflow-x:hidden;
+    }
+    body::before {
+      content:'';
+      position:fixed;
+      inset:-20%;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(198,40,40,.28), transparent 18%),
+        radial-gradient(circle at 18% 18%, rgba(255,255,255,.13), transparent 18%),
+        radial-gradient(circle at 82% 78%, rgba(21,101,192,.26), transparent 22%);
+      opacity:0;
+      transform:scale(.84);
+      pointer-events:none;
+      animation:ambientBloom 950ms cubic-bezier(.2,.8,.2,1) forwards;
+    }
+    .shell {
+      width:100%;
+      max-width:430px;
+      position:relative;
+      z-index:1;
+      animation:shellRise 760ms cubic-bezier(.2,.8,.2,1) 180ms both;
+    }
+    .brand {
+      text-align:center;
+      margin-bottom:22px;
+      color:#fff;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+    }
+    .brand-logo {
+      width:min(230px,72vw);
+      height:auto;
+      display:block;
+      margin:0 auto 14px;
+      filter:drop-shadow(0 20px 44px rgba(0,0,0,.24));
+      animation:logoPop 820ms cubic-bezier(.18,.9,.24,1.25) both;
+    }
+    .brand p {
+      margin-top:6px;
+      color:rgba(255,255,255,.76);
+      font-size:13px;
+      animation:softFadeUp 560ms ease 360ms both;
+    }
+    .card {
+      background:rgba(255,255,255,.98);
+      border-radius:26px;
+      padding:30px 24px 24px;
+      box-shadow:0 32px 72px rgba(0,0,0,.28);
+      transform-origin:50% 12%;
+      animation:cardUnfold 760ms cubic-bezier(.2,.8,.2,1) 320ms both;
+    }
+    .card h2 {
+      font-family:'Rajdhani',sans-serif;
+      font-size:30px;
+      line-height:.95;
+      font-weight:700;
+      margin:0 0 6px;
+      color:#15233b;
+      text-align:center;
+    }
+    .sub {
+      color:#6b7280;
+      font-size:13px;
+      margin-bottom:24px;
+      text-align:center;
+    }
+    .field { margin-bottom:16px; }
+    .field label {
+      display:block; font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
+      color:#4b5563; margin-bottom:6px;
+    }
+    .input-wrap { position:relative; }
+    .input-wrap > i {
+      position:absolute; left:14px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:18px;
+    }
+    .input-wrap input {
+      width:100%; border-radius:14px; border:1.5px solid #e8ecf0; background:#f8fafc;
+      padding:13px 44px 13px 44px; font-size:14px; font-family:inherit; color:#172033;
+    }
+    .input-wrap input:focus {
+      outline:none; border-color:#1565c0; background:#fff; box-shadow:0 0 0 4px rgba(21,101,192,.10);
+    }
+    .eye-btn {
+      position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none;
+      color:#94a3b8; cursor:pointer; font-size:18px;
+    }
+    .helper-row { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:6px; }
+    .helper-row a { color:#c62828; font-weight:700; text-decoration:none; font-size:13px; }
+    .btn-main {
+      width:100%; border:none; border-radius:16px; padding:14px 16px;
+      background:linear-gradient(135deg,#15233b,#1e4a8a); color:#fff;
+      font-family:'Rajdhani',sans-serif; font-size:18px; font-weight:700; letter-spacing:.5px;
+      cursor:pointer; box-shadow:0 12px 28px rgba(21,35,59,.22); transition:.18s ease;
+      margin-top:6px;
+    }
+    .btn-main:hover { transform:translateY(-1px); }
+    .divider {
+      display:flex; align-items:center; gap:12px; margin:20px 0; color:#94a3b8; font-size:12px;
+    }
+    .divider::before,.divider::after { content:''; flex:1; height:1px; background:#e8ecf0; }
+    .google-btn {
+      display:flex; align-items:center; justify-content:center; gap:12px; width:100%; padding:13px 16px;
+      background:#fff; border:1px solid #d0d7de; border-radius:14px; color:#172033; text-decoration:none;
+      font-weight:700; box-shadow:0 1px 2px rgba(0,0,0,.04);
+    }
+    .footer-link { text-align:center; margin-top:18px; font-size:13px; color:#6b7280; }
+    .footer-link a { color:#c62828; font-weight:700; text-decoration:none; }
+    .staff-link-box {
+      margin-top:14px;
+      padding:14px 15px;
+      border-radius:16px;
+      border:1px solid #e6ecf5;
+      background:#f7fafc;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:12px;
+    }
+    .staff-link-copy { color:#475569; font-size:12.5px; line-height:1.45; }
+    .staff-link-copy strong { display:block; color:#15233b; font-size:13px; margin-bottom:2px; }
+    .staff-link-btn {
+      flex-shrink:0; display:inline-flex; align-items:center; gap:8px; text-decoration:none;
+      border:1.5px solid #d3def1; color:#15233b; background:#fff; border-radius:12px;
+      padding:10px 14px; font-weight:700; font-size:13px;
+    }
+    .staff-link-btn:hover { color:#15233b; border-color:#1565c0; box-shadow:0 8px 20px rgba(21,101,192,.08); }
+    .login-transition {
+      position:fixed;
+      inset:0;
+      z-index:30;
+      display:grid;
+      place-items:center;
+      pointer-events:none;
+      opacity:0;
+      background:linear-gradient(135deg,#0d1b2e 0%,#15233b 48%,#1a4d91 100%);
+      transform:scale(1.04);
+      transition:opacity .32s ease, transform .32s ease;
+    }
+    .login-transition img {
+      width:min(210px,68vw);
+      filter:drop-shadow(0 26px 54px rgba(0,0,0,.28));
+      transform:scale(.82) translateY(16px);
+      transition:transform .38s cubic-bezier(.18,.9,.24,1.25);
+    }
+    body.is-staff-handoff .login-transition {
+      opacity:1;
+      transform:scale(1);
+      pointer-events:auto;
+    }
+    body.is-staff-handoff .login-transition img {
+      transform:scale(1) translateY(0);
+    }
+    body.is-staff-handoff .shell {
+      transform:translateY(-16px) scale(.96);
+      opacity:0;
+      transition:transform .28s ease, opacity .24s ease;
+    }
+    .err-box {
+      background:#fdecea; border:1px solid #f5b7b1; border-radius:14px; padding:11px 13px;
+      font-size:13px; color:#c62828; margin-bottom:18px; display:flex; gap:8px; align-items:flex-start;
+    }
+    @keyframes ambientBloom {
+      0% { opacity:0; transform:scale(.82) rotate(-4deg); }
+      100% { opacity:1; transform:scale(1) rotate(0); }
+    }
+    @keyframes shellRise {
+      0% { opacity:0; transform:translateY(26px) scale(.96); }
+      100% { opacity:1; transform:translateY(0) scale(1); }
+    }
+    @keyframes logoPop {
+      0% { opacity:0; transform:translateY(22px) scale(.72); }
+      58% { opacity:1; transform:translateY(-4px) scale(1.06); }
+      100% { opacity:1; transform:translateY(0) scale(1); }
+    }
+    @keyframes cardUnfold {
+      0% { opacity:0; transform:translateY(34px) scale(.92) rotateX(8deg); }
+      100% { opacity:1; transform:translateY(0) scale(1) rotateX(0); }
+    }
+    @keyframes softFadeUp {
+      0% { opacity:0; transform:translateY(8px); }
+      100% { opacity:1; transform:translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation:none!important; transition:none!important; }
+    }
+    @media (max-width:480px) {
+      .card { padding:26px 18px 22px; border-radius:22px; }
+      .brand-logo { width:min(198px,78vw); }
+      .card h2 { font-size:26px; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <div class="brand">
+    <img src="{% static "brand/neverq-logo.png" %}" alt="{{ APP_NAME }}" class="brand-logo">
+    <p>POWERED BY NEVERNO</p>
+  </div>
+
+  <div class="card">
+    <h2>Sign In</h2>
+    <div class="sub">Use your registered email to continue.</div>
+
+    {% if messages %}{% for msg in messages %}
+    <div class="err-box"><i class="bi bi-exclamation-circle-fill" style="font-size:18px;flex-shrink:0;"></i><div>{{ msg }}</div></div>
+    {% endfor %}{% endif %}
+    {% if form.non_field_errors %}
+    <div class="err-box"><i class="bi bi-exclamation-circle-fill" style="font-size:18px;flex-shrink:0;"></i><div>{{ form.non_field_errors|join:', ' }}</div></div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      <div class="field">
+        <label>Email Address</label>
+        <div class="input-wrap">
+          <i class="bi bi-envelope"></i>
+          {{ form.email }}
+        </div>
+        {% if form.email.errors %}<div style="font-size:12px;color:#c62828;margin-top:4px;">{{ form.email.errors.0 }}</div>{% endif %}
+      </div>
+
+      <div class="field">
+        <div class="helper-row">
+          <label>Password</label>
+          <a href="{% url 'accounts:customer_forgot_password' %}">Forgot password?</a>
+        </div>
+        <div class="input-wrap">
+          <i class="bi bi-lock"></i>
+          {{ form.password }}
+          <button type="button" class="eye-btn" onclick="togglePw(this)"><i class="bi bi-eye"></i></button>
+        </div>
+        {% if form.password.errors %}<div style="font-size:12px;color:#c62828;margin-top:4px;">{{ form.password.errors.0 }}</div>{% endif %}
+      </div>
+
+      <button type="submit" class="btn-main">Sign In</button>
+    </form>
+
+    <div class="divider">or</div>
+
+    <a href="{% url 'accounts:google_login' %}" class="google-btn">
+      <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+        <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.651 32.657 29.24 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.85 1.154 7.971 3.029l5.657-5.657C34.046 6.053 29.27 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
+        <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.85 1.154 7.971 3.029l5.657-5.657C34.046 6.053 29.27 4 24 4c-7.682 0-14.347 4.337-17.694 10.691z"/>
+        <path fill="#4CAF50" d="M24 44c5.167 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.145 35.091 26.715 36 24 36c-5.219 0-9.617-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/>
+        <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.793 2.237-2.231 4.166-4.084 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
+      </svg>
+      <span>Continue with Google</span>
+    </a>
+
+    <div class="footer-link">New here? <a href="{% url 'accounts:customer_register' %}">Create an account</a></div>
+
+    <div class="staff-link-box">
+      <a href="{% url 'accounts:login' %}" class="staff-link-btn" id="staffLoginHandoff">
+        <i class="bi bi-shield-lock"></i> Neverno Log In
+      </a>
+    </div>
+  </div>
+</div>
+<div class="login-transition" aria-hidden="true">
+  <img src="{% static "brand/neverq-logo.png" %}" alt="">
+</div>
+<script>
+function togglePw(btn) {
+  const inp = btn.closest('.input-wrap').querySelector('input');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.querySelector('i').className = inp.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+}
+
+document.getElementById('staffLoginHandoff')?.addEventListener('click', function(event) {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  event.preventDefault();
+  const target = this.href;
+  document.body.classList.add('is-staff-handoff');
+  window.setTimeout(function() {
+    window.location.href = target;
+  }, 420);
+});
+</script>
+</body>
+</html>

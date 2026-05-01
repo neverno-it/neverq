@@ -1,0 +1,514 @@
+{% extends "base/customer_base.html" %}
+{% block extra_head %}
+<style>
+  .home-phase-one .section-heading.phase1-section-heading h4{font-size:22px;}
+  .home-phase-one .section-heading.phase1-section-heading .section-subtitle{font-size:11.5px;}
+  .home-phase-one .phase1-visual-tile .mini-square-title{font-size:11.5px;line-height:1.2;}
+  .home-phase-one .pill-soft,.home-phase-one .pill-outline,.home-phase-one .pill-muted{font-size:11px;}
+  @media (max-width: 767.98px){
+    .home-phase-one .section-heading.phase1-section-heading h4{font-size:19px;}
+    .home-phase-one .section-heading.phase1-section-heading .section-subtitle{font-size:10.5px;}
+    .home-phase-one .phase1-visual-tile .mini-square-title{font-size:10.5px;}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="container mt-3 mt-md-4 home-phase-one">
+  {% if company_cafes|length > 1 and not selected_cafe_id %}
+  <div class="surface-card phase1-location-card mb-3 mb-md-4" id="customerTourCafe">
+    <div class="phase1-location-copy">
+      <div class="phase1-location-icon"><i class="bi bi-geo-alt-fill"></i></div>
+      <div>
+        <div class="phase1-location-label">Cafeteria</div>
+        <div class="phase1-location-title">Choose your serving point</div>
+      </div>
+    </div>
+    <div class="phase1-location-select">
+      <select id="cafePicker" class="form-select" onchange="selectWebCafe(this.value); if(this.value){ var card=document.getElementById('customerTourCafe'); if(card){ card.style.transition='opacity .35s'; card.style.opacity='0'; setTimeout(function(){card.style.display='none';},360); } }">
+        <option value="">Select a cafe</option>
+        {% for c in company_cafes %}
+        <option value="{{ c.pk }}" {% if c.pk == selected_cafe_id %}selected{% endif %}>{{ c.name }}{% if c.building %} · {{ c.building.name }}{% endif %}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <span id="cafeCheck" class="phase1-location-check" style="display:none;"><i class="bi bi-check-circle-fill"></i></span>
+  </div>
+  {% endif %}
+
+
+  {% if not company.is_store_open %}
+  <div class="alert alert-warning mb-3 d-flex align-items-center gap-2 phase1-store-alert">
+    <i class="bi bi-clock-history fs-5 text-warning"></i>
+    <div>
+      <strong>Ordering is currently closed.</strong>
+      {% if company.has_order_schedule %}<br><span class="small text-muted">Open: <strong>{{ company.order_window_label }}</strong></span>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if subsidy_reminder %}
+  <div class="alert alert-info mb-3 d-flex align-items-center gap-2 phase1-store-alert">
+    <i class="bi bi-gift-fill fs-5 text-primary"></i>
+    <div>{{ subsidy_reminder }}</div>
+  </div>
+  {% endif %}
+
+  {% if adverts %}
+  <div class="surface-card overflow-hidden mb-3 mb-md-4 phase1-banner-card">
+    <div id="adCarousel" class="carousel slide" data-bs-ride="carousel" data-bs-interval="3800">
+      <div class="carousel-inner">
+        {% for ad in adverts %}
+        <div class="carousel-item {% if forloop.first %}active{% endif %}">
+          {% if ad.display_image %}
+          <img src="{{ ad.display_image.url }}" class="d-block w-100" alt="{{ ad.name|default:company.name }}" style="width:100%;height:auto;aspect-ratio:1240/560;object-fit:cover;">
+          {% else %}
+          <div class="phase1-banner-fallback">
+            <h2>{{ company.name }}</h2>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% if adverts|length > 1 %}
+      <div class="carousel-indicators nq-carousel-indicators mb-2">
+        {% for ad in adverts %}
+        <button type="button" data-bs-target="#adCarousel" data-bs-slide-to="{{ forloop.counter0 }}" class="{% if forloop.first %}active{% endif %}" aria-current="{% if forloop.first %}true{% endif %}" aria-label="Slide {{ forloop.counter }}"></button>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="surface-card phase1-toolbar-card compact-toolbar sticky-home-toolbar mb-4" id="customerTourToolbar">
+    <div class="menu-toolbar-top">
+      <div class="search-shell flex-grow-1">
+        <i class="bi bi-search"></i>
+        <input type="text" id="menuSearchInput" class="search-input" placeholder="Search products or offerings" value="{{ search_query }}">
+      </div>
+      <button type="button" class="veg-only-toggle {% if food_pref == 'veg' %}active{% endif %}" onclick="toggleVegOnly()" aria-label="Toggle veg only items" title="Veg only">
+        <span class="veg-toggle-mark" aria-hidden="true"><span class="veg-toggle-dot"></span></span>
+        <span class="veg-only-switch"><span class="veg-only-knob"></span></span>
+      </button>
+    </div>
+    <div class="menu-toolbar-bottom compact-only">
+      <div class="calorie-inline-group">
+        <span class="calorie-inline-label"><i class="bi bi-fire"></i>Calories</span>
+        {% for preset in calorie_presets %}
+        <button type="button" class="filter-pill filter-pill-btn compact {% if calorie_max == preset %}active{% endif %}" onclick="setCaloriePreset('{{ preset }}')">≤{{ preset }}</button>
+        {% endfor %}
+        {% if calorie_max %}
+        <button type="button" class="filter-pill filter-pill-btn compact" onclick="setCaloriePreset('')">Clear</button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+
+
+  {% if offerings %}
+  <div class="section-heading phase1-section-heading mb-3" id="homeOfferingsHeading">
+    <div>
+      <h4>Offerings</h4>
+      <div class="section-subtitle">Meal windows and service slots</div>
+    </div>
+  </div>
+  <div class="mini-square-scroller phase1-card-scroller mb-4" id="customerTourOfferings">
+    {% for offering in offerings %}
+    <a href="{% url 'menu:offering_detail' offering.slug|default:offering.pk %}{% if food_pref or calorie_max %}?{% endif %}{% if food_pref %}food={{ food_pref|urlencode }}{% endif %}{% if food_pref and calorie_max %}&{% endif %}{% if calorie_max %}calorie_max={{ calorie_max }}{% endif %}" class="mini-square-card phase1-visual-tile js-searchable" data-search="{{ offering.name|lower }} offering {% if offering.description %}{{ offering.description|lower }}{% endif %}">
+      <div class="mini-square-image">
+        {% if offering.image %}
+        <img src="{{ offering.image.url }}" alt="{{ offering.name }}">
+        {% else %}
+        <div class="mini-square-fallback">⏰</div>
+        {% endif %}
+      </div>
+      <div class="mini-square-title">{{ offering.name }}</div>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if live_offers %}
+  <div class="section-heading phase1-section-heading mb-3" id="homeOffersHeading">
+    <div>
+      <h4>Offers</h4>
+      <div class="section-subtitle">Active deals available right now</div>
+    </div>
+  </div>
+  <div class="row g-3 mb-4 phase1-offer-grid" id="homeOffersGrid">
+    {% for offer in live_offers|slice:":4" %}
+    <div class="col-12 col-sm-6 js-searchable" data-search="{{ offer.title|lower }} offer coupon discount">
+      <a href="{% url 'menu:menu' %}" class="text-decoration-none d-block h-100">
+        <div class="surface-card phase1-offer-card h-100">
+          <div class="phase1-offer-copy">
+            <div class="phase1-offer-topline">Limited offer</div>
+            <div class="phase1-offer-title">{{ offer.title }}</div>
+            <div class="phase1-offer-badge-row">
+              {% if offer.offer_type == 'bogo' %}
+              <span class="phase1-offer-badge red">Buy 1 Get 1</span>
+              {% elif offer.offer_type == 'free' %}
+              <span class="phase1-offer-badge green">Free item</span>
+              {% elif offer.offer_type == 'percent' %}
+              <span class="phase1-offer-badge blue">{{ offer.value|floatformat:0 }}% Off</span>
+              {% elif offer.offer_type == 'flat' %}
+              <span class="phase1-offer-badge orange">₹{{ offer.value|floatformat:0 }} Off</span>
+              {% elif offer.offer_type == 'cart' %}
+              <span class="phase1-offer-badge purple">Cart offer</span>
+              {% endif %}
+            </div>
+          </div>
+          {% if offer.popup_image %}
+          <div class="phase1-offer-image-wrap">
+            <img src="{{ offer.popup_image.url }}" alt="{{ offer.title }}" class="phase1-offer-image">
+          </div>
+          {% endif %}
+        </div>
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if featured_products %}
+  <div class="section-heading phase1-section-heading mb-3" id="homeFeaturedHeading">
+    <div>
+      <h4>Featured Products</h4>
+      <div class="section-subtitle">Popular picks for quick ordering</div>
+    </div>
+  </div>
+  <div class="phase1-featured-hscroll mb-4 {% if web_cfg %}web-card-style-{{ web_cfg.card_style }}{% endif %}" id="customerTourFeatured">
+    {% for product in featured_products %}
+    <div class="phase1-featured-hitem js-searchable" data-search="{{ product.name|lower }} {{ product.description|default:''|lower }} {{ product.category.name|lower }} featured">
+      <div class="feature-card phase1-featured-card phase3-tile-card h-100 overflow-hidden d-flex flex-column">
+        <a href="{% url 'menu:product_detail' product.pk %}" class="text-decoration-none d-block phase3-tile-media-link">
+          <div class="phase3-tile-media">
+            {% if product.image %}
+            <img src="{{ product.image.url }}" alt="{{ product.name }}" class="feature-image phase1-feature-image phase3-tile-image">
+            {% else %}
+            <div class="feature-image phase1-feature-image d-grid place-items-center phase1-feature-fallback phase3-tile-image">🍲</div>
+            {% endif %}
+            <div class="phase3-tile-badges">
+              {% with ft=product.food_type.first %}{% if ft %}<span class="phase3-food-badge {% if "non" in ft.name|lower %}nonveg{% else %}veg{% endif %}" aria-label="{% if "non" in ft.name|lower %}Non-veg{% else %}Veg{% endif %}" title="{% if "non" in ft.name|lower %}Non-veg{% else %}Veg{% endif %}"><span class="food-mark-icon"><span class="food-mark-dot"></span></span></span>{% endif %}{% endwith %}
+              {% if product.live_offer %}<span class="phase3-mini-offer">Offer</span>{% endif %}
+            </div>
+          </div>
+        </a>
+        <div class="phase1-feature-body phase3-tile-body d-flex flex-column flex-grow-1">
+          <div class="phase3-tile-topline">
+            <span class="pill-muted text-truncate">{{ product.category.name }}</span>
+            {% if product.calories %}<span class="phase1-calorie-note phase3-inline-calorie"><i class="bi bi-fire"></i> {{ product.calories }} kcal</span>{% endif %}
+          </div>
+          <a href="{% url 'menu:product_detail' product.pk %}" class="text-decoration-none text-reset d-block">
+            <h5 class="phase1-feature-title phase3-tile-title">{{ product.name }}</h5>
+            <div class="phase1-feature-desc phase3-tile-desc">{{ product.description|default:'Freshly prepared and ready to order.'|truncatechars:72 }}</div>
+          </a>
+          <div class="phase1-feature-footer phase3-tile-footer mt-auto">
+            <div>
+              <div class="pprice phase1-price phase3-tile-price">₹{{ product.display_price|default:product.price }}</div>
+              {% if customer.company.bill_company == 2 and customer.meal_benefit == 'company_pay' and product.is_free_meal_eligible %}<span class="pill-soft" style="background:rgba(46,125,50,.1);color:#2e7d32;font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap;">Company covered</span>
+              {% elif customer.company.bill_company == 2 and customer.meal_benefit == 'subsidy' %}<span class="pill-soft" style="background:rgba(21,101,192,.08);color:#1565c0;font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap;">Subsidy eligible</span>{% endif %}
+              <div class="phase3-tile-availability {% if product.is_available_now and product.effective_web_qty != 0 %}open{% else %}closed{% endif %}">{% if product.effective_web_qty == 0 %}Sold out{% elif product.is_available_now %}Available now{% else %}Unavailable{% endif %}</div>{% if product.effective_web_qty > 0 %}<div class="small text-muted mt-1">Max {{ product.effective_web_qty }}/order</div>{% endif %}
+            </div>
+            <div class="phase1-action-row phase3-action-row">
+              <a href="{% url 'menu:product_detail' product.pk %}" class="btn btn-cf-outline btn-sm">Details</a>
+              {% if company.is_store_open and product.effective_web_qty != 0 %}
+              <button type="button" class="btn btn-cf-primary btn-sm js-add-to-cart" data-pid="{{ product.pk }}"><i class="bi bi-plus-lg"></i></button>
+              {% elif company.is_store_open %}
+              <button type="button" class="btn btn-cf-outline btn-sm" disabled>Sold out</button>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if home_products_preview %}
+  <div class="section-heading phase1-section-heading mb-3" id="all-products">
+    <div>
+      <h4>All Products</h4>
+      <div class="section-subtitle">A quick snapshot from the full menu</div>
+    </div>
+  </div>
+  <div class="home-products-stack mb-2 {% if web_cfg %}web-card-style-{{ web_cfg.card_style }}{% endif %}" id="homeProductsStack">
+    {% for product in home_products_preview %}
+      <div class="home-product-slot {% if forloop.counter > home_products_preview_initial %}home-product-extra d-none{% endif %}">
+        {% include "menu/_product_row.html" with product=product %}
+      </div>
+    {% endfor %}
+  </div>
+  {% if home_products_preview|length > home_products_preview_initial %}
+  <div class="text-center mb-4" id="homeProductsToggleWrap">
+    <button type="button" class="btn btn-cf-outline phase1-see-more-btn" id="homeProductsToggleBtn" onclick="toggleHomeProducts()">
+      <i class="bi bi-chevron-down me-1"></i>See more
+    </button>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  {% if not featured_products and not offerings and not home_products_preview %}
+  <div class="empty-state py-5">
+    {% if not company.is_store_open %}
+    <div style="font-size:64px;margin-bottom:14px;"><i class="bi bi-clock-history"></i></div>
+    <h4>Ordering is closed for now</h4>
+    <p class="text-muted">Please come back when the next ordering window opens.</p>
+    {% else %}
+    <div style="font-size:64px;margin-bottom:14px;">🍽</div>
+    <h4>Menu coming soon</h4>
+    <p class="text-muted">The team is still setting up the menu.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</div>
+
+{% for offer in live_offers %}
+{% if offer.is_popup_enabled and offer.popup_image %}
+<div class="modal fade" id="offerPopupModal{{ forloop.counter }}" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:500px;">
+    <div class="modal-content border-0 shadow-lg" style="border-radius:20px;overflow:hidden;">
+      <div class="modal-header border-0 pb-0" style="position:absolute;top:0;right:0;z-index:10;">
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" style="background-color:rgba(0,0,0,.4);border-radius:50%;padding:6px;"></button>
+      </div>
+      <img src="{{ offer.popup_image.url }}" alt="{{ offer.title }}" style="width:100%;max-height:280px;object-fit:cover;">
+      <div class="modal-body text-center p-4">
+        <h5 class="fw-bold mb-1">{{ offer.title }}</h5>
+        <a href="{% url 'menu:menu' %}" class="btn btn-cf-primary mt-3 w-100" data-bs-dismiss="modal"><i class="bi bi-bag me-1"></i>View Menu</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
+{% endblock %}
+
+{% block extra_js %}
+</div>
+<script>
+(function(){
+  const today = new Date().toISOString().slice(0, 10);
+  const popups = [
+    {% for offer in live_offers %}{% if offer.is_popup_enabled and offer.popup_image %}
+    {pk: {{ offer.pk }}, modalId: 'offerPopupModal{{ forloop.counter }}'},
+    {% endif %}{% endfor %}
+  ];
+  for (const o of popups) {
+    const lsKey = 'nq_offer_seen_' + o.pk + '_' + today;
+    if (!localStorage.getItem(lsKey)) {
+      const el = document.getElementById(o.modalId);
+      if (el) {
+        new bootstrap.Modal(el).show();
+        localStorage.setItem(lsKey, '1');
+        break;
+      }
+    }
+  }
+
+  const si = document.getElementById('menuSearchInput');
+  const offeringItems = Array.from(document.querySelectorAll('#customerTourOfferings .js-searchable'));
+  const offerItems = Array.from(document.querySelectorAll('#homeOffersGrid .js-searchable'));
+  const featuredItems = Array.from(document.querySelectorAll('#customerTourFeatured .js-searchable'));
+  const productSlots = Array.from(document.querySelectorAll('#homeProductsStack .home-product-slot'));
+  const offeringsHeading = document.getElementById('homeOfferingsHeading');
+  const offersHeading = document.getElementById('homeOffersHeading');
+  const featuredHeading = document.getElementById('homeFeaturedHeading');
+  const homeProductsStack = document.getElementById('homeProductsStack');
+  const homeProductsHeading = document.getElementById('all-products');
+  const homeProductsToggleWrap = document.getElementById('homeProductsToggleWrap');
+  let searchSyncTimer = null;
+  if (homeProductsStack) homeProductsStack.dataset.expanded = '0';
+
+  function normalizedText(value) {
+    return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  function itemMatches(el, term) {
+    if (!term) return true;
+    const hay = normalizedText(el.dataset.search || el.textContent || '');
+    return hay.includes(term);
+  }
+
+  function setBlockVisible(el, visible, displayValue='') {
+    if (!el) return;
+    el.style.display = visible ? displayValue : 'none';
+  }
+
+  function syncSectionVisibility(headingEl, contentEl, visibleCount, displayValue='') {
+    const show = visibleCount > 0;
+    setBlockVisible(headingEl, show);
+    setBlockVisible(contentEl, show, displayValue);
+  }
+
+  function applyHomeSearch(t) {
+    let visibleOfferings = 0;
+    let visibleOffers = 0;
+    let visibleFeatured = 0;
+    let visibleProducts = 0;
+
+    offeringItems.forEach(function(item) {
+      const matches = itemMatches(item, t);
+      setBlockVisible(item, matches, '');
+      if (matches) visibleOfferings += 1;
+    });
+
+    offerItems.forEach(function(item) {
+      const matches = itemMatches(item, t);
+      setBlockVisible(item, matches, '');
+      if (matches) visibleOffers += 1;
+    });
+
+    featuredItems.forEach(function(item) {
+      const matches = itemMatches(item, t);
+      setBlockVisible(item, matches, '');
+      if (matches) visibleFeatured += 1;
+    });
+
+    productSlots.forEach(function(slot) {
+      const card = slot.querySelector('.js-product-card');
+      const matches = card ? itemMatches(card, t) : false;
+      if (t) {
+        slot.classList.toggle('d-none', !matches);
+      } else if (slot.classList.contains('home-product-extra')) {
+        slot.classList.toggle('d-none', (homeProductsStack?.dataset.expanded || '0') !== '1');
+      } else {
+        slot.classList.remove('d-none');
+      }
+      if (!slot.classList.contains('d-none')) visibleProducts += 1;
+    });
+
+    syncSectionVisibility(offeringsHeading, document.getElementById('customerTourOfferings'), visibleOfferings, '');
+    syncSectionVisibility(offersHeading, document.getElementById('homeOffersGrid'), visibleOffers, '');
+    syncSectionVisibility(featuredHeading, document.getElementById('customerTourFeatured'), visibleFeatured, '');
+    syncSectionVisibility(homeProductsHeading, homeProductsStack, visibleProducts, '');
+    setBlockVisible(homeProductsToggleWrap, !t && document.querySelectorAll('.home-product-extra').length > 0, '');
+  }
+
+  function syncHomeSearchQuery(rawValue) {
+    const url = new URL(window.location.href);
+    const current = (url.searchParams.get('q') || '').trim();
+    const next = String(rawValue || '').trim();
+    if (current === next) return;
+    if (next) url.searchParams.set('q', next);
+    else url.searchParams.delete('q');
+    window.location.href = url.toString();
+  }
+
+  si?.addEventListener('input', function(){
+    const raw = this.value || '';
+    const t = normalizedText(raw);
+    applyHomeSearch(t);
+    window.clearTimeout(searchSyncTimer);
+    searchSyncTimer = window.setTimeout(function() {
+      syncHomeSearchQuery(raw);
+    }, 280);
+  });
+  applyHomeSearch(normalizedText(si?.value || ''));
+
+  document.querySelectorAll('.js-add-to-cart').forEach(function(button) {
+    button.addEventListener('click', function() {
+      if (button.dataset.busy === '1') return;
+      button.dataset.busy = '1';
+      button.disabled = true;
+      const pid = button.dataset.pid;
+      const original = button.innerHTML;
+      const formData = new FormData();
+      formData.append('qty', '1');
+      formData.append('csrfmiddlewaretoken', NeverQUI.getCookie('csrftoken'));
+
+      fetch(`/menu/cart/add/${pid}/`, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': NeverQUI.getCookie('csrftoken')
+        },
+        body: formData
+      })
+      .then(resp => resp.json())
+      .then(data => {
+        if (!data.success) {
+          button.disabled = false;
+          alert(data.error || 'Could not add item to cart.');
+          return;
+        }
+        NeverQUI.updateCartBadges(data.cart_count || 0);
+        NeverQUI.flashButtonState(button, original, '<i class="bi bi-check2 me-1"></i>Added');
+      })
+      .catch(() => {
+        button.disabled = false;
+        alert('Network error. Please try again.');
+      })
+      .finally(() => {
+        window.setTimeout(function() {
+          button.dataset.busy = '0';
+        }, 1350);
+      });
+    });
+  });
+})();
+
+function toggleVegOnly() {
+  const current = '{{ food_pref|default:"" }}';
+  const url = new URL(window.location.href);
+  if (current === 'veg') url.searchParams.delete('food');
+  else url.searchParams.set('food', 'veg');
+  window.location.href = url.toString();
+}
+
+function setCaloriePreset(val) {
+  const url = new URL(window.location.href);
+  const current = url.searchParams.get('calorie_max') || '';
+  if (!val || current === String(val)) url.searchParams.delete('calorie_max');
+  else url.searchParams.set('calorie_max', val);
+  window.location.href = url.toString();
+}
+
+function selectWebCafe(cafeId) {
+  const check = document.getElementById('cafeCheck');
+  fetch('{% url "orders:set_web_cafe" %}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRFToken': NeverQUI.getCookie('csrftoken'),
+    },
+    body: 'cafe_id=' + encodeURIComponent(cafeId),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (check) check.style.display = (data.success && cafeId) ? 'inline-flex' : 'none';
+  })
+  .catch(() => {});
+}
+
+function toggleHomeProducts() {
+  const extras = document.querySelectorAll('.home-product-extra');
+  const btn = document.getElementById('homeProductsToggleBtn');
+  const stack = document.getElementById('homeProductsStack');
+  if (!extras.length || !btn) return;
+  const isCollapsed = Array.from(extras).some(el => el.classList.contains('d-none'));
+  extras.forEach(el => el.classList.toggle('d-none', !isCollapsed));
+  if (stack) stack.dataset.expanded = isCollapsed ? '1' : '0';
+  if (isCollapsed) {
+    btn.innerHTML = '<i class="bi bi-chevron-up me-1"></i>Show less';
+  } else {
+    btn.innerHTML = '<i class="bi bi-chevron-down me-1"></i>See more';
+    const allProd = document.getElementById('all-products');
+    if (allProd) allProd.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+}
+
+
+window.NEVERQ_PAGE_TOUR_KEY = 'customer-home';
+window.NEVERQ_PAGE_TOUR = [
+  {selector:'#customerTourCafe', title:'Choose cafeteria', copy:'Pick your serving point here when your company has multiple cafes or floors.', placement:'bottom'},
+  {selector:'#customerTourToolbar', title:'Search and filters', copy:'Use search, veg-only, and calorie filters to narrow the menu quickly.', placement:'bottom'},
+  {selector:'#customerTourOfferings', title:'Browse offerings', copy:'Choose an offering here first. Each offering opens its own page with categories and products inside it.', placement:'top'},
+  {selector:'#customerTourFeatured', title:'Featured products', copy:'Featured items are the fastest way to start a new order.', placement:'top'}
+];
+</script>
+{% endblock %}

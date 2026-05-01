@@ -1,0 +1,1013 @@
+{% extends "base/dashboard_base.html" %}
+
+{% block extra_head %}
+<style>
+  /* Layout */
+  .pos-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(310px, 24vw, 330px);
+    height: calc(100vh - 58px);
+    overflow: hidden;
+    margin: -16px;
+  }
+
+  /* Products pane */
+  .pos-products {
+    overflow-y: auto;
+    padding: 16px;
+    background: var(--cf-surface);
+  }
+  .pos-search {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--cf-surface);
+    padding-bottom: 10px;
+  }
+  .pos-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .pos-title-site,
+  .pos-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .pos-toolbar-actions { flex-shrink: 0; }
+  .pos-products-title {
+    color: var(--cf-navy);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .pos-company-select {
+    max-width: 190px;
+    min-width: 140px;
+    font-size: 12px;
+    padding: 3px 8px;
+    border: 1px solid var(--cf-border);
+    border-radius: 6px;
+    color: var(--cf-navy);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .pos-day-stats {
+    color: var(--cf-muted);
+    font-size: 12px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .pos-prod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+  .active-cat { background: var(--cf-blue) !important; color: #fff !important; border-color: var(--cf-blue) !important; }
+  .pos-btn {
+    background: white;
+    border: 1.5px solid var(--cf-border);
+    border-radius: 9px;
+    min-height: 118px;
+    padding: 16px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .15s;
+    user-select: none;
+    position: relative;
+  }
+  .pos-btn:hover { border-color: var(--cf-blue); background: var(--cf-blue-light); }
+  .pos-btn.in-cart { border-color: var(--cf-blue); background: var(--cf-blue-light); }
+  .pos-btn .badge-qty {
+    position: absolute;
+    top: -7px; right: -7px;
+    background: var(--cf-red);
+    color: white;
+    border-radius: 50%;
+    width: 20px; height: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .pos-btn.in-cart .badge-qty { display: flex; }
+  .pos-btn .pname { font-family:'Rajdhani',sans-serif; font-weight:700; font-size:14px; color:var(--cf-navy); line-height:1.2; }
+  .pos-btn .pprice { font-family:'Rajdhani',sans-serif; font-size:19px; font-weight:700; color:var(--cf-red); margin-top:5px; }
+
+  /* Cart sidebar */
+  .pos-sidebar {
+    background: white;
+    border-left: 1px solid var(--cf-border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .pos-cart-hd {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--cf-border);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .pos-order-mode {
+    padding: 10px 14px 12px;
+    border-bottom: 1px solid var(--cf-border);
+    background: #fff;
+    flex-shrink: 0;
+  }
+  .pos-mode-label {
+    margin-bottom: 6px;
+    color: var(--cf-muted);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+  }
+  .pos-mode-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .cust-type-btn {
+    min-height: 34px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .cust-type-btn i { margin-right: 4px !important; }
+  .pos-cart-body {
+    flex: 0 1 auto;
+    min-height: 84px;
+    max-height: clamp(110px, 22vh, 210px);
+    overflow-y: auto;
+    padding: 0;
+  }
+  .pos-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--cf-muted);
+    font-size: 13px;
+  }
+  .pos-cart-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--cf-border);
+  }
+  .pos-cart-item .iname { flex:1; font-weight:600; font-size:13px; }
+  .pos-cart-item .iprice { font-family:'Rajdhani',sans-serif; font-weight:700; font-size:15px; color:var(--cf-blue); min-width:48px; text-align:right; }
+
+  /* Qty buttons */
+  .qbtn {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    transition: transform .1s;
+  }
+  .qbtn:active { transform: scale(.9); }
+  .qbtn-minus { background: #FEE2E2; color: var(--cf-red); }
+  .qbtn-plus  { background: var(--cf-blue); color: white; }
+  .qbtn-del   { background: none; border: none; color: #9CA3AF; font-size: 14px; cursor: pointer; padding: 0 2px; }
+  .qty-input {
+    width: 52px;
+    height: 30px;
+    border: 1px solid var(--cf-border);
+    border-radius: 7px;
+    background: #fff;
+    color: var(--cf-navy);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    text-align: center;
+    padding: 2px 4px;
+  }
+  .qty-input:focus {
+    outline: none;
+    border-color: var(--cf-blue);
+    box-shadow: 0 0 0 2px rgba(26,35,126,.12);
+  }
+  .qty-input::-webkit-outer-spin-button,
+  .qty-input::-webkit-inner-spin-button { margin: 0; }
+
+  /* Cart footer */
+  .pos-cart-ft {
+    padding: 10px 16px 12px;
+    border-top: 2px solid var(--cf-border);
+    flex-shrink: 0;
+    background: white;
+  }
+  .pos-cart-ft .form-control-sm {
+    min-height: 34px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .pos-payment-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    margin-bottom: 10px;
+  }
+  .pos-payment-grid .pay-btn {
+    min-height: 38px;
+    padding: 7px 6px;
+    border-radius: 8px;
+    font-weight: 800;
+  }
+  .pos-bill-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+    color: var(--cf-muted);
+    font-size: 12px;
+  }
+  .pos-bill-row strong {
+    color: var(--cf-navy);
+    white-space: nowrap;
+  }
+  .pos-card-fee-note {
+    margin: 2px 0 8px;
+    color: var(--cf-muted);
+    font-size: 11px;
+    line-height: 1.25;
+  }
+  .pos-card-fee-note[hidden],
+  .pos-bill-row[hidden] {
+    display: none !important;
+  }
+  .pos-total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin: 10px 0 12px;
+  }
+  .pos-total-label {
+    color: var(--cf-navy);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 17px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .pos-total-amount,
+  #totalAmt {
+    color: var(--cf-red) !important;
+    font-family: 'Rajdhani', sans-serif !important;
+    font-size: 27px !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
+    white-space: nowrap;
+  }
+  #placeBtn {
+    min-height: 48px;
+    padding: 10px 12px !important;
+    border-radius: 8px;
+    font-size: 16px !important;
+    line-height: 1.15;
+  }
+
+  @media (max-width: 768px) {
+    .pos-wrap {
+      grid-template-columns: 1fr;
+      height: auto;
+      min-height: calc(100vh - 58px);
+      overflow: visible;
+    }
+    .pos-products {
+      overflow: visible;
+      padding: 12px;
+    }
+    .pos-search {
+      position: static;
+      padding-bottom: 8px;
+    }
+    .pos-toolbar {
+      align-items: stretch;
+      flex-direction: column;
+      gap: 7px;
+      margin-bottom: 8px;
+    }
+    .pos-title-site {
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+    }
+    .pos-products-title {
+      font-size: 15px;
+      line-height: 1;
+    }
+    .pos-company-select {
+      flex: 1;
+      min-width: 0;
+      max-width: 180px;
+      height: 30px;
+      font-size: 10px;
+      padding: 3px 6px;
+    }
+    .pos-toolbar-actions {
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+    }
+    .pos-printer-btn {
+      min-height: 32px;
+      max-width: 150px;
+      padding: 5px 10px !important;
+      border-radius: 12px !important;
+      font-size: 10px !important;
+      line-height: 1.1;
+      white-space: normal;
+    }
+    .pos-printer-btn .nq-bt-label {
+      line-height: 1.05;
+      white-space: normal;
+    }
+    .pos-day-stats {
+      max-width: 116px;
+      font-size: 10px;
+      line-height: 1.15;
+      text-align: right;
+      white-space: normal;
+    }
+    #searchBox {
+      height: 32px;
+      font-size: 12px;
+    }
+    .pos-sidebar {
+      max-height: none;
+      overflow: visible;
+      border-left: 0;
+      border-top: 1px solid var(--cf-border);
+    }
+    .pos-cart-hd { padding: 12px 14px 8px; }
+    .pos-order-mode { padding: 8px 12px 10px; }
+    .pos-mode-grid,
+    .pos-payment-grid { gap: 4px; }
+    .cust-type-btn {
+      min-height: 32px;
+      padding: 5px 6px;
+      font-size: 11px;
+    }
+    .pos-cart-body {
+      min-height: 64px;
+      max-height: 96px;
+    }
+    .pos-cart-item {
+      gap: 6px;
+      padding: 8px 12px;
+    }
+    .qty-input {
+      width: 46px;
+      height: 28px;
+      font-size: 14px;
+    }
+    .pos-cart-ft {
+      position: sticky;
+      bottom: 0;
+      z-index: 20;
+      padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+      box-shadow: 0 -8px 18px rgba(15,23,42,.08);
+    }
+    .pos-cart-ft .form-control-sm {
+      min-height: 31px;
+      padding-top: 4px;
+      padding-bottom: 4px;
+      font-size: 12px;
+    }
+    .pos-cart-ft .mb-2 { margin-bottom: .35rem !important; }
+    .pos-payment-grid { margin-bottom: 7px; }
+    .pos-payment-grid .pay-btn {
+      min-height: 34px;
+      padding: 5px 4px;
+      font-size: 12px;
+    }
+    .pos-bill-row {
+      margin-bottom: 2px;
+      font-size: 11px;
+    }
+    .pos-card-fee-note {
+      margin: 1px 0 5px;
+      font-size: 10px;
+      line-height: 1.2;
+    }
+    .pos-total-row {
+      margin: 7px 0 8px;
+      align-items: center;
+    }
+    .pos-total-label { font-size: 15px; }
+    #totalAmt { font-size: 24px !important; }
+    #placeBtn {
+      min-height: 42px;
+      padding: 8px 10px !important;
+      font-size: 14px !important;
+    }
+    .pos-prod-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  }
+</style>
+{% endblock %}
+
+{% block page_heading %}POS Terminal — {{ company.name }}{% endblock %}
+
+{% block content %}
+<div class="pos-wrap">
+
+  <!-- ── Products ── -->
+  <div class="pos-products">
+    <div class="pos-search">
+      <div class="pos-toolbar">
+        <div class="pos-title-site">
+          <div class="pos-products-title">
+            <i class="bi bi-grid-3x3-gap me-1 text-blue"></i>Products
+          </div>
+          {% if companies|length > 1 %}
+          <select onchange="if(this.value) window.location.href='?company='+this.value"
+                  class="pos-company-select">
+            {% for co in companies %}
+            <option value="{{ co.pk }}" {% if co.pk == company.pk %}selected{% endif %}>{{ co.name }}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
+        </div>
+        <div class="pos-toolbar-actions">
+          <!-- BUG 2 FIX: BT connect button was entirely missing from the terminal.
+               Without this, there was no way to connect the printer from this page. -->
+          <button onclick="connectBluetooth(this)"
+                  class="bt-status disconnected nq-bt-btn pos-printer-btn"
+                  style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+                         padding:5px 14px;border-radius:20px;cursor:pointer;border:none;">
+            <i class="bi bi-bluetooth"></i>
+            <span class="nq-bt-label">Connect KOT Printer</span>
+          </button>
+          <div class="pos-day-stats">
+            Today: <strong>{{ today_orders }}</strong> orders &nbsp;·&nbsp;
+            <strong style="color:var(--cf-blue);">₹{{ today_revenue|floatformat:0 }}</strong>
+          </div>
+        </div>
+      </div>
+      <input type="search" id="searchBox" placeholder="Search products…"
+             class="form-control form-control-sm"
+             oninput="filterProducts(this.value)">
+    </div>
+
+    <!-- Category tabs -->
+    {% if products %}
+    {% regroup products by category as cat_groups %}
+    <div class="d-flex gap-2 flex-wrap mb-2" id="catTabs">
+      <button class="btn btn-cf-primary btn-sm active-cat" onclick="filterCat('__all__', this)">All</button>
+      {% for group in cat_groups %}
+      <button class="btn btn-cf-outline btn-sm" onclick="filterCat('{{ group.grouper.pk|default:0 }}', this)">
+        {{ group.grouper.name|default:'Uncategorised' }}
+      </button>
+      {% endfor %}
+    </div>
+
+    <div class="pos-prod-grid" id="productGrid">
+      {% for p in products %}
+      <div class="pos-btn" id="pbtn-menu-{{ p.pk }}"
+           data-name="{{ p.name|lower }}"
+           data-cat="{{ p.category.pk|default:0 }}"
+           data-src="menu"
+           data-min-qty="{{ p.pos_order_min_qty|default:p.min_qty }}"
+           data-max-qty="{{ p.pos_order_max_qty|default:p.pos_qty }}"
+           onclick="addItem('menu_{{ p.pk }}', '{{ p.name|escapejs }}')">
+        <span class="badge-qty" id="qty-badge-menu-{{ p.pk }}">1</span>
+        {% if p.category %}<div style="font-size:9px;color:#888;line-height:1;margin-bottom:3px;">{{ p.category.name }}</div>{% endif %}
+        <div class="pname">{{ p.name }}</div>
+        <div class="pprice" id="pprice-menu-{{ p.pk }}">₹…</div>
+        <div style="font-size:10px;color:#6b7280;margin-top:4px;">Min {{ p.pos_order_min_qty|default:p.min_qty }} · Max {{ p.pos_order_max_qty|default:p.pos_qty }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-box" style="font-size:48px;display:block;margin-bottom:10px;opacity:.3;"></i>
+      No products configured for this company.
+      <a href="{% url 'dashboard:product_list' %}" class="d-block mt-2">Add menu products →</a>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ── Cart Sidebar ── -->
+  <div class="pos-sidebar">
+    <div class="pos-cart-hd">
+      <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:17px;color:var(--cf-navy);">
+        <i class="bi bi-receipt me-1 text-red"></i>Current Order
+      </div>
+      <button onclick="clearAll()"
+              style="background:none;border:none;font-size:12px;color:var(--cf-muted);cursor:pointer;padding:0;">
+        <i class="bi bi-trash me-1"></i>Clear
+      </button>
+    </div>
+
+    <!-- Cart items go here — rendered by JS -->
+    {% if pos_customer_types %}
+    <div class="pos-order-mode">
+      <div class="pos-mode-label">Customer type</div>
+      <div class="pos-mode-grid" id="custTypeBtns">
+        {% for type in pos_customer_types %}
+        <button type="button"
+                class="cust-type-btn btn btn-sm {% if type.key == default_customer_type %}btn-cf-primary{% else %}btn-cf-outline{% endif %}"
+                data-ct="{{ type.key }}" onclick="selectCustType(this)">
+          <i class="bi {{ type.icon }}"></i>{{ type.label }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="pos-cart-body" id="cartBody">
+      <div class="pos-empty" id="emptyState">
+        <i class="bi bi-cart3" style="font-size:40px;margin-bottom:8px;opacity:.3;"></i>
+        Tap products to add
+      </div>
+    </div>
+
+    <div class="pos-cart-ft">
+      <input type="text" id="custName" placeholder="Customer name (optional)"
+             class="form-control form-control-sm mb-2">
+      <input type="tel" id="custPhone" placeholder="Phone (optional)"
+             class="form-control form-control-sm mb-2">
+
+      <!-- Payment type -->
+      <div class="pos-payment-grid" id="payBtns">
+        {% for val, lbl in payment_choices %}
+        <button type="button"
+                class="pay-btn btn btn-sm {% if forloop.first %}btn-cf-primary{% else %}btn-cf-outline{% endif %}"
+                data-pt="{{ val }}"
+                onclick="selectPay(this)">{{ lbl }}</button>
+        {% endfor %}
+      </div>
+
+      <div class="pos-bill-row">
+        <span>Subtotal</span>
+        <strong id="baseAmt">Rs.0.00</strong>
+      </div>
+      <div id="cardFeeRow" class="pos-bill-row" hidden>
+        <span>Card fee ({{ card_fee_percent|floatformat:2 }}%)</span>
+        <strong id="cardFeeAmt">Rs.0.00</strong>
+      </div>
+      <div id="cardFeeNote" class="pos-card-fee-note" hidden>Card fee applies only when Card is selected in POS.</div>
+
+      <div class="pos-total-row">
+        <span class="pos-total-label">Customer pays</span>
+        <span id="totalAmt"
+              style="font-family:'Rajdhani',sans-serif;font-size:30px;font-weight:700;color:var(--cf-red);">₹0.00</span>
+      </div>
+
+      <button id="placeBtn" onclick="placeOrder()" disabled
+              style="width:100%;background:var(--cf-navy);color:white;border:none;
+                     border-radius:8px;padding:13px;font-family:'Rajdhani',sans-serif;
+                     font-size:18px;font-weight:700;cursor:pointer;letter-spacing:.5px;
+                     transition:background .2s,opacity .2s;opacity:.5;">
+        <i class="bi bi-check-circle me-2"></i>PLACE ORDER
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Receipt Modal ── -->
+<div class="modal fade" id="receiptModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"
+           style="background:var(--cf-navy);color:white;border:none;padding:14px 18px;">
+        <h6 class="modal-title"
+            style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;margin:0;">
+          ✅ Order Placed!
+        </h6>
+      </div>
+      <div class="modal-body text-center py-3">
+        <div style="font-family:'Rajdhani',sans-serif;font-size:24px;font-weight:700;
+                    color:var(--cf-navy);" id="modalOrderNum"></div>
+        <div style="font-size:14px;color:var(--cf-muted);margin-top:4px;">
+          Total: <strong id="modalTotal" style="color:var(--cf-blue);"></strong>
+        </div>
+      </div>
+      <div class="modal-footer justify-content-center gap-2 border-0 pt-0">
+        <!-- BUG 2 FIX: Old code opened /pos/receipt/<id>/ in a new tab — that tab has
+             no access to the parent page's btDevice/btChar and is a standalone HTML page
+             with no BT system. Print via BT directly from here using printKOT(). -->
+        <button class="btn btn-cf-primary btn-sm" onclick="terminalPrint(lastOrderId)">
+          <i class="bi bi-printer me-1"></i>Print
+        </button>
+        <button class="btn btn-cf-outline btn-sm" onclick="startNewOrder()">
+          New Order
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ pos_prices|json_script:"posProductPrices" }}
+{{ pos_customer_types|json_script:"posCustomerTypes" }}
+<script>
+// ── Price data (server-rendered, keyed by product pk as string) ──
+const POS_PRICES = JSON.parse(document.getElementById('posProductPrices').textContent);
+const POS_CUSTOMER_TYPES = JSON.parse(document.getElementById('posCustomerTypes').textContent);
+const PRICE_KEY_BY_TYPE = POS_CUSTOMER_TYPES.reduce((acc, item) => {
+  acc[item.key] = item.price_key;
+  return acc;
+}, {});
+
+// ── State ─────────────────────────────────────────────────────
+const cart = {};
+let paymentType  = {{ payment_choices.0.0 }};
+let customerType = '{{ default_customer_type|escapejs }}';   // 'staff' | 'visitor' | 'room_service'
+const PLACE_BTN_BASE_HTML = '<i class="bi bi-check-circle me-2"></i>PLACE ORDER';
+const CARD_PAYMENT_TYPE   = 2;
+const CARD_FEE_PERCENT    = parseFloat('{{ card_fee_percent|floatformat:2 }}') || 0;
+let activeModal  = null;
+let lastOrderId  = null;
+
+// ── CSRF ──────────────────────────────────────────────────────
+function getCsrf() {
+  const m = document.cookie.match(/csrftoken=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
+// ── Product filter ────────────────────────────────────────────
+let activeCat = '__all__';
+function filterCat(cat, btn) {
+  activeCat = cat;
+  document.querySelectorAll('#catTabs button').forEach(b => b.classList.remove('active-cat','btn-cf-primary'));
+  document.querySelectorAll('#catTabs button').forEach(b => { if (!b.classList.contains('active-cat')) b.classList.add('btn-cf-outline'); });
+  btn.classList.add('active-cat','btn-cf-primary');
+  btn.classList.remove('btn-cf-outline');
+  applyFilters();
+}
+function filterProducts(q) { applyFilters(q); }
+function applyFilters(q) {
+  q = (q || document.getElementById('searchBox')?.value || '').toLowerCase().trim();
+  document.querySelectorAll('#productGrid .pos-btn').forEach(btn => {
+    const nameMatch = !q || btn.dataset.name.includes(q);
+    const catMatch  = activeCat === '__all__' || btn.dataset.cat === activeCat;
+    const typeMatch = btn.dataset.src !== 'menu' || menuSupportsType(btn.id.replace('pbtn-menu-', ''), customerType);
+    btn.style.display = (nameMatch && catMatch && typeMatch) ? '' : 'none';
+  });
+}
+
+// ── Customer type ─────────────────────────────────────────────
+function menuSupportsType(pkStr, type) {
+  const available = POS_PRICES[pkStr]?.available || [];
+  return available.includes(type);
+}
+
+function _menuPriceForType(pkStr, type = customerType) {
+  const p = POS_PRICES[pkStr] || {v: 0, s: 0, r: 0, available: []};
+  if (!menuSupportsType(pkStr, type)) return 0;
+  const priceKey = PRICE_KEY_BY_TYPE[type] || 's';
+  return Number(p[priceKey] || 0);
+}
+
+function selectCustType(btn) {
+  customerType = btn.dataset.ct;
+  document.querySelectorAll('.cust-type-btn').forEach(b => {
+    b.classList.remove('btn-cf-primary');
+    b.classList.add('btn-cf-outline');
+  });
+  btn.classList.remove('btn-cf-outline');
+  btn.classList.add('btn-cf-primary');
+
+  // Update price shown on each menu product card
+  document.querySelectorAll('#productGrid .pos-btn[data-src="menu"]').forEach(card => {
+    const priceEl = card.querySelector('.pprice');
+    if (!priceEl) return;
+    const pk = card.id.replace('pbtn-menu-', '');
+    priceEl.textContent = '₹' + _menuPriceForType(pk).toFixed(2);
+  });
+
+  Object.keys(cart).forEach(key => {
+    const item = cart[key];
+    if ((item.src || 'pos') === 'menu' && !menuSupportsType(String(item.id), customerType)) {
+      delete cart[key];
+    }
+  });
+  applyFilters();
+
+  // Re-render cart so line totals update for items already added
+  renderCart();
+}
+
+// Returns the effective unit price for a cart item given current customerType
+function getActivePrice(item) {
+  if (item.src !== 'menu') return item.price;  // POS-only: single price
+  return _menuPriceForType(String(item.id)) || 0;
+}
+
+// ── Cart operations ───────────────────────────────────────────
+// Menu products: prices come from POS_PRICES (no price args).
+// POS-only products: single price passed as posPrice arg.
+function getItemLimits(src, id) {
+  if (src !== 'menu') return { min: 1, max: Number.MAX_SAFE_INTEGER };
+  const card = document.getElementById('pbtn-menu-' + id);
+  const min = Math.max(1, parseInt(card?.dataset.minQty || '1', 10) || 1);
+  const maxRaw = parseInt(card?.dataset.maxQty || String(Number.MAX_SAFE_INTEGER), 10);
+  const max = Number.isFinite(maxRaw) && maxRaw > 0 ? maxRaw : Number.MAX_SAFE_INTEGER;
+  return { min, max };
+}
+
+function clampCartQty(src, id, qty, name) {
+  const limits = getItemLimits(src, id);
+  if (qty > limits.max) {
+    alert(`${name} allows maximum ${limits.max} per order.`);
+    return limits.max;
+  }
+  if (qty > 0 && qty < limits.min) {
+    alert(`${name} requires minimum ${limits.min} per order.`);
+    return limits.min;
+  }
+  return qty;
+}
+
+function addItem(compositeId, name, posPrice) {
+  const [src, rawId] = compositeId.split('_');
+  const id  = parseInt(rawId);
+  const key = compositeId;
+  if (src === 'menu' && !menuSupportsType(String(id), customerType)) {
+    alert(`${name} is not available for this customer type.`);
+    return;
+  }
+  if (cart[key]) {
+    const nextQty = clampCartQty(src, id, cart[key].qty + 1, name);
+    if (nextQty <= cart[key].qty) return;
+    cart[key].qty = nextQty;
+  } else {
+    const limits = getItemLimits(src, id);
+    if (limits.max < limits.min) {
+      alert(`${name} is not available in the required minimum quantity.`);
+      return;
+    }
+    if (src === 'menu') {
+      cart[key] = { id, src, name, qty: limits.min };
+    } else {
+      // Legacy POS-only product — single price for all customer types
+      cart[key] = { id, src, name, price: parseFloat(posPrice || 0), qty: 1 };
+    }
+  }
+  renderCart();
+}
+
+function setQty(key, newQty) {
+  if (!cart[key]) return;
+  if (newQty <= 0) {
+    delete cart[key];
+  } else {
+    cart[key].qty = clampCartQty(cart[key].src || 'pos', cart[key].id, newQty, cart[key].name);
+  }
+  renderCart();
+}
+
+function setQtyFromInput(key, input) {
+  if (!cart[key]) return;
+  const raw = String(input?.value || '').trim();
+  if (!raw) {
+    input.value = cart[key].qty;
+    return;
+  }
+  const nextQty = parseInt(raw, 10);
+  if (!Number.isFinite(nextQty)) {
+    input.value = cart[key].qty;
+    return;
+  }
+  setQty(key, nextQty);
+}
+
+function qtyInputKeydown(event, key) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    setQtyFromInput(key, event.currentTarget);
+    event.currentTarget.blur();
+  }
+}
+
+function clearAll() {
+  Object.keys(cart).forEach(k => delete cart[k]);
+  renderCart();
+}
+
+function startNewOrder() {
+  if (activeModal) activeModal.hide();
+  clearAll();
+  document.getElementById('custName').value  = '';
+  document.getElementById('custPhone').value = '';
+}
+
+// ── Render ────────────────────────────────────────────────────
+function renderCart() {
+  const body     = document.getElementById('cartBody');
+  const placeBtn = document.getElementById('placeBtn');
+  const items    = Object.values(cart);
+
+  // Sync product button badges
+  document.querySelectorAll('.pos-btn').forEach(btn => {
+    const src   = btn.dataset.src || 'pos';
+    const rawId = btn.id.replace('pbtn-' + src + '-', '');
+    const key   = src + '_' + rawId;
+    const badge = document.getElementById('qty-badge-' + src + '-' + rawId);
+    if (cart[key]) {
+      btn.classList.add('in-cart');
+      if (badge) { badge.textContent = cart[key].qty; badge.style.display = 'flex'; }
+    } else {
+      btn.classList.remove('in-cart');
+      if (badge) badge.style.display = 'none';
+    }
+  });
+
+  const frag = document.createDocumentFragment();
+
+  if (items.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'pos-empty';
+    empty.innerHTML = `<i class="bi bi-cart3" style="font-size:40px;margin-bottom:8px;opacity:.3;"></i>Tap products to add`;
+    frag.appendChild(empty);
+    updateDisplayedTotal(0);
+    placeBtn.disabled = true;
+    placeBtn.style.opacity = '0.5';
+  } else {
+    let total = 0;
+    items.forEach(item => {
+      const key           = (item.src || 'pos') + '_' + item.id;
+      const unitPrice     = getActivePrice(item);
+      const line          = unitPrice * item.qty;
+      total += line;
+      const row = document.createElement('div');
+      row.className    = 'pos-cart-item';
+      row.dataset.itemId = item.id;
+      row.innerHTML = `
+        <div class="iname">${escHtml(item.name)}<br>
+          <span style="font-size:11px;color:var(--cf-muted);">₹${unitPrice.toFixed(2)} each</span>
+        </div>
+        <button class="qbtn qbtn-minus" ${item.qty <= getItemLimits(item.src || 'pos', item.id).min ? 'disabled' : ''} onclick="setQty('${key}', ${item.qty - 1})">−</button>
+        <input class="qty-input" type="number" inputmode="numeric"
+               min="${getItemLimits(item.src || 'pos', item.id).min}"
+               max="${getItemLimits(item.src || 'pos', item.id).max}"
+               value="${item.qty}"
+               aria-label="Quantity for ${escHtml(item.name)}"
+               onchange="setQtyFromInput('${key}', this)"
+               onkeydown="qtyInputKeydown(event, '${key}')">
+        <button class="qbtn qbtn-plus" ${item.qty >= getItemLimits(item.src || 'pos', item.id).max ? 'disabled' : ''} onclick="setQty('${key}', ${item.qty + 1})">+</button>
+        <span class="iprice">₹${line.toFixed(2)}</span>
+        <button class="qbtn-del" onclick="setQty('${key}', 0)" title="Remove">✕</button>
+      `;
+      frag.appendChild(row);
+    });
+    updateDisplayedTotal(total);
+    placeBtn.disabled = false;
+    placeBtn.style.opacity = '1';
+  }
+
+  body.innerHTML = '';
+  body.appendChild(frag);
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Payment type ──────────────────────────────────────────────
+function calculateCardFee(baseTotal) {
+  if (paymentType !== CARD_PAYMENT_TYPE || !CARD_FEE_PERCENT || baseTotal <= 0) return 0;
+  return Math.round((baseTotal * CARD_FEE_PERCENT / 100) * 100) / 100;
+}
+
+function updateDisplayedTotal(baseTotal) {
+  const fee      = calculateCardFee(baseTotal);
+  const total    = baseTotal + fee;
+  const feeRow   = document.getElementById('cardFeeRow');
+  const feeNote  = document.getElementById('cardFeeNote');
+  const feeAmt   = document.getElementById('cardFeeAmt');
+  const baseAmt  = document.getElementById('baseAmt');
+  const totalAmt = document.getElementById('totalAmt');
+  const showCardFee = paymentType === CARD_PAYMENT_TYPE;
+  if (baseAmt)  baseAmt.textContent  = 'Rs.' + baseTotal.toFixed(2);
+  if (feeRow)   feeRow.hidden = !showCardFee;
+  if (feeNote)  feeNote.hidden = !showCardFee;
+  if (feeAmt)   feeAmt.textContent   = 'Rs.' + fee.toFixed(2);
+  if (totalAmt) totalAmt.textContent = 'Rs.' + total.toFixed(2);
+  const placeBtn = document.getElementById('placeBtn');
+  if (placeBtn) {
+    placeBtn.innerHTML = itemsInCartCount()
+      ? (PLACE_BTN_BASE_HTML + ' · Rs.' + total.toFixed(2))
+      : PLACE_BTN_BASE_HTML;
+  }
+}
+
+function itemsInCartCount() { return Object.keys(cart).length; }
+
+function selectPay(btn) {
+  paymentType = parseInt(btn.dataset.pt);
+  document.querySelectorAll('.pay-btn').forEach(b => {
+    b.classList.remove('btn-cf-primary');
+    b.classList.add('btn-cf-outline');
+  });
+  btn.classList.remove('btn-cf-outline');
+  btn.classList.add('btn-cf-primary');
+  renderCart();
+}
+
+// ── Place order ───────────────────────────────────────────────
+function placeOrder() {
+  const items = Object.values(cart);
+  if (!items.length) return;
+
+  const btn = document.getElementById('placeBtn');
+  btn.disabled = true;
+  btn.style.opacity = '0.7';
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Processing…';
+
+  const payload = {
+    customer_name:  document.getElementById('custName').value.trim() || 'Walk-in Customer',
+    customer_email: '',
+    customer_phone: document.getElementById('custPhone').value.trim(),
+    customer_type:  customerType,
+    payment_type:   paymentType,
+    company_id:     {{ company.pk }},
+    items: items.map(i => ({ id: i.id, qty: i.qty, src: i.src || 'pos' })),
+  };
+
+  fetch('{% url "pos:place_order" %}', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+    body: JSON.stringify(payload),
+  })
+  .then(r => r.json().then(d => ({ ok: r.ok, status: r.status, d })))
+  .then(({ ok, status, d }) => {
+    btn.innerHTML = PLACE_BTN_BASE_HTML;
+    btn.disabled  = false;
+    btn.style.opacity = '1';
+    if (d.success) {
+      lastOrderId = d.order_id;
+      document.getElementById('modalOrderNum').textContent = '#' + String(d.order_number || '').replace(/^([A-Za-z]+)-(\d{6}|\d{8})-(.+)$/, '$1-$3');
+      document.getElementById('modalTotal').textContent    = '₹' + parseFloat(d.total).toFixed(2);
+      activeModal = new bootstrap.Modal(document.getElementById('receiptModal'));
+      activeModal.show();
+    } else {
+      alert('Order failed: ' + (d.error || ('Server error ' + status)));
+    }
+  })
+  .catch(err => {
+    btn.innerHTML = PLACE_BTN_BASE_HTML;
+    btn.disabled  = false;
+    btn.style.opacity = '1';
+    alert('Failed to place order. Please try again.\n' + err.message);
+  });
+}
+
+// ── Init: set correct prices on all menu cards after page load ───
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('#productGrid .pos-btn[data-src="menu"]').forEach(card => {
+    const priceEl = card.querySelector('.pprice');
+    if (!priceEl) return;
+    const pk = card.id.replace('pbtn-menu-', '');
+    priceEl.textContent = '₹' + _menuPriceForType(pk).toFixed(2);
+  });
+  applyFilters();
+  updateDisplayedTotal(0);
+});
+
+// ── BUG 2 FIX: Print via Bluetooth directly — no new tab, no separate page ──
+// Fetches KOT JSON from /pos/kot/<id>/ then calls the global printKOT()
+// defined in dashboard_base.html (BT → ESC/POS, fallback → hidden iframe).
+async function terminalPrint(orderId) {
+  if (!orderId) return;
+  const printBtn = document.querySelector('#receiptModal .btn-cf-primary');
+  if (printBtn) { printBtn.disabled = true; printBtn.textContent = '⏳ Printing…'; }
+  try {
+    const resp = await fetch(`{% url 'pos:terminal_kot_data' 0 %}`.replace('/0/', '/' + orderId + '/'), {
+      headers: { 'X-CSRFToken': getCsrf(), 'X-Requested-With': 'XMLHttpRequest' }
+    });
+    const ct = resp.headers.get('Content-Type') || '';
+    if (!ct.includes('application/json')) {
+      throw new Error(resp.redirected || resp.url.includes('/auth/login')
+        ? 'Session expired — please refresh the page and log in again.'
+        : 'Unexpected server response (HTTP ' + resp.status + ')');
+    }
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Server error ' + resp.status);
+    await window.printKOT(data, 'POS ORDER RECEIPT', 'kotPrintFrame');
+  } catch (e) {
+    alert('Print failed: ' + e.message);
+  } finally {
+    if (printBtn) { printBtn.disabled = false; printBtn.innerHTML = '<i class="bi bi-printer me-1"></i>Print'; }
+  }
+}
+</script>
+{% endblock %}

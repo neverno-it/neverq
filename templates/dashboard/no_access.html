@@ -1,0 +1,25 @@
+{% extends "base/dashboard_base.html" %}
+
+{% block content %}
+<div class="cf-card" style="max-width:760px;margin:20px auto;">
+  <div class="cf-card-body" style="padding:32px;">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
+      <div style="width:52px;height:52px;border-radius:12px;background:var(--cf-red-light);color:var(--cf-red);display:grid;place-items:center;font-size:22px;">
+        <i class="bi bi-shield-lock"></i>
+      </div>
+      <div>
+        <h3 style="margin:0;font-family:'Rajdhani',sans-serif;color:var(--cf-navy);">No Access Assigned</h3>
+        <div class="text-muted" style="font-size:13px;">Your account can sign in, but no dashboard pages have been assigned yet.</div>
+      </div>
+    </div>
+
+    <div class="alert alert-warning" style="margin-top:16px;">
+      Please ask Super Admin to assign at least one dashboard menu/page to your account.
+    </div>
+
+    <div style="font-size:13px;color:var(--cf-muted);">
+      Once access is assigned, sign out and sign in again to load your dashboard.
+    </div>
+  </div>
+</div>
+{% endblock %}

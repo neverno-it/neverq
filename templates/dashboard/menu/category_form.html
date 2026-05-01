@@ -1,0 +1,339 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  .schedule-row { display:flex; gap:8px; align-items:center; margin-bottom:8px; background:var(--cf-surface); border:1px solid var(--cf-border); border-radius:var(--cf-radius-sm); padding:8px 10px; }
+  .schedule-row select, .schedule-row input[type=time] { font-size:13px; padding:5px 8px; border:1px solid var(--cf-border); border-radius:6px; background:#fff; }
+  .schedule-row select { min-width:110px; }
+  .schedule-row .btn-remove { border:none; background:#fef2f2; color:var(--cf-red); border-radius:6px; padding:4px 10px; font-size:13px; cursor:pointer; flex-shrink:0; }
+  .schedule-row .btn-remove:hover { background:#fecaca; }
+  #add-schedule-btn { font-size:13px; }
+  .site-schedule-card { border:1px solid var(--cf-border); border-radius:10px; background:#fff; padding:12px; margin-top:10px; }
+  .site-schedule-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; }
+  .site-schedule-title { font-weight:700; color:var(--cf-blue); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .site-schedule-body[hidden] { display:none !important; }
+  .site-day-grid { display:flex; flex-wrap:wrap; gap:7px; margin:8px 0 10px; }
+  .site-day-pill { display:flex; align-items:center; gap:5px; border:1px solid var(--cf-border); background:#f8fafc; border-radius:999px; padding:6px 10px; font-size:12px; font-weight:700; cursor:pointer; }
+  .site-day-pill input { accent-color:var(--cf-blue); }
+</style>
+{% endblock %}
+{% block content %}
+<div style="max-width:920px;">
+  <div class="cf-card">
+    <div class="cf-card-header">
+      <h5><i class="bi bi-grid-3x3-gap me-2 text-blue"></i>{{ page_title }}</h5>
+      <a href="{% url 'dashboard:category_list' %}" class="btn btn-cf-outline btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back
+      </a>
+    </div>
+    <div class="cf-card-body">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="return_to" value="{{ request.GET.return_to|default:'' }}">
+        <input type="hidden" name="return_anchor" value="{{ request.GET.return_anchor|default:'' }}">
+        <input type="hidden" name="parent_id" value="{{ category.parent_id|default:'' }}">
+        <input type="hidden" name="icon_type" value="{{ category.icon_type|default:'0' }}">
+        <div class="row g-3">
+
+          <div class="col-12">
+            <label class="form-label">Category Name *</label>
+            <input type="text" name="name" class="form-control" required
+                   value="{{ category.name|default:'' }}" placeholder="e.g. The Brunch">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Sort Order</label>
+            <input type="number" name="position_order" class="form-control"
+                   value="{{ category.position_order|default:'0' }}">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Preparation Time (minutes)</label>
+            <input type="number" min="0" name="preparation_time_minutes" class="form-control"
+                   value="{% if request.method == 'POST' %}{{ request.POST.preparation_time_minutes|default:'0' }}{% elif category %}{{ category.preparation_time_minutes|default:'0' }}{% else %}0{% endif %}">
+            <small class="text-muted">If &gt; 0, orders auto-become READY after this many minutes. 0 = manual.</small>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Status</label>
+            <div class="form-check form-switch mt-2">
+              <input class="form-check-input" type="checkbox" name="is_active" id="isActive"
+                     {% if not category or category.is_active %}checked{% endif %}
+                     style="width:44px;height:22px;cursor:pointer;">
+              <label class="form-check-label" for="isActive">Active</label>
+            </div>
+          </div>
+
+          {# ── Multi-slot Schedule Windows ───────────────────── #}
+          <div class="col-12">
+            <label class="form-label">
+              <i class="bi bi-clock me-1 text-primary"></i>
+              Availability Time Windows
+              <small class="text-muted fw-normal">(add multiple slots per day if needed)</small>
+            </label>
+            <div id="schedule-rows">
+              {# Existing schedule rows (edit mode) #}
+              {% for sched in existing_schedules %}
+              <div class="schedule-row">
+                <select name="window_day_{{ forloop.counter0 }}">
+                  {% for abbr, label in weekday_choices %}
+                  <option value="{{ abbr }}" {% if sched.day == abbr %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                  <option value="All" {% if sched.day == 'All' %}selected{% endif %}>All Days</option>
+                </select>
+                <input type="time" name="window_start_{{ forloop.counter0 }}" value="{{ sched.start }}" required>
+                <span style="color:var(--cf-muted);font-size:13px;">to</span>
+                <input type="time" name="window_end_{{ forloop.counter0 }}" value="{{ sched.end }}" required>
+                <button type="button" class="btn-remove" onclick="removeScheduleRow(this)">✕</button>
+              </div>
+              {% endfor %}
+            </div>
+            <button type="button" id="add-schedule-btn" class="btn btn-cf-outline btn-sm mt-2" onclick="addScheduleRow()">
+              <i class="bi bi-plus-circle me-1"></i>Add Time Window
+            </button>
+            <div class="small text-muted mt-1">
+              Leave empty for all-day availability. Add one row per slot (e.g. Mon 08:00–11:00, Mon 15:00–17:00).
+            </div>
+          </div>
+
+          {# ── Day-of-week scheduling ─────────────────────────── #}
+          <div class="col-12">
+            <label class="form-label">
+              <i class="bi bi-calendar-week me-1 text-primary"></i>
+              Available Days
+              <small class="text-muted fw-normal">(leave all unchecked = every day)</small>
+            </label>
+            <div class="d-flex flex-wrap gap-2 mt-1">
+              {% for abbr, label in weekday_choices %}
+              <label class="d-flex align-items-center gap-1 px-3 py-2 rounded-3 border"
+                     style="cursor:pointer;font-size:13px;font-weight:600;background:#f8f9fa;">
+                <input type="checkbox" name="open_days" value="{{ abbr }}"
+                       {% if abbr in category_open_days %}checked{% endif %}
+                       style="accent-color:#1565c0;">
+                {{ label }}
+              </label>
+              {% endfor %}
+            </div>
+            <small class="text-muted">Category will only appear in the menu on the selected days.</small>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Tagline / Description</label>
+            <input type="text" name="tagline" class="form-control"
+                   value="{{ category.tagline|default:'' }}"
+                   placeholder="Short tagline shown under category name">
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Companies (which companies see this category)</label>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;background:var(--cf-surface);border-radius:var(--cf-radius-sm);border:1px solid var(--cf-border);">
+              {% for co in companies %}
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13.5px;background:white;padding:6px 12px;border-radius:20px;border:1px solid var(--cf-border);">
+                <input type="checkbox" name="companies" value="{{ co.pk }}"
+                       {% if co.pk in selected_companies|default:'' %}checked{% endif %}
+                       style="accent-color:var(--cf-blue);">
+                {{ co.name }}
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          {% if category_site_availability %}
+          <div class="col-12">
+            <label class="form-label">
+              <i class="bi bi-calendar-check me-1 text-primary"></i>
+              Site-Specific Availability
+              <small class="text-muted fw-normal">(optional)</small>
+            </label>
+            <div class="small text-muted">Turn on custom availability only for sites that should use different days or time windows from the shared schedule above.</div>
+            {% for site in category_site_availability %}
+            <div class="site-schedule-card">
+              <input type="hidden" name="site_schedule_company_ids" value="{{ site.company.pk }}">
+              <div class="site-schedule-head">
+                <div class="site-schedule-title">{{ site.company.name }}</div>
+                <div class="form-check form-switch m-0">
+                  <input class="form-check-input site-schedule-toggle" type="checkbox"
+                         name="site_schedule_enabled_{{ site.company.pk }}"
+                         id="siteScheduleEnabled{{ site.company.pk }}"
+                         data-site-schedule="{{ site.company.pk }}"
+                         {% if site.use_custom %}checked{% endif %}
+                         style="width:42px;height:21px;cursor:pointer;">
+                  <label class="form-check-label" for="siteScheduleEnabled{{ site.company.pk }}">Custom availability</label>
+                </div>
+              </div>
+              <div class="site-schedule-body" data-site-schedule-body="{{ site.company.pk }}" {% if not site.use_custom %}hidden{% endif %}>
+                <div class="small text-muted">Leave days unchecked for every day. Leave time windows empty for all-day availability.</div>
+                <div class="site-day-grid">
+                  {% for abbr, label in weekday_choices %}
+                  <label class="site-day-pill">
+                    <input type="checkbox" name="site_open_days_{{ site.company.pk }}" value="{{ abbr }}" {% if abbr in site.open_days %}checked{% endif %}>
+                    {{ abbr }}
+                  </label>
+                  {% endfor %}
+                </div>
+                <div id="site-schedule-rows-{{ site.company.pk }}">
+                  {% for sched in site.schedules %}
+                  <div class="schedule-row" data-site-schedule-row="{{ site.company.pk }}">
+                    <select name="site_window_day_{{ site.company.pk }}_{{ forloop.counter0 }}">
+                      {% for abbr, label in weekday_choices %}
+                      <option value="{{ abbr }}" {% if sched.day == abbr %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                      <option value="All" {% if sched.day == 'All' %}selected{% endif %}>All Days</option>
+                    </select>
+                    <input type="time" name="site_window_start_{{ site.company.pk }}_{{ forloop.counter0 }}" value="{{ sched.start }}">
+                    <span style="color:var(--cf-muted);font-size:13px;">to</span>
+                    <input type="time" name="site_window_end_{{ site.company.pk }}_{{ forloop.counter0 }}" value="{{ sched.end }}">
+                    <button type="button" class="btn-remove" onclick="removeSiteScheduleRow(this, '{{ site.company.pk }}')">x</button>
+                  </div>
+                  {% endfor %}
+                </div>
+                <button type="button" class="btn btn-cf-outline btn-sm mt-1" onclick="addSiteScheduleRow('{{ site.company.pk }}')">
+                  <i class="bi bi-plus-circle me-1"></i>Add Site Time Window
+                </button>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+
+          <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-cf-primary">
+              <i class="bi bi-check-circle me-1"></i>{{ action }} Category
+            </button>
+            <a href="{% url 'dashboard:category_list' %}" class="btn btn-cf-outline">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Multi-slot schedule rows ──────────────────────────────────
+let scheduleRowCount = {{ existing_schedules|length|default:0 }};
+
+const DAY_OPTIONS = [
+  {% for abbr, label in weekday_choices %}['{{ abbr }}', '{{ label }}'],{% endfor %}
+  ['All', 'All Days']
+];
+
+function buildDayOptions(selectedDay) {
+  return DAY_OPTIONS.map(([v, l]) =>
+    `<option value="${v}"${v === selectedDay ? ' selected' : ''}>${l}</option>`
+  ).join('');
+}
+
+function addScheduleRow(day='Mon', start='', end='') {
+  const idx = scheduleRowCount++;
+  const row = document.createElement('div');
+  row.className = 'schedule-row';
+  row.innerHTML = `
+    <select name="window_day_${idx}">${buildDayOptions(day)}</select>
+    <input type="time" name="window_start_${idx}" value="${start}">
+    <span style="color:var(--cf-muted);font-size:13px;">to</span>
+    <input type="time" name="window_end_${idx}" value="${end}">
+    <button type="button" class="btn-remove" onclick="removeScheduleRow(this)">✕</button>
+  `;
+  document.getElementById('schedule-rows').appendChild(row);
+}
+
+function removeScheduleRow(btn) {
+  btn.closest('.schedule-row').remove();
+  // Re-index all rows so names stay sequential
+  document.querySelectorAll('#schedule-rows .schedule-row').forEach((row, i) => {
+    row.querySelector('select').name        = `window_day_${i}`;
+    row.querySelectorAll('input[type=time]')[0].name = `window_start_${i}`;
+    row.querySelectorAll('input[type=time]')[1].name = `window_end_${i}`;
+  });
+  scheduleRowCount = document.querySelectorAll('#schedule-rows .schedule-row').length;
+}
+
+const siteScheduleRowCounts = {
+  {% for site in category_site_availability %}'{{ site.company.pk }}': {{ site.schedules|length|default:0 }},{% endfor %}
+};
+
+function setSiteScheduleVisible(siteId, visible) {
+  const body = document.querySelector(`[data-site-schedule-body="${siteId}"]`);
+  if (body) body.hidden = !visible;
+}
+
+document.querySelectorAll('.site-schedule-toggle').forEach((toggle) => {
+  toggle.addEventListener('change', () => setSiteScheduleVisible(toggle.dataset.siteSchedule, toggle.checked));
+});
+
+function reindexSiteScheduleRows(siteId) {
+  const rows = document.querySelectorAll(`#site-schedule-rows-${siteId} .schedule-row`);
+  rows.forEach((row, i) => {
+    row.querySelector('select').name = `site_window_day_${siteId}_${i}`;
+    row.querySelectorAll('input[type=time]')[0].name = `site_window_start_${siteId}_${i}`;
+    row.querySelectorAll('input[type=time]')[1].name = `site_window_end_${siteId}_${i}`;
+  });
+  siteScheduleRowCounts[siteId] = rows.length;
+}
+
+function addSiteScheduleRow(siteId, day='Mon', start='', end='') {
+  const rows = document.getElementById(`site-schedule-rows-${siteId}`);
+  if (!rows) return;
+  const idx = siteScheduleRowCounts[siteId] || 0;
+  siteScheduleRowCounts[siteId] = idx + 1;
+  const row = document.createElement('div');
+  row.className = 'schedule-row';
+  row.dataset.siteScheduleRow = siteId;
+  row.innerHTML = `
+    <select name="site_window_day_${siteId}_${idx}">${buildDayOptions(day)}</select>
+    <input type="time" name="site_window_start_${siteId}_${idx}" value="${start}">
+    <span style="color:var(--cf-muted);font-size:13px;">to</span>
+    <input type="time" name="site_window_end_${siteId}_${idx}" value="${end}">
+    <button type="button" class="btn-remove" onclick="removeSiteScheduleRow(this, '${siteId}')">x</button>
+  `;
+  rows.appendChild(row);
+}
+
+function removeSiteScheduleRow(btn, siteId) {
+  btn.closest('.schedule-row').remove();
+  reindexSiteScheduleRows(siteId);
+}
+
+// ── Gallery helpers (unchanged) ───────────────────────────────
+</script>
+{% if perm_level %}
+<script>
+(function(){
+  var LVL="{{ perm_level }}";
+  var LOCKED=new Set({{ locked_names_json|safe }});
+  var form=document.querySelector('form[method="post"]');
+  if(form&&LVL!=="full_edit"){
+    var html=LVL==="view"
+      ?'<div class="alert alert-warning py-2 mb-3" style="border-radius:10px;"><i class="bi bi-eye-fill me-2"></i><strong>View-only access</strong> — you can see this record but cannot save changes.</div>'
+      :'<div class="alert alert-info py-2 mb-3" style="border-radius:10px;"><i class="bi bi-shield-lock me-2"></i><strong>Limited edit access</strong> — fields marked 🔒 cannot be modified.</div>';
+    form.insertAdjacentHTML("afterbegin",html);
+  }
+  if(LVL==="view"){
+    document.querySelectorAll('button[type="submit"]').forEach(function(b){b.style.display="none";});
+  }
+  if(LOCKED.size){
+    document.querySelectorAll("input,select,textarea").forEach(function(el){
+      if(!LOCKED.has(el.name))return;
+      el.disabled=true;el.style.background="#f8f9fa";el.style.cursor="not-allowed";el.style.opacity="0.7";
+      var c=el.closest('[class*="col-"]');
+      if(c){
+        var lb=c.querySelector("label");
+        if(lb&&!lb.querySelector(".flock"))lb.insertAdjacentHTML("beforeend",' <span class="flock" style="font-size:11px;" title="You do not have permission to edit this field">🔒</span>');
+      }
+    });
+    if(LOCKED.has("__schedule_windows__")){
+      document.querySelectorAll('[name^="window_day_"],[name^="window_start_"],[name^="window_end_"],[name^="site_schedule_enabled_"],[name^="site_open_days_"],[name^="site_window_day_"],[name^="site_window_start_"],[name^="site_window_end_"]').forEach(function(el){
+        el.disabled=true;el.style.background="#f8f9fa";el.style.cursor="not-allowed";el.style.opacity="0.7";
+      });
+      var ab=document.getElementById("add-schedule-btn");if(ab)ab.style.display="none";
+      document.querySelectorAll(".btn-remove,.site-schedule-card .btn-cf-outline").forEach(function(b){b.style.display="none";});
+    }
+    if(LOCKED.has("food_types")){
+      document.querySelectorAll(".food-type-pill").forEach(function(p){
+        p.style.pointerEvents="none";p.style.opacity="0.65";
+      });
+    }
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

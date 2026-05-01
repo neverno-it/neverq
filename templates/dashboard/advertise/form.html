@@ -1,0 +1,430 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  /* ── Image frame: customer portal banner ratio ─────────────── */
+  .frame-preview {
+    width: 100%;
+    max-height: 160px;
+    aspect-ratio: 62 / 33;
+    background: #F1F5F9;
+    border: 2px dashed var(--cf-border);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .frame-preview.is-hidden { display:none; }
+  .frame-preview img { width:100%; height:100%; object-fit:cover; display:block; }
+  .frame-hint { font-size:11px; color:var(--cf-muted); text-align:center; padding:12px; }
+  .frame-label {
+    position:absolute; top:6px; right:8px;
+    background:rgba(0,0,0,.45); color:white;
+    font-size:10px; font-weight:700; padding:2px 7px; border-radius:20px;
+  }
+  /* ── Site checkboxes ────────────────────────────────────── */
+  .site-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:6px; }
+  .site-check { display:flex; align-items:center; gap:7px; padding:7px 10px;
+    border:1.5px solid var(--cf-border); border-radius:6px; cursor:pointer;
+    transition:border-color .15s, background .15s; }
+  .site-check input[type=checkbox] { accent-color:var(--cf-blue); width:15px; height:15px; flex-shrink:0; }
+  .site-check:has(input:checked) { border-color:var(--cf-blue); background:var(--cf-blue-light); }
+  /* ── Holiday checkboxes ─────────────────────────────────── */
+  .holiday-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:6px; max-height:220px; overflow-y:auto; padding:2px; }
+  .hday-check { display:flex; align-items:center; gap:8px; padding:8px 10px;
+    border:1.5px solid var(--cf-border); border-radius:6px; cursor:pointer;
+    transition:border-color .15s; }
+  .hday-check input[type=checkbox] { accent-color:var(--cf-blue); width:15px; height:15px; flex-shrink:0; }
+  .hday-check:has(input:checked) { border-color:#E65100; background:#FFF8F0; }
+  .hday-date-badge { font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:700; color:var(--cf-blue); min-width:36px; }
+  /* ── Library picker ──────────────────────────────────────── */
+  .asset-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:8px; max-height:260px; overflow-y:auto; padding:4px; }
+  .asset-tile { position:relative; border:2.5px solid var(--cf-border); border-radius:7px; overflow:hidden; cursor:pointer; transition:border-color .15s; }
+  .asset-tile:hover { border-color:var(--cf-blue); }
+  .asset-tile.selected { border-color:var(--cf-blue); box-shadow:0 0 0 3px rgba(21,101,192,.18); }
+  .asset-tile img { width:100%; aspect-ratio:62/33; object-fit:cover; display:block; }
+  .asset-tile .asset-name { font-size:10px; font-weight:600; padding:3px 5px; color:var(--cf-navy); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .asset-tile .asset-check { position:absolute; top:4px; right:4px; width:18px; height:18px; border-radius:50%; background:var(--cf-blue); color:white; font-size:11px; display:none; align-items:center; justify-content:center; }
+  .asset-tile.selected .asset-check { display:flex; }
+  .tab-pill { padding:6px 16px; border-radius:20px; border:1.5px solid var(--cf-border); font-size:13px; font-weight:600; cursor:pointer; background:white; color:var(--cf-muted); transition:all .15s; }
+  .tab-pill.active { background:var(--cf-blue); border-color:var(--cf-blue); color:white; }
+  .duration-btn { padding:4px 12px; border-radius:6px; border:1.5px solid var(--cf-border); background:white; font-size:12px; font-weight:600; cursor:pointer; color:var(--cf-navy); transition:all .15s; }
+  .duration-btn:hover, .duration-btn.active { background:var(--cf-blue); border-color:var(--cf-blue); color:white; }
+</style>
+{% endblock %}
+
+{% block page_heading %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div style="max-width:760px;">
+  <div class="cf-card">
+    <div class="cf-card-header">
+      <h5><i class="bi bi-megaphone me-2 text-blue"></i>{{ page_title }}</h5>
+      <a href="{% url 'dashboard:advertise_list' %}" class="btn btn-cf-outline btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back
+      </a>
+    </div>
+    <div class="cf-card-body">
+
+      {% if request.user.role == 'pos' or request.user.role == 'admin' %}
+      <div class="alert alert-info mb-3" style="font-size:13px;">
+        <i class="bi bi-info-circle me-2"></i>
+        Your banner will be submitted for <strong>superadmin approval</strong> before going live.
+      </div>
+      {% endif %}
+
+      <form method="post" enctype="multipart/form-data" id="adForm">
+        {% csrf_token %}
+        <input type="hidden" name="return_to" value="{{ request.GET.return_to|default:'' }}">
+        <input type="hidden" name="return_anchor" value="{{ request.GET.return_anchor|default:'' }}">
+        <div class="row g-3">
+
+          <!-- ── Name + Order ─────────────────────────── -->
+          <div class="col-md-8">
+            <label class="form-label">Banner Title <span style="font-weight:400;color:var(--cf-muted);">(optional)</span></label>
+            <input type="text" name="name" class="form-control"
+                   value="{{ ad.name|default:'' }}" placeholder="e.g. Weekend Special Offer">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Display Order</label>
+            <input type="number" name="position_order" class="form-control" min="0"
+                   value="{{ ad.position_order|default:'0' }}">
+          </div>
+
+          <!-- ── Target Sites (multi-select checkboxes) ── -->
+          <div class="col-12">
+            <label class="form-label">
+              Run On Sites
+              <span style="font-weight:400;color:var(--cf-muted);">
+                (select all sites where this banner should appear)
+              </span>
+            </label>
+            {% if all_companies %}
+            <div class="site-grid">
+              {% for co in all_companies %}
+              <label class="site-check">
+                <input type="checkbox" name="companies" value="{{ co.pk }}"
+                  {% if ad and co in ad.companies.all %}checked
+                  {% elif not ad and request.user.company and co.pk == request.user.company.pk %}checked
+                  {% elif not ad and request.user.is_superadmin and forloop.first %}checked
+                  {% endif %}>
+                <span style="font-size:13px;font-weight:500;">{{ co.name }}</span>
+              </label>
+              {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted" style="font-size:13px;">No companies available.</p>
+            {% endif %}
+          </div>
+
+          <!-- ── Schedule ─────────────────────────────── -->
+          <div class="col-12">
+            <label class="form-label">
+              Date Schedule
+              <span style="font-weight:400;color:var(--cf-muted);">(leave blank = always on)</span>
+            </label>
+            <div class="row g-2 align-items-end">
+              <div class="col-md-5">
+                <label style="font-size:11px;color:var(--cf-muted);font-weight:600;text-transform:uppercase;">Start Date</label>
+                <input type="date" name="start_date" id="startDate" class="form-control"
+                       value="{{ ad.start_date|date:'Y-m-d'|default:'' }}">
+              </div>
+              <div class="col-md-5">
+                <label style="font-size:11px;color:var(--cf-muted);font-weight:600;text-transform:uppercase;">End Date</label>
+                <input type="date" name="end_date" id="endDate" class="form-control"
+                       value="{{ ad.end_date|date:'Y-m-d'|default:'' }}">
+              </div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap mt-2">
+              <span style="font-size:12px;color:var(--cf-muted);align-self:center;">Quick:</span>
+              <button type="button" class="duration-btn" onclick="setDuration(1)">1 Day</button>
+              <button type="button" class="duration-btn" onclick="setDuration(3)">3 Days</button>
+              <button type="button" class="duration-btn" onclick="setDuration(5)">5 Days</button>
+              <button type="button" class="duration-btn" onclick="setDuration(7)">1 Week</button>
+              <button type="button" class="duration-btn" onclick="setDuration(14)">2 Weeks</button>
+              <button type="button" class="duration-btn" onclick="setDuration(30)">1 Month</button>
+            </div>
+          </div>
+
+          <!-- ── Holiday Schedules ─────────────────────── -->
+          {% if holidays %}
+          <div class="col-12">
+            <label class="form-label">
+              National Holidays
+              <span style="font-weight:400;color:var(--cf-muted);">
+                (banner auto-activates every year on these dates)
+              </span>
+            </label>
+            <div class="holiday-grid">
+              {% for h in holidays %}
+              <label class="hday-check">
+                <input type="checkbox" name="holiday_schedules" value="{{ h.pk }}"
+                  {% if ad and h in ad.holiday_schedules.all %}checked{% endif %}>
+                <span class="hday-date-badge">{{ h.day }}/{{ h.month }}</span>
+                <span style="font-size:12px;font-weight:500;color:var(--cf-navy);">{{ h.name }}</span>
+              </label>
+              {% endfor %}
+            </div>
+            {% if not holidays %}
+            <p class="text-muted" style="font-size:12px;margin-top:6px;">
+              No holidays configured. <a href="{% url 'dashboard:holiday_list' %}">Add holidays →</a>
+            </p>
+            {% endif %}
+          </div>
+          {% endif %}
+
+          <!-- ── Banner Image ──────────────────────────── -->
+          <div class="col-12">
+            <label class="form-label">
+              Banner Image
+              <span style="font-weight:400;color:var(--cf-muted);">— required ratio for customer portal</span>
+            </label>
+
+            <!-- Image frame preview (620:330 aspect ratio) -->
+            <div class="frame-preview mb-2 {% if not ad or not ad.display_image %}is-hidden{% endif %}" id="framePreview">
+              <span class="frame-label">{{ banner_size_label|default:"1240 × 660 px" }}</span>
+              {% if ad and ad.display_image %}
+                <img src="{{ ad.display_image.url }}" id="frameImg" alt="">
+              {% else %}
+                <div class="frame-hint" id="frameHint">
+                  <i class="bi bi-image" style="font-size:32px;display:block;opacity:.3;"></i>
+                  Preview ({{ banner_size_label|default:"1240 × 660 px" }})
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="d-flex gap-2 mb-3">
+              {% if request.user.is_superadmin %}
+              <button type="button" class="tab-pill {% if not ad or not ad.media_asset_id %}active{% endif %}"
+                      onclick="switchTab('upload', this)" id="tabUploadBtn">
+                <i class="bi bi-upload me-1"></i>Upload New
+              </button>
+              {% else %}
+              <div class="alert alert-warning mb-0" style="font-size:12px;padding:6px 12px;flex:1;">
+                <i class="bi bi-lock me-1"></i>Images are uploaded by superadmin. Pick from library below.
+              </div>
+              {% endif %}
+              {% if assets %}
+              <button type="button"
+                      class="tab-pill {% if not request.user.is_superadmin or ad and ad.media_asset_id %}active{% endif %}"
+                      onclick="switchTab('library', this)" id="tabLibBtn">
+                <i class="bi bi-images me-1"></i>From Library
+                <span class="badge" style="background:var(--cf-blue);color:white;margin-left:4px;font-size:10px;">{{ assets|length }}</span>
+              </button>
+              {% endif %}
+            </div>
+
+            <!-- Upload tab (superadmin only) -->
+            {% if request.user.is_superadmin %}
+            <div id="tab-upload">
+              <input type="file" name="image" id="fileInput" class="form-control" accept="image/*"
+                     data-banner-width="{{ banner_width|default:'1240' }}"
+                     data-banner-height="{{ banner_height|default:'660' }}"
+                     onchange="previewUpload(this)">
+              <small class="text-muted d-block">Original banner size: {{ banner_size_label|default:"1240 x 660 px" }} or larger in the same ratio. Tiny export rounding is accepted.</small>
+              <small class="text-muted d-block">Local uploads are also saved into Media Library automatically.</small>
+              <small class="text-muted">Upload {{ banner_size_label|default:"1240 x 660 px" }} or any larger image in the same banner ratio so it fits the customer portal without cropping.</small>
+              <div id="bannerUploadMeta" style="font-size:12px;margin-top:6px;color:var(--cf-muted);"></div>
+            </div>
+            {% endif %}
+
+            <!-- Library tab -->
+            <div id="tab-library" {% if request.user.is_superadmin and not ad.media_asset_id %}style="display:none;"{% endif %}>
+              <input type="hidden" name="media_asset" id="mediaAssetInput"
+                     value="{{ ad.media_asset_id|default:'' }}">
+              <input type="hidden" name="clear_asset"   id="clearAssetFlag" value="0">
+              {% if assets %}
+              <div class="asset-grid" id="assetGrid">
+                {% for asset in assets %}
+                <div class="asset-tile {% if ad and ad.media_asset_id == asset.pk %}selected{% endif %}"
+                     data-pk="{{ asset.pk }}"
+                     onclick="selectAsset({{ asset.pk }}, '{{ asset.image.url }}', this)">
+                  <img src="{{ asset.image.url }}" alt="{{ asset.name }}">
+                  <div class="asset-name" title="{{ asset.name }}">{{ asset.name }}</div>
+                  <div class="asset-check"><i class="bi bi-check"></i></div>
+                </div>
+                {% endfor %}
+              </div>
+              <div id="selectedAssetInfo" style="margin-top:6px;font-size:12px;color:var(--cf-blue);font-weight:600;"></div>
+              <button type="button" onclick="clearAsset()"
+                      class="btn btn-sm btn-cf-outline mt-2" style="font-size:12px;">
+                <i class="bi bi-x me-1"></i>Clear selection
+              </button>
+              {% else %}
+              <div class="text-muted" style="font-size:13px;padding:10px 0;">
+                No images in library yet.
+                {% if request.user.is_superadmin %}
+                <a href="{% url 'dashboard:media_library' %}" target="_blank">Upload to library →</a>
+                {% else %}
+                Ask superadmin to upload images.
+                {% endif %}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- ── Active toggle ─────────────────────────── -->
+          <div class="col-12">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" name="is_active" id="isActive"
+                     {% if not ad or ad.is_active %}checked{% endif %}
+                     style="width:44px;height:22px;cursor:pointer;">
+              <label class="form-check-label" for="isActive">Active (show when live)</label>
+            </div>
+          </div>
+
+          <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-cf-primary">
+              <i class="bi bi-check-circle me-1"></i>{{ action }} Banner
+            </button>
+            <a href="{% url 'dashboard:advertise_list' %}" class="btn btn-cf-outline">Cancel</a>
+          </div>
+
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── Tab switching ─────────────────────────────────────────
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-pill').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const up  = document.getElementById('tab-upload');
+  const lib = document.getElementById('tab-library');
+  if (up)  up.style.display  = tab === 'upload'  ? '' : 'none';
+  if (lib) lib.style.display = tab === 'library' ? '' : 'none';
+  if (tab === 'upload') {
+    document.getElementById('mediaAssetInput').value = '';
+    document.getElementById('clearAssetFlag').value  = '1';
+    document.querySelectorAll('.asset-tile').forEach(t => t.classList.remove('selected'));
+    document.getElementById('selectedAssetInfo').textContent = '';
+  }
+}
+
+// ── Library picker ────────────────────────────────────────
+function selectAsset(pk, imgUrl, tile) {
+  document.querySelectorAll('.asset-tile').forEach(t => t.classList.remove('selected'));
+  tile.classList.add('selected');
+  document.getElementById('mediaAssetInput').value = pk;
+  document.getElementById('clearAssetFlag').value  = '0';
+  const info = tile.querySelector('.asset-name').textContent;
+  document.getElementById('selectedAssetInfo').textContent = '✓ Selected: ' + info;
+  // Update frame preview
+  setFrameImage(imgUrl);
+}
+
+function clearAsset() {
+  document.querySelectorAll('.asset-tile').forEach(t => t.classList.remove('selected'));
+  document.getElementById('mediaAssetInput').value = '';
+  document.getElementById('clearAssetFlag').value  = '1';
+  document.getElementById('selectedAssetInfo').textContent = '';
+  clearFramePreview();
+}
+
+// ── Upload preview + validation ───────────────────────────
+function showBannerMeta(message, isError=false) {
+  const el = document.getElementById('bannerUploadMeta');
+  if (!el) return;
+  el.textContent = message || '';
+  el.style.color = isError ? '#DC2626' : 'var(--cf-muted)';
+}
+
+function previewUpload(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  const reqW = parseInt(input.dataset.bannerWidth || '1240', 10);
+  const reqH = parseInt(input.dataset.bannerHeight || '660', 10);
+  const reader = new FileReader();
+
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const imageWidth = img.naturalWidth || img.width;
+      const imageHeight = img.naturalHeight || img.height;
+      const actualRatio = imageWidth / imageHeight;
+      const requiredRatio = reqW / reqH;
+      const ratioError = Math.abs(actualRatio - requiredRatio) / requiredRatio;
+      const sameRatio = ratioError <= 0.01;
+      const largeEnough = imageWidth >= reqW && imageHeight >= reqH;
+
+      if (!sameRatio) {
+        showBannerMeta(`Selected image is ${imageWidth} x ${imageHeight}px. Required ratio is ${reqW}:${reqH}. The server will reject it unless it is close to this ratio.`, true);
+        return;
+      }
+      if (!largeEnough) {
+        showBannerMeta(`Selected image is ${imageWidth} x ${imageHeight}px. Minimum size is ${reqW} x ${reqH}px. The server will reject smaller images.`, true);
+        return;
+      }
+
+      const mediaInput = document.getElementById('mediaAssetInput');
+      const clearInput = document.getElementById('clearAssetFlag');
+      if (mediaInput) mediaInput.value = '';
+      if (clearInput) clearInput.value = '1';
+      document.querySelectorAll('.asset-tile').forEach(t => t.classList.remove('selected'));
+      const selectedInfo = document.getElementById('selectedAssetInfo');
+      if (selectedInfo) selectedInfo.textContent = '';
+      setFrameImage(e.target.result);
+      showBannerMeta(`Selected image: ${imageWidth} x ${imageHeight}px. Ready for the customer portal banner frame.`);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function setFrameImage(src) {
+  const preview = document.getElementById('framePreview');
+  const hint    = document.getElementById('frameHint');
+  let   img     = document.getElementById('frameImg');
+  if (!img) {
+    img = document.createElement('img');
+    img.id = 'frameImg';
+    preview.appendChild(img);
+  }
+  img.src = src;
+  img.style.display = '';
+  preview.classList.remove('is-hidden');
+  if (hint) hint.style.display = 'none';
+}
+
+function clearFramePreview() {
+  const img = document.getElementById('frameImg');
+  if (img) { img.src = ''; img.style.display = 'none'; }
+  const hint = document.getElementById('frameHint');
+  if (hint) hint.style.display = '';
+  document.getElementById('framePreview')?.classList.add('is-hidden');
+  showBannerMeta('');
+}
+
+// ── Quick duration shortcuts ──────────────────────────────
+function setDuration(days) {
+  const today = new Date();
+  const end   = new Date();
+  end.setDate(today.getDate() + days - 1);
+  document.getElementById('startDate').value = toIso(today);
+  document.getElementById('endDate').value   = toIso(end);
+  document.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+}
+function toIso(d) { return d.toISOString().slice(0, 10); }
+
+// ── Init: if media_asset pre-selected, show library tab ───
+document.addEventListener('DOMContentLoaded', () => {
+  const assetVal = document.getElementById('mediaAssetInput')?.value;
+  if (assetVal) {
+    const libBtn = document.getElementById('tabLibBtn');
+    if (libBtn) switchTab('library', libBtn);
+    const tile = document.querySelector(`.asset-tile[data-pk="${assetVal}"]`);
+    if (tile) {
+      tile.classList.add('selected');
+      document.getElementById('selectedAssetInfo').textContent =
+        '✓ Selected: ' + tile.querySelector('.asset-name').textContent;
+    }
+  }
+});
+</script>
+{% endblock %}

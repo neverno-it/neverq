@@ -1,0 +1,103 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  .gallery-card { background:#fff; border:1px solid var(--cf-border); border-radius:var(--cf-radius); overflow:hidden; height:100%; }
+  .gallery-thumb { width:100%; height:140px; object-fit:cover; display:block; }
+  .gallery-check { position:absolute; top:10px; left:10px; z-index:3; background:rgba(255,255,255,.96); border-radius:999px; padding:5px 7px; box-shadow:0 4px 12px rgba(15,23,42,.14); }
+</style>
+{% endblock %}
+{% block content %}
+{% url 'dashboard:product_gallery_bulk_delete' as bulk_delete_url %}
+<div class="cf-card mb-4">
+  <div class="cf-card-header">
+    <h5><i class="bi bi-images me-2"></i>Product Image Gallery</h5>
+  </div>
+  <div class="card-body p-4">
+    <form method="post" enctype="multipart/form-data" class="row g-3 align-items-end">
+      {% csrf_token %}
+      {% if request.user.role == 'superadmin' and companies %}
+      <div class="col-md-3">
+        <label class="form-label">Company</label>
+        <select name="company" class="form-select">
+          <option value="">Global (all companies)</option>
+          {% for co in companies %}<option value="{{ co.pk }}">{{ co.name }}</option>{% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div class="col-md-4">
+        <label class="form-label">Image File <span class="text-danger">*</span></label>
+        <input type="file" name="image" class="form-control" accept="image/*" required>
+        <div class="form-text">Image name is taken from the file name automatically.</div>
+      </div>
+      <div class="col-md-1">
+        <button class="btn btn-cf-primary w-100">Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="cf-card">
+  <div class="cf-card-header d-flex justify-content-between align-items-center gap-3 flex-wrap">
+    <div>
+      <h5 class="mb-0"><i class="bi bi-grid me-2"></i>Gallery ({{ gallery|length }} images)</h5>
+      <div class="small text-muted">Reusable images for product create/edit</div>
+    </div>
+    <form method="get" class="d-flex gap-2">
+      <input type="search" name="q" value="{{ search_query }}" placeholder="Search image name" class="form-control" style="min-width:240px;">
+      <button class="btn btn-cf-outline">Search</button>
+    </form>
+  </div>
+  <div class="cf-card-body pb-0">
+    {% include "dashboard/includes/bulk_delete_controls.html" with bulk_form_id='product-gallery-bulk-delete-form' bulk_action=bulk_delete_url bulk_confirm_message='Delete selected gallery images?' %}
+  </div>
+  <div class="row g-3 p-3">
+    {% for img in gallery %}
+    <div class="col-6 col-md-3 col-lg-2">
+      <div class="gallery-card position-relative">
+        <label class="gallery-check" title="Select image">
+          <input type="checkbox" class="form-check-input bulk-item-check" data-bulk-form-input="product-gallery-bulk-delete-form" form="product-gallery-bulk-delete-form" name="ids" value="{{ img.pk }}">
+        </label>
+        <img src="{{ img.image.url }}" alt="{{ img.name }}" class="gallery-thumb">
+        <div class="p-2">
+          <input class="form-control form-control-sm gallery-name-input" value="{{ img.name }}" data-id="{{ img.pk }}" data-url="{% url 'dashboard:product_gallery_rename' img.pk %}">
+          <button class="btn btn-sm btn-cf-outline w-100 mt-2 rename-btn" data-id="{{ img.pk }}">Rename & Save</button>
+          {% if img.company %}<div class="small text-muted mt-1">{{ img.company.name }}</div>
+          {% else %}<div class="small text-muted mt-1">Global</div>{% endif %}
+        </div>
+        <div class="position-absolute top-0 end-0 p-1 d-flex gap-1">
+          <button class="btn btn-sm btn-light border" onclick="copyUrl('{{ img.image.url }}')" title="Copy URL" type="button">
+            <i class="bi bi-clipboard"></i>
+          </button>
+          <button type="submit" form="product-gallery-bulk-delete-form" formaction="{% url 'dashboard:product_gallery_delete' img.pk %}" formmethod="post" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Delete this image?');">
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="col-12 text-center text-muted py-5">
+      <i class="bi bi-images" style="font-size:3rem;"></i>
+      <p class="mt-3">No images yet. Upload your first product image above.</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+function getCsrf(){return document.querySelector('[name=csrfmiddlewaretoken]').value;}
+document.querySelectorAll('.rename-btn').forEach(btn=>btn.addEventListener('click', async ()=>{const id=btn.dataset.id; const input=document.querySelector('.gallery-name-input[data-id="'+id+'"]'); const resp=await fetch(input.dataset.url,{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({name:input.value})}); const data=await resp.json(); if(data.success){btn.textContent='Saved'; setTimeout(()=>btn.textContent='Rename & Save',1200);} else {alert(data.error||'Rename failed');}}));
+</script>
+<div id="copyToast" class="position-fixed bottom-0 end-0 p-3" style="z-index:9999;display:none;">
+  <div class="toast show bg-dark text-white px-3 py-2 rounded-3">URL copied!</div>
+</div>
+
+<script>
+function copyUrl(url) {
+  navigator.clipboard.writeText(url).then(function() {
+    const t = document.getElementById('copyToast');
+    t.style.display = '';
+    setTimeout(() => t.style.display='none', 1800);
+  });
+}
+</script>
+{% endblock %}

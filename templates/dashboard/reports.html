@@ -1,0 +1,618 @@
+{% extends "base/dashboard_base.html" %}
+{% load core_extras %}
+{% block content %}
+
+<div class="filter-bar">
+  <form class="d-flex flex-wrap gap-2 align-items-end" method="get">
+    <div>
+      <label class="form-label">From Date</label>
+      <input type="date" name="from_date" value="{{ from_date }}"
+             class="form-control form-control-sm" style="width:145px;">
+    </div>
+    <div>
+      <label class="form-label">To Date</label>
+      <input type="date" name="to_date" value="{{ to_date }}"
+             class="form-control form-control-sm" style="width:145px;">
+    </div>
+    {% if request.user.is_superadmin %}
+    <div>
+      <label class="form-label">Company</label>
+      <select name="company" class="form-select form-select-sm" style="width:170px;" onchange="this.form.submit()">
+        <option value="">All Companies</option>
+        {% for co in companies %}
+        <option value="{{ co.pk }}" {% if company_filter == co.pk|stringformat:'s' %}selected{% endif %}>
+          {{ co.name|truncatechars:22 }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div>
+      <label class="form-label">Sale Particular</label>
+      <select name="sale_particular" class="form-select form-select-sm" style="width:180px;">
+        {% for value, label in sale_particular_choices %}
+        <option value="{{ value }}" {% if sale_particular == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn btn-cf-primary btn-sm">Generate</button>
+      <a href="{% url 'dashboard:reports' %}" class="btn btn-cf-outline btn-sm">Reset</a>
+      <a href="?from_date={{ from_date }}&to_date={{ to_date }}&company={{ company_filter }}&sale_particular={{ sale_particular }}&export=csv"
+         class="btn btn-cf-danger btn-sm">
+        <i class="bi bi-download me-1"></i>Export CSV
+      </a>
+      <a href="?from_date={{ from_date }}&to_date={{ to_date }}&company={{ company_filter }}&sale_particular={{ sale_particular }}&export=xlsx"
+         class="btn btn-cf-primary btn-sm">
+        <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+      </a>
+    </div>
+  </form>
+</div>
+
+<div class="row g-2 mb-3">
+  <div class="col-6 col-md-3 col-xl-2">
+    <div style="background:var(--cf-navy);border-radius:var(--cf-radius);padding:16px;color:white;min-height:92px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.72;">Total Amount</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;line-height:1;">Rs.{{ report_total_amount|floatformat:0 }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3 col-xl-2">
+    <div style="background:#0f766e;border-radius:var(--cf-radius);padding:16px;color:white;min-height:92px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.72;">Cash Amount</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;line-height:1;">Rs.{{ report_cash_amount|floatformat:0 }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3 col-xl-2">
+    <div style="background:var(--cf-blue);border-radius:var(--cf-radius);padding:16px;color:white;min-height:92px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.72;">UPI Amount</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;line-height:1;">Rs.{{ report_upi_amount|floatformat:0 }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3 col-xl-2">
+    <div style="background:var(--cf-purple);border-radius:var(--cf-radius);padding:16px;color:white;min-height:92px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.72;">Card Amount</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;line-height:1;">Rs.{{ report_card_amount|floatformat:0 }}</div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-4">
+    <div style="background:#1f2937;border-radius:var(--cf-radius);padding:16px;color:white;min-height:92px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.72;margin-bottom:8px;">Platform Orders</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+        <div><div style="font-size:11px;opacity:.7;">Web</div><div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;line-height:1;">{{ platform_web_orders }}</div></div>
+        <div><div style="font-size:11px;opacity:.7;">POS</div><div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;line-height:1;">{{ platform_pos_orders }}</div></div>
+        <div><div style="font-size:11px;opacity:.7;">Kiosk</div><div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;line-height:1;">{{ platform_kiosk_orders }}</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% comment %}
+<div class="row g-2 mb-3">
+  <div class="col-6 col-md-4 col-xl-2">
+    <div style="background:var(--cf-navy);border-radius:var(--cf-radius);padding:18px;color:white;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.7;">Web Orders</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;line-height:1;">{{ platform_web_orders }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div style="background:var(--cf-blue);border-radius:var(--cf-radius);padding:18px;color:white;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.7;">Customer Paid</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;line-height:1;">₹{{ customer_web_revenue|floatformat:0 }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div style="background:var(--cf-purple);border-radius:var(--cf-radius);padding:18px;color:white;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.7;">Company Provisional</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;line-height:1;">₹{{ company_provisional|floatformat:0 }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div style="background:var(--cf-green);border-radius:var(--cf-radius);padding:18px;color:white;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.7;">Company Received</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;line-height:1;">₹{{ company_received|floatformat:0 }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div style="background:var(--cf-red);border-radius:var(--cf-radius);padding:18px;color:white;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.7;">Outstanding</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;line-height:1;">₹{{ outstanding_total|floatformat:0 }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div style="background:var(--cf-orange);border-radius:var(--cf-radius);padding:18px;color:white;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.7;">POS Revenue</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;line-height:1;">₹{{ pos_revenue|floatformat:0 }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div style="background:#0f766e;border-radius:var(--cf-radius);padding:18px;color:white;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.7;">Wallet / Points Orders</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;line-height:1;">Rs.{{ wallet_order_revenue|floatformat:0 }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl-2">
+    <div style="background:#7c3aed;border-radius:var(--cf-radius);padding:18px;color:white;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.7;">Wallet Recharge</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;line-height:1;">Rs.{{ wallet_recharge_revenue|floatformat:0 }}</div>
+    </div>
+  </div>
+</div>
+{% endcomment %}
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-bar-chart-line me-2 text-blue"></i>Daily Collections — {{ from_date }} to {{ to_date }}</h5>
+      </div>
+      <div class="cf-card-body">
+        <canvas id="reportChart" height="220"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-receipt me-2 text-blue"></i>Recent Company Receipts</h5>
+      </div>
+      <div style="overflow-y:auto;max-height:320px;">
+        <table class="cf-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Company</th>
+              <th style="text-align:right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in recent_settlements %}
+            <tr>
+              <td><small>{{ row.payment_date|date:"d M Y" }}</small></td>
+              <td style="font-size:13px;">
+                {{ row.company.name|truncatechars:18 }}
+                {% if row.reference_no %}
+                <br><small class="text-muted">{{ row.reference_no }}</small>
+                {% endif %}
+              </td>
+              <td style="text-align:right;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--cf-green);">
+                ₹{{ row.amount_received|floatformat:0 }}
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="text-center text-muted py-3">No receipts recorded.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-calendar3 me-2 text-blue"></i>Date Wise Sales</h5>
+        <small class="text-muted">Includes web, kiosk, POS, company-paid, monthly, wallet, and recharge values.</small>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="cf-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th style="text-align:right;">Web Sale</th>
+              <th style="text-align:right;">Kiosk Sale</th>
+              <th style="text-align:right;">POS Sale</th>
+              <th style="text-align:right;">Company-paid</th>
+              <th style="text-align:right;">Monthly Billing</th>
+              <th style="text-align:right;">Wallet / Points Orders</th>
+              <th style="text-align:right;">Wallet Recharge</th>
+              <th style="text-align:right;">Total Sales</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for day in daily_chart %}
+            <tr>
+              <td><strong>{{ day.date }}</strong></td>
+              <td style="text-align:right;">Rs.{{ day.web_sale|floatformat:0 }}</td>
+              <td style="text-align:right;">Rs.{{ day.kiosk_sale|floatformat:0 }}</td>
+              <td style="text-align:right;">Rs.{{ day.pos|floatformat:0 }}</td>
+              <td style="text-align:right;">Rs.{{ day.company_pay|floatformat:0 }}</td>
+              <td style="text-align:right;">Rs.{{ day.monthly|floatformat:0 }}</td>
+              <td style="text-align:right;">Rs.{{ day.wallet_order|floatformat:0 }}</td>
+              <td style="text-align:right;">Rs.{{ day.wallet_recharge|floatformat:0 }}</td>
+              <td style="text-align:right;font-weight:800;color:var(--cf-blue);">Rs.{{ day.total_sales|floatformat:0 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="9" class="text-center text-muted py-3">No sales data in this date range.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="cf-card">
+      <div class="cf-card-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+        <div>
+          <h5><i class="bi bi-box-seam me-2 text-blue"></i>Order Summary</h5>
+          <small class="text-muted">Product-wise summary for the currently selected report filters.</small>
+          <div class="mt-1" style="font-size:12px;color:var(--cf-muted);display:flex;gap:14px;flex-wrap:wrap;">
+            <span><strong>Products:</strong> {{ order_summary_rows|length }}</span>
+            <span><strong>Qty Sold:</strong> {{ order_summary_total_qty }}</span>
+            <span><strong>Orders:</strong> {{ order_summary_total_orders }}</span>
+            <span><strong>Revenue:</strong> ₹{{ order_summary_total_rev|floatformat:2 }}</span>
+          </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <a href="?from_date={{ from_date }}&to_date={{ to_date }}&company={{ company_filter }}&sale_particular={{ sale_particular }}&export=order_summary_pdf"
+             class="btn btn-cf-outline btn-sm">
+            <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+          </a>
+          <a href="?from_date={{ from_date }}&to_date={{ to_date }}&company={{ company_filter }}&sale_particular={{ sale_particular }}&export=order_summary_xlsx"
+             class="btn btn-cf-primary btn-sm">
+            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+          </a>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="cf-table">
+          <thead>
+            <tr>
+              <th>Product Name</th>
+              <th style="text-align:right;">Qty Sold</th>
+              <th style="text-align:right;">Orders</th>
+              <th style="text-align:right;">Revenue</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in order_summary_rows %}
+            <tr>
+              <td style="font-size:13px;">{{ row.product_name }}</td>
+              <td style="text-align:right;font-weight:600;">{{ row.qty }}</td>
+              <td style="text-align:right;font-weight:600;">{{ row.order_count }}</td>
+              <td style="text-align:right;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--cf-blue);">
+                ₹{{ row.rev|floatformat:2 }}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="4" class="text-center text-muted py-3">No order summary data found for the selected filters.</td>
+            </tr>
+            {% endfor %}
+            {% if order_summary_rows %}
+            <tr style="background:#F8FAFC;border-top:1px solid var(--cf-border);">
+              <td style="font-size:13px;font-weight:800;color:var(--cf-navy);">TOTAL</td>
+              <td style="text-align:right;font-weight:800;color:var(--cf-navy);">{{ order_summary_total_qty }}</td>
+              <td style="text-align:right;font-weight:800;color:var(--cf-navy);">{{ order_summary_total_orders }}</td>
+              <td style="text-align:right;font-family:'Rajdhani',sans-serif;font-weight:800;color:var(--cf-blue);">
+                ₹{{ order_summary_total_rev|floatformat:2 }}
+              </td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {% if request.user.is_superadmin or request.user.role == 'admin' %}
+  <div class="col-lg-4">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-cash-coin me-2 text-blue"></i>Record Company Payment</h5>
+      </div>
+      <div class="cf-card-body">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="return_from_date" value="{{ from_date }}">
+          <input type="hidden" name="return_to_date" value="{{ to_date }}">
+          <input type="hidden" name="return_company" value="{{ company_filter }}">
+          <input type="hidden" name="return_sale_particular" value="{{ sale_particular }}">
+
+          <div class="mb-3">
+            <label class="form-label">Company *</label>
+            <select name="settlement_company" class="form-select" required>
+              <option value="">Select company</option>
+              {% for co in companies %}
+              <option value="{{ co.pk }}">{{ co.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Payment Date *</label>
+            <input type="date" name="payment_date" class="form-control" value="{{ default_payment_date }}" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Amount Received *</label>
+            <input type="number" name="amount_received" class="form-control" step="0.01" min="0.01" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Reference No.</label>
+            <input type="text" name="reference_no" class="form-control" placeholder="UTR / voucher / cheque no.">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Notes</label>
+            <textarea name="notes" class="form-control" rows="3" placeholder="Optional remarks"></textarea>
+          </div>
+
+          <div class="small text-muted mb-3">
+            This entry confirms company receipt. It reduces outstanding and moves the amount into received revenue.
+          </div>
+
+          <button type="submit" class="btn btn-cf-primary w-100">
+            <i class="bi bi-check-circle me-1"></i>Save Payment Entry
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+  {% else %}
+  <div class="col-12">
+  {% endif %}
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-building me-2 text-blue"></i>Company Receivables Snapshot (as of {{ to_date }})</h5>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="cf-table">
+          <thead>
+            <tr>
+              <th>Company</th>
+              <th style="text-align:right;">Orders</th>
+              <th style="text-align:right;">Customer Paid</th>
+              <th style="text-align:right;">Provisional</th>
+              <th style="text-align:right;">Received</th>
+              <th style="text-align:right;">Outstanding</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in by_company %}
+            <tr>
+              <td style="font-size:13px;">{{ row.company_name|truncatechars:24 }}</td>
+              <td style="text-align:right;font-weight:600;">{{ row.cnt }}</td>
+              <td style="text-align:right;color:var(--cf-blue);font-family:'Rajdhani',sans-serif;font-weight:700;">
+                ₹{{ row.customer_paid|floatformat:0 }}
+              </td>
+              <td style="text-align:right;color:var(--cf-purple);font-family:'Rajdhani',sans-serif;font-weight:700;">
+                ₹{{ row.provisional|floatformat:0 }}
+              </td>
+              <td style="text-align:right;color:var(--cf-green);font-family:'Rajdhani',sans-serif;font-weight:700;">
+                ₹{{ row.received|floatformat:0 }}
+              </td>
+              <td style="text-align:right;font-family:'Rajdhani',sans-serif;font-weight:700;color:{% if row.outstanding > 0 %}var(--cf-red){% else %}var(--cf-green){% endif %};">
+                ₹{{ row.outstanding|floatformat:0 }}
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-muted py-3">No company receivable data.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="cf-card">
+      <div class="cf-card-header"><h5><i class="bi bi-egg-fried me-2 text-red"></i>Top Web Products</h5></div>
+      <div style="overflow-y:auto;max-height:300px;">
+        <table class="cf-table">
+          <thead><tr><th>#</th><th>Product</th><th style="text-align:right;">Qty Sold</th><th style="text-align:right;">Sales Value</th></tr></thead>
+          <tbody>
+            {% for p in top_products %}
+            <tr>
+              <td class="text-muted">{{ forloop.counter }}</td>
+              <td style="font-size:13px;">{{ p.product__name|default:"—"|truncatechars:28 }}</td>
+              <td style="text-align:right;font-weight:600;">{{ p.qty }}</td>
+              <td style="text-align:right;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--cf-blue);">₹{{ p.rev|floatformat:0 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-3">No data.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="cf-card">
+      <div class="cf-card-header"><h5><i class="bi bi-phone me-2" style="color:var(--cf-orange);"></i>Top POS Products</h5></div>
+      <div style="overflow-y:auto;max-height:300px;">
+        <table class="cf-table">
+          <thead><tr><th>#</th><th>Product</th><th style="text-align:right;">Qty Sold</th><th style="text-align:right;">Revenue</th></tr></thead>
+          <tbody>
+            {% for p in top_pos_products %}
+            <tr>
+              <td class="text-muted">{{ forloop.counter }}</td>
+              <td style="font-size:13px;">{{ p.product_name|default:"—"|truncatechars:28 }}</td>
+              <td style="text-align:right;font-weight:600;">{{ p.qty }}</td>
+              <td style="text-align:right;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--cf-orange);">₹{{ p.rev|floatformat:0 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-3">No data.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-wallet2 me-2 text-blue"></i>Recent Wallet Recharges</h5>
+        <small class="text-muted">Shown as sale entries for cash/UPI/card/online recharge collection.</small>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="cf-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Order#</th>
+              <th>Customer</th>
+              <th>Company</th>
+              <th>Mode</th>
+              <th style="text-align:right;">Wallet Added</th>
+              <th style="text-align:right;">Card Fee</th>
+              <th style="text-align:right;">Collected</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for txn in recent_recharges %}
+            <tr>
+              <td><small>{{ txn.created_at|date:"d M Y, h:i A" }}</small></td>
+              <td><small>{{ txn.order_ref|default:"-" }}</small></td>
+              <td>{{ txn.customer.name }}</td>
+              <td><small>{{ txn.customer.company.name|truncatechars:22 }}</small></td>
+              <td><small>{{ txn.get_payment_mode_display|default:"-" }}</small></td>
+              <td style="text-align:right;font-weight:700;color:var(--cf-green);">Rs.{{ txn.wallet_delta|floatformat:2 }}</td>
+              <td style="text-align:right;">Rs.{{ txn.card_fee_amount|floatformat:2 }}</td>
+              <td style="text-align:right;font-weight:700;">Rs.{{ txn.gross_amount|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="8" class="text-center text-muted py-3">No wallet recharges in this range.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-table me-2 text-blue"></i>Order Details</h5>
+        <small class="text-muted">{{ orders|length }} orders shown (max 500)</small>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="cf-table">
+          <thead>
+            <tr>
+              <th>Order#</th>
+              <th>Date</th>
+              <th>Customer</th>
+              <th>Company</th>
+              <th>Items</th>
+              <th>Total</th>
+              <th>Customer Paid</th>
+              <th>Wallet</th>
+              <th>Points</th>
+              <th>Company Covered</th>
+              <th>Payment Mode</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for o in orders %}
+            <tr>
+              <td><a href="{% url 'dashboard:order_detail' o.pk %}" class="text-blue fw-600">{{ o.order_number|short_order_no }}</a></td>
+              <td><small>{{ o.created_at|date:"d M Y"|default:"—" }}</small></td>
+              <td>
+                <div class="fw-500">{{ o.customer.name }}</div>
+                <small class="text-muted">{{ o.customer.phone }}</small>
+              </td>
+              <td><small>{{ o.company.name|truncatechars:18 }}</small></td>
+              <td><small>{{ o.items.count }}</small></td>
+              <td><strong>₹{{ o.total_amount|default:0 }}</strong></td>
+              <td><strong class="text-dark">₹{{ o.my_pay|default:0 }}</strong></td>
+              <td><strong class="{% if o.wallet_used and o.wallet_used > 0 %}text-success{% else %}text-muted{% endif %}">Rs.{{ o.wallet_used|default:0 }}</strong></td>
+              <td><strong class="{% if o.points_redeemed and o.points_redeemed > 0 %}text-success{% else %}text-muted{% endif %}">{{ o.points_redeemed|default:0 }}</strong></td>
+              <td>
+                <strong class="{% if o.bill_to_company and o.bill_to_company > 0 %}text-success{% else %}text-muted{% endif %}">
+                  ₹{{ o.bill_to_company|default:0 }}
+                </strong>
+              </td>
+              <td><small>{% if o.is_wallet_recharge and o.recharge_transaction %}{{ o.recharge_transaction.get_payment_mode_display }}{% else %}{{ o.get_payment_mode_display }}{% endif %}</small></td>
+              <td><span class="badge bg-{{ o.status_color }}">{{ o.status_label }}</span></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="12" class="text-center text-muted py-4">No orders in this range.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+const chartData = {{ daily_chart|safe }};
+new Chart(document.getElementById('reportChart'), {
+  type: 'bar',
+  data: {
+    labels: chartData.map(d => d.date),
+    datasets: [
+      {
+        label: 'Customer Paid ₹',
+        data: chartData.map(d => d.customer_paid),
+        backgroundColor: 'rgba(21,101,192,.2)',
+        borderColor: '#1565C0',
+        borderWidth: 2,
+        borderRadius: 4,
+        borderSkipped: false
+      },
+      {
+        label: 'Company Received ₹',
+        data: chartData.map(d => d.company_received),
+        backgroundColor: 'rgba(46,125,50,.15)',
+        borderColor: '#2E7D32',
+        borderWidth: 2,
+        borderRadius: 4,
+        borderSkipped: false
+      },
+      {
+        label: 'POS ₹',
+        data: chartData.map(d => d.pos),
+        backgroundColor: 'rgba(230,81,0,.15)',
+        borderColor: '#E65100',
+        borderWidth: 2,
+        borderRadius: 4,
+        borderSkipped: false
+      },
+      {
+        label: 'Wallet Recharge Rs',
+        data: chartData.map(d => d.wallet_recharge),
+        backgroundColor: 'rgba(124,58,237,.15)',
+        borderColor: '#7c3aed',
+        borderWidth: 2,
+        borderRadius: 4,
+        borderSkipped: false
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'top' },
+      tooltip: {
+        callbacks: {
+          label: ctx => `₹ ${ctx.raw.toLocaleString('en-IN')}`
+        }
+      }
+    },
+    scales: {
+      x: { grid: { display: false } },
+      y: {
+        beginAtZero: true,
+        ticks: {
+          callback: v => `₹${v}`
+        }
+      }
+    }
+  }
+});
+</script>
+{% endblock %}

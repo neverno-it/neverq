@@ -1,0 +1,429 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<div style="max-width:900px;">
+  <div class="cf-card">
+    <div class="cf-card-header">
+      <h5><i class="bi bi-person-gear me-2"></i>{{ page_title }}</h5>
+      <a href="{% url 'dashboard:customer_list' %}" class="btn btn-cf-outline btn-sm">← Back to Customers</a>
+    </div>
+    <div class="cf-card-body">
+      <form method="post" id="customerEditForm">
+        {% csrf_token %}
+        <div class="row g-3">
+
+          <!-- ── SECTION: Basic Info ── -->
+          <div class="col-12">
+            <div class="p-2 rounded mb-1" style="background:var(--cf-blue-light);">
+              <small class="fw-600 text-blue"><i class="bi bi-person me-1"></i>Basic Information</small>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Full Name</label>
+            <input type="text" name="name" class="form-control" value="{{ customer.name }}" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Phone</label>
+            <input type="text" name="phone" class="form-control" value="{{ customer.phone }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Email <span class="text-muted" style="font-size:11px;">(cannot be changed)</span></label>
+            <input type="email" class="form-control" value="{{ customer.email }}" disabled style="background:#f8f9fa;">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Birth Date</label>
+            {% if customer.date_of_birth %}
+              <input type="text" class="form-control" value="{% if customer.date_of_birth.year == 2000 %}{{ customer.date_of_birth|date:'d M' }}{% else %}{{ customer.date_of_birth|date:'Y-m-d' }}{% endif %}" readonly style="background:#f8f9fa;">
+              <div class="small text-muted mt-1">Birth date is locked after it is set.</div>
+            {% else %}
+              <div class="row g-2">
+                <div class="col-6">
+                  <select name="birth_day" class="form-select">
+                    <option value="">Date</option>
+                    {% for day in birth_day_options %}
+                    <option value="{{ day }}">{{ day }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-6">
+                  <select name="birth_month" class="form-select">
+                    <option value="">Month</option>
+                    {% for month in birth_month_options %}
+                    <option value="{{ month }}">{{ month }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+              <div class="small text-muted mt-1">Choose only date and month. Birth date is locked after it is set.</div>
+            {% endif %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Building / Floor</label>
+            <select name="building" class="form-select">
+              <option value="">— Not assigned —</option>
+              {% for b in buildings %}
+              <option value="{{ b.pk }}" {% if customer.building_id == b.pk %}selected{% endif %}>{{ b.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Address</label>
+            <textarea name="address" class="form-control" rows="2">{{ customer.address|default:'' }}</textarea>
+          </div>
+
+          <!-- ── SECTION: Security & Access ── -->
+          <div class="col-12 mt-2">
+            <div class="p-2 rounded mb-1" style="background:var(--cf-blue-light);">
+              <small class="fw-600 text-blue"><i class="bi bi-shield-lock me-1"></i>Security & Access</small>
+            </div>
+          </div>
+          <div class="col-lg-6">
+            <label class="form-label">Set / Reset Password <span class="text-muted" style="font-size:11px;">(existing password cannot be shown because it is stored securely)</span></label>
+            <div class="input-group">
+              <input type="password" name="new_password" class="form-control" id="customerNewPassword" placeholder="Enter a new password">
+              <button class="btn btn-cf-outline" type="button" id="toggleCustomerPassword"><i class="bi bi-eye"></i></button>
+            </div>
+            <div class="small text-muted mt-1">Leave blank to keep the current password unchanged.</div>
+          </div>
+          <div class="col-lg-6">
+            <div class="row g-2">
+              <div class="col-sm-6">
+                <label class="form-label">Active</label>
+                <div class="compact-toggle-row">
+                  <span class="small">Account active</span>
+                  <input class="form-check-input" type="checkbox" name="is_active" id="isActive" {% if customer.is_active %}checked{% endif %}>
+                </div>
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">Approved{% if not customer.is_approved %}<span class="badge bg-warning text-dark ms-1" style="font-size:10px;">Pending</span>{% endif %}</label>
+                <div class="compact-toggle-row">
+                  <span class="small">Can order</span>
+                  <input class="form-check-input" type="checkbox" name="is_approved" id="isApproved" {% if customer.is_approved %}checked{% endif %}>
+                </div>
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">COD</label>
+                <div class="compact-toggle-row">
+                  <span class="small">Cash on delivery</span>
+                  <input class="form-check-input" type="checkbox" name="cod_payment" {% if customer.cod_payment %}checked{% endif %}>
+                </div>
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">Monthly</label>
+                <div class="compact-toggle-row">
+                  <span class="small">Monthly billing</span>
+                  <input class="form-check-input" type="checkbox" name="monthly_payment" {% if customer.monthly_payment %}checked{% endif %}>
+                </div>
+                <div class="small text-muted mt-1">Works only when company monthly billing is enabled.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── SECTION: Meal Benefit ── -->
+          <div class="col-12 mt-2">
+            <div class="p-2 rounded mb-1" style="background:var(--cf-blue-light);">
+              <small class="fw-600 text-blue"><i class="bi bi-cash-coin me-1"></i>Meal Benefit — Who Pays?</small>
+            </div>
+          </div>
+
+          {% if customer.company.bill_company != 2 %}
+          <!-- Company not in Bill-to-Company mode -->
+          <div class="col-12">
+            <div class="alert alert-warning py-2 mb-0" style="border-radius:10px;border:none;">
+              <i class="bi bi-exclamation-triangle me-2"></i>
+              <strong>Meal benefits are disabled</strong> for this company — the company billing mode is set to <em>Employee Pays</em>.
+              To enable subsidies or company pay, go to the
+              <a href="{% url 'dashboard:company_edit' customer.company.pk %}" class="alert-link">company settings</a>
+              and change Billing Mode to <strong>Company Pays</strong>.
+            </div>
+          </div>
+          <input type="hidden" name="meal_benefit" value="none">
+
+          {% else %}
+          <!-- Company is in Bill-to-Company mode — show benefit selector -->
+          <div class="col-12">
+            <div class="row g-3" id="benefitCards">
+
+              <!-- Card: No Benefit -->
+              <div class="col-md-4">
+                <label class="benefit-card {% if customer.meal_benefit == 'none' %}active{% endif %}" for="benefit_none" style="cursor:pointer;display:block;border:2px solid {% if customer.meal_benefit == 'none' %}var(--cf-blue){% else %}#dee2e6{% endif %};border-radius:12px;padding:16px;transition:all .2s;">
+                  <input type="radio" name="meal_benefit" value="none" id="benefit_none" class="d-none" {% if customer.meal_benefit == 'none' %}checked{% endif %}>
+                  <div class="d-flex align-items-center gap-2 mb-2">
+                    <div style="width:36px;height:36px;border-radius:50%;background:#f1f3f5;display:flex;align-items:center;justify-content:center;">
+                      <i class="bi bi-person" style="color:#6c757d;"></i>
+                    </div>
+                    <div>
+                      <div class="fw-700" style="font-size:14px;">No Benefit</div>
+                      <div class="small text-muted">Employee pays in full</div>
+                    </div>
+                  </div>
+                  <div class="small text-muted">
+                    Every order is fully charged to the employee. No company contribution.
+                  </div>
+                  <div class="mt-2 text-center">
+                    <span class="badge bg-secondary">Employee Pays 100%</span>
+                  </div>
+                </label>
+              </div>
+
+              <!-- Card: Subsidy -->
+              <div class="col-md-4">
+                <label class="benefit-card {% if customer.meal_benefit == 'subsidy' %}active{% endif %}" for="benefit_subsidy" style="cursor:pointer;display:block;border:2px solid {% if customer.meal_benefit == 'subsidy' %}var(--cf-blue){% else %}#dee2e6{% endif %};border-radius:12px;padding:16px;transition:all .2s;">
+                  <input type="radio" name="meal_benefit" value="subsidy" id="benefit_subsidy" class="d-none" {% if customer.meal_benefit == 'subsidy' %}checked{% endif %}>
+                  <div class="d-flex align-items-center gap-2 mb-2">
+                    <div style="width:36px;height:36px;border-radius:50%;background:#e3f2fd;display:flex;align-items:center;justify-content:center;">
+                      <i class="bi bi-cash-coin" style="color:var(--cf-blue);"></i>
+                    </div>
+                    <div>
+                      <div class="fw-700" style="font-size:14px;">Subsidy</div>
+                      <div class="small text-muted">Company covers part</div>
+                    </div>
+                  </div>
+                  <div class="small text-muted mb-2">
+                    Company pays up to a fixed amount for the configured <strong>subsidy uses per day</strong>.
+                    Employee pays any remaining balance.
+                  </div>
+                  <div class="p-2 rounded text-center" style="background:#e3f2fd;">
+                    <div class="small text-muted" style="font-size:11px;">Company covers up to</div>
+                    <div class="fw-700" style="color:var(--cf-blue);font-size:18px;">
+                      ₹{% if customer.subsidy_amount_override %}{{ customer.subsidy_amount_override }}{% else %}{{ customer.company.company_meal_amount|default:'0' }}{% endif %}
+                    </div>
+                    <div class="small text-muted" style="font-size:10px;">{{ customer.company.subsidy_meals_per_day|default:'1' }} use(s) per day</div>
+                  </div>
+                </label>
+              </div>
+
+              <!-- Card: Company Pay -->
+              <div class="col-md-4">
+                <label class="benefit-card {% if customer.meal_benefit == 'company_pay' %}active{% endif %}" for="benefit_company_pay" style="cursor:pointer;display:block;border:2px solid {% if customer.meal_benefit == 'company_pay' %}#27ae60{% else %}#dee2e6{% endif %};border-radius:12px;padding:16px;transition:all .2s;">
+                  <input type="radio" name="meal_benefit" value="company_pay" id="benefit_company_pay" class="d-none" {% if customer.meal_benefit == 'company_pay' %}checked{% endif %}>
+                  <div class="d-flex align-items-center gap-2 mb-2">
+                    <div style="width:36px;height:36px;border-radius:50%;background:#e8f5e9;display:flex;align-items:center;justify-content:center;">
+                      <i class="bi bi-building-check" style="color:#27ae60;"></i>
+                    </div>
+                    <div>
+                      <div class="fw-700" style="font-size:14px;">Company Pays</div>
+                      <div class="small text-muted">Selected meals are free</div>
+                    </div>
+                  </div>
+                  <div class="small text-muted mb-2">
+                    Company covers the <strong>entire cost</strong> of selected free-meal products while daily meals remain.
+                    Employee pays only for non-selected products and packing, if any.
+                  </div>
+                  <div class="p-2 rounded text-center" style="background:#e8f5e9;">
+                    <div class="small text-muted" style="font-size:11px;">Employee cost</div>
+                    <div class="fw-700" style="color:#27ae60;font-size:18px;">₹0</div>
+                    <div class="small text-muted" style="font-size:10px;">{{ customer.company.company_pay_meals_per_day|default:'1' }} meal(s) per day</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Subsidy override amount (only shown when Subsidy is selected) -->
+          <div class="col-12" id="subsidyOverrideSection" style="display:{% if customer.meal_benefit == 'subsidy' %}block{% else %}none{% endif %};">
+            <div class="p-3 rounded" style="background:linear-gradient(135deg,#e3f2fd,#f0f7ff);border:1px solid #90caf9;border-radius:12px;">
+              <div class="fw-600 mb-2" style="color:var(--cf-blue);">
+                <i class="bi bi-sliders me-1"></i>Custom Subsidy Amount (optional)
+              </div>
+              <div class="row g-2 align-items-center">
+                <div class="col-md-4">
+                  <div class="input-group">
+                    <span class="input-group-text">₹</span>
+                    <input type="number" step="0.01" min="0" name="subsidy_amount_override"
+                           class="form-control" id="subsidyOverrideInput"
+                           value="{{ customer.subsidy_amount_override|default:'' }}"
+                           placeholder="e.g. 50">
+                  </div>
+                </div>
+                <div class="col-md-8">
+                  <div class="small text-muted">
+                    Leave <strong>blank</strong> to use the company default of
+                    <strong>₹{{ customer.company.company_meal_amount|default:'0' }}</strong> per order.
+                    Enter a value to give this employee a different subsidy amount.
+                  </div>
+                </div>
+              </div>
+              <!-- Live example -->
+              <div class="mt-3 p-2 rounded" style="background:#fff;border:1px dashed #90caf9;" id="subsidyExample">
+                <div class="small fw-600 mb-1 text-muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Example</div>
+                <div class="d-flex gap-4 flex-wrap" style="font-size:13px;">
+                  <div>
+                    Product price: <strong>₹35</strong> &nbsp;·&nbsp;
+                    Subsidy: <strong id="exSubsidyA">₹{{ customer.subsidy_amount_override|default:customer.company.company_meal_amount|default:'0' }}</strong> &nbsp;→&nbsp;
+                    <span class="text-success fw-600">Employee pays ₹0</span>
+                  </div>
+                  <div>
+                    Product price: <strong>₹60</strong> &nbsp;·&nbsp;
+                    Subsidy: <strong id="exSubsidyB">₹{{ customer.subsidy_amount_override|default:customer.company.company_meal_amount|default:'0' }}</strong> &nbsp;→&nbsp;
+                    <span class="text-danger fw-600" id="exEmployeePays">
+                      Employee pays ₹{{ 60|add:"-"|add:customer.subsidy_amount_override|default:customer.company.company_meal_amount|default:'0' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- "Used today" indicator -->
+          <div class="col-12" id="benefitStatusRow" style="display:{% if customer.meal_benefit != 'none' %}block{% else %}none{% endif %};">
+            <div class="small" style="color:#666;">
+              <i class="bi bi-info-circle me-1"></i>
+              Benefits apply only to products selected for free-meal/subsidy cover and only while the configured daily uses remain.
+              All other items remain chargeable to the employee.
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- ── SAVE BUTTON ── -->
+          <div class="col-12 pt-3 border-top mt-2">
+            <div class="row g-3 align-items-stretch">
+              <div class="col-lg-8">
+                <div class="border rounded-3 p-3 h-100" style="background:linear-gradient(135deg,#e8f4fd,#f0f8ff);">
+                  <div class="fw-bold mb-2"><i class="bi bi-wallet2 me-2 text-primary"></i>Wallet & Royalty Points</div>
+                  <div class="d-flex gap-3 flex-wrap align-items-center mb-3">
+                    <div><span class="badge bg-primary fs-6">₹{{ customer.wallet_balance|floatformat:2 }}</span><span class="small text-muted ms-1">wallet</span></div>
+                    <div><span class="badge bg-success fs-6">{{ customer.royalty_points }} pts</span><span class="small text-muted ms-1">royalty (≈ ₹{{ customer.royalty_points }})</span></div>
+                  </div>
+                  <div class="row g-2">
+                    <div class="col-md-4"><label class="form-label small fw-bold">Adjust Points (+/-)</label><input type="number" name="royalty_adjust" class="form-control form-control-sm" placeholder="e.g. +100 or -50"></div>
+                    <div class="col-md-4 d-flex align-items-end"><a href="{% url 'dashboard:wallet_recharge' %}?q={{ customer.phone|urlencode }}" class="btn btn-cf-primary btn-sm w-100"><i class="bi bi-wallet2 me-1"></i>Recharge</a></div>
+                    <div class="col-md-4 d-flex align-items-end"><a href="{% url 'dashboard:customer_wallet' customer.pk %}" class="btn btn-cf-outline btn-sm w-100"><i class="bi bi-clock-history me-1"></i>Full History</a></div>
+                  </div>
+                </div>
+              </div>
+              <div class="col-lg-4 d-flex flex-column gap-2 justify-content-end">
+                <button type="submit" class="btn btn-cf-primary w-100"><i class="bi bi-check-circle me-1"></i>Save Customer</button>
+                <a href="{% url 'dashboard:customer_list' %}" class="btn btn-cf-outline w-100">Cancel</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+#benefitCards>[class*="col-"]{display:flex}
+#benefitCards .benefit-card{width:100%;min-height:100%;display:flex!important;flex-direction:column}
+#benefitCards .benefit-card>.mt-2.text-center,
+#benefitCards .benefit-card>.p-2.rounded.text-center{margin-top:auto!important}
+.benefit-card:hover {
+  border-color: var(--cf-blue) !important;
+  box-shadow: 0 2px 12px rgba(30,58,95,.1);
+}
+.benefit-card.active-green {
+  border-color: #27ae60 !important;
+}
+.compact-toggle-row{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--cf-border);border-radius:12px;padding:10px 12px;background:#fff;min-height:44px}
+.compact-toggle-row .form-check-input{margin:0;width:38px;height:20px}
+#customerEditForm .form-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--cf-muted)}
+</style>
+
+<script>
+(function () {
+  const companyDefault = parseFloat('{{ customer.company.company_meal_amount|default:"0" }}') || 0;
+  const cards          = document.querySelectorAll('.benefit-card');
+  const radios         = document.querySelectorAll('input[name="meal_benefit"]');
+  const overrideSection = document.getElementById('subsidyOverrideSection');
+  const overrideInput   = document.getElementById('subsidyOverrideInput');
+  const benefitStatusRow = document.getElementById('benefitStatusRow');
+  const exSubsidyA     = document.getElementById('exSubsidyA');
+  const toggleCustomerPassword = document.getElementById('toggleCustomerPassword');
+  const customerNewPassword = document.getElementById('customerNewPassword');
+  toggleCustomerPassword?.addEventListener('click', function(){
+    const show = customerNewPassword.type === 'password';
+    customerNewPassword.type = show ? 'text' : 'password';
+    this.innerHTML = show ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+  });
+
+  const exSubsidyB     = document.getElementById('exSubsidyB');
+  const exEmployeePays = document.getElementById('exEmployeePays');
+
+  function updateExample() {
+    const amt = parseFloat(overrideInput?.value) || companyDefault;
+    const label = '₹' + amt.toFixed(2).replace('.00','');
+    if (exSubsidyA) exSubsidyA.textContent = label;
+    if (exSubsidyB) exSubsidyB.textContent = label;
+    if (exEmployeePays) {
+      const diff = Math.max(0, 60 - amt);
+      exEmployeePays.textContent = diff === 0 ? 'Employee pays ₹0' : 'Employee pays ₹' + diff.toFixed(2).replace('.00','');
+      exEmployeePays.style.color = diff === 0 ? '#27ae60' : '#e74c3c';
+    }
+  }
+
+  function syncCards() {
+    const selected = document.querySelector('input[name="meal_benefit"]:checked')?.value || 'none';
+    cards.forEach(card => {
+      const radio = card.querySelector('input[type="radio"]');
+      const isSelected = radio && radio.checked;
+      const isGreen    = radio && radio.value === 'company_pay';
+      card.style.borderColor = isSelected ? (isGreen ? '#27ae60' : 'var(--cf-blue)') : '#dee2e6';
+      card.style.boxShadow   = isSelected ? '0 2px 16px rgba(30,58,95,.15)' : '';
+    });
+    if (overrideSection) overrideSection.style.display  = selected === 'subsidy'  ? '' : 'none';
+    if (benefitStatusRow) benefitStatusRow.style.display = selected !== 'none'    ? '' : 'none';
+    updateExample();
+  }
+
+  radios.forEach(r => r.addEventListener('change', syncCards));
+  overrideInput?.addEventListener('input', updateExample);
+
+  // Card click → check radio inside
+  cards.forEach(card => {
+    card.addEventListener('click', function () {
+      const radio = this.querySelector('input[type="radio"]');
+      if (radio) { radio.checked = true; syncCards(); }
+    });
+  });
+
+  syncCards();
+})();
+</script>
+{% if perm_level %}
+<script>
+(function(){
+  var LVL="{{ perm_level }}";
+  var LOCKED=new Set({{ locked_names_json|safe }});
+  var form=document.querySelector('form[method="post"]');
+  if(form&&LVL!=="full_edit"){
+    var html=LVL==="view"
+      ?'<div class="alert alert-warning py-2 mb-3" style="border-radius:10px;"><i class="bi bi-eye-fill me-2"></i><strong>View-only access</strong> — you can see this record but cannot save changes.</div>'
+      :'<div class="alert alert-info py-2 mb-3" style="border-radius:10px;"><i class="bi bi-shield-lock me-2"></i><strong>Limited edit access</strong> — fields marked 🔒 cannot be modified.</div>';
+    form.insertAdjacentHTML("afterbegin",html);
+  }
+  if(LVL==="view"){
+    document.querySelectorAll('button[type="submit"]').forEach(function(b){b.style.display="none";});
+  }
+  if(LOCKED.size){
+    document.querySelectorAll("input,select,textarea").forEach(function(el){
+      if(!LOCKED.has(el.name))return;
+      el.disabled=true;el.style.background="#f8f9fa";el.style.cursor="not-allowed";el.style.opacity="0.7";
+      var c=el.closest('[class*="col-"]');
+      if(c){
+        var lb=c.querySelector("label");
+        if(lb&&!lb.querySelector(".flock"))lb.insertAdjacentHTML("beforeend",' <span class="flock" style="font-size:11px;" title="You do not have permission to edit this field">🔒</span>');
+      }
+    });
+    if(LOCKED.has("date_of_birth")){
+      document.querySelectorAll('[name="birth_day"],[name="birth_month"]').forEach(function(el){
+        el.disabled=true;el.style.background="#f8f9fa";el.style.cursor="not-allowed";el.style.opacity="0.7";
+      });
+    }
+    if(LOCKED.has("__schedule_windows__")){
+      document.querySelectorAll('[name^="window_day_"],[name^="window_start_"],[name^="window_end_"]').forEach(function(el){
+        el.disabled=true;el.style.background="#f8f9fa";el.style.cursor="not-allowed";el.style.opacity="0.7";
+      });
+      var ab=document.getElementById("add-schedule-btn");if(ab)ab.style.display="none";
+      document.querySelectorAll(".btn-remove").forEach(function(b){b.style.display="none";});
+    }
+    if(LOCKED.has("food_types")){
+      document.querySelectorAll(".food-type-pill").forEach(function(p){
+        p.style.pointerEvents="none";p.style.opacity="0.65";
+      });
+    }
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

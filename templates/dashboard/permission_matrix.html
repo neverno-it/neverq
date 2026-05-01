@@ -1,0 +1,192 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<div style="max-width:1100px;">
+
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <a href="{% url 'dashboard:staff_list' %}" style="font-size:13px;color:var(--cf-blue);text-decoration:none;">
+        <i class="bi bi-arrow-left"></i> Back to Staff
+      </a>
+      <h4 class="mt-2 mb-0" style="font-family:'Rajdhani',sans-serif;font-weight:700;">
+        <i class="bi bi-sliders me-2" style="color:var(--cf-blue);"></i>{{ page_title }}
+      </h4>
+      <p class="text-muted mb-0" style="font-size:13px;">
+        {{ target_user.email }} &middot; {{ target_user.get_role_display }}
+      </p>
+    </div>
+    <a href="{% url 'dashboard:pending_changes' %}" class="btn btn-cf-outline btn-sm">
+      <i class="bi bi-clock-history me-1"></i> Pending Changes
+    </a>
+  </div>
+
+  {% if messages %}
+  {% for msg in messages %}
+  <div class="alert alert-{% if msg.tags == 'error' %}danger{% else %}success{% endif %} alert-dismissible fade show" style="border-radius:8px;border:none;">
+    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  <!-- Legend -->
+  <div class="d-flex gap-3 mb-3 flex-wrap align-items-center" style="font-size:12px;background:#f8fafc;padding:10px 14px;border-radius:8px;border:1px solid var(--cf-border);">
+    <strong style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--cf-muted);">Legend:</strong>
+    <span><span class="badge" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;">None</span> Module hidden completely</span>
+    <span><span class="badge" style="background:#dbeafe;color:#1e40af;">View</span> Can see - no changes</span>
+    <span><span class="badge" style="background:#ffedd5;color:#c2410c;">Part Edit</span> Only ticked actions / fields</span>
+    <span><span class="badge" style="background:#dcfce7;color:#166534;">Full Edit</span> All actions - goes to approval queue</span>
+  </div>
+
+  <form method="post" id="permMatrix">
+    {% csrf_token %}
+    <input type="hidden" name="site_access_submitted" value="1">
+
+    <div class="d-flex gap-2 mb-4">
+      <button type="submit" class="btn btn-cf-primary px-4">
+        <i class="bi bi-shield-check me-1"></i>Save Permission Matrix
+      </button>
+      <button type="button" class="btn btn-cf-outline" onclick="clearAll()">
+        <i class="bi bi-x-circle me-1"></i>Clear All
+      </button>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-3" style="border-radius:10px;overflow:hidden;">
+      <div style="background:var(--cf-navy);color:white;padding:10px 16px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:1px;">
+        <i class="bi bi-buildings me-2"></i>Site Access
+      </div>
+      <div class="p-3">
+        <div class="mb-2" style="font-size:13px;color:var(--cf-muted);">
+          Select which sites this staff member can access. The module permissions below decide what they can do inside those sites.
+        </div>
+        <div class="row g-2">
+          {% for co in companies %}
+          <div class="col-md-6 col-xl-4">
+            <label class="d-flex align-items-start gap-2" style="font-size:12px;border:1px solid var(--cf-border);border-radius:8px;padding:8px 10px;min-height:42px;cursor:pointer;">
+              <input type="checkbox" name="site_access" value="{{ co.pk }}" {% if co.pk in selected_site_ids %}checked{% endif %} style="margin-top:2px;accent-color:var(--cf-blue);flex-shrink:0;">
+              <span>{{ co.name }}</span>
+            </label>
+          </div>
+          {% empty %}
+          <div class="col-12 text-muted small">No active sites available.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {% for section_name, modules in ordered_sections %}
+    <div class="card border-0 shadow-sm mb-3" style="border-radius:10px;overflow:hidden;">
+
+      <div style="background:var(--cf-navy);color:white;padding:10px 16px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:1px;">
+        <i class="bi bi-folder2-open me-2"></i>{{ section_name }}
+      </div>
+
+      {% for mod in modules %}
+      <div class="border-bottom p-3" data-module="{{ mod.module_key }}">
+        <div class="row g-3 align-items-start">
+
+          <!-- Label + radio buttons -->
+          <div class="col-lg-4">
+            <div style="font-size:14px;font-weight:600;color:var(--cf-navy);margin-bottom:8px;">
+              {{ mod.label }}
+            </div>
+            <div class="d-flex flex-wrap gap-3">
+
+              <label class="d-flex align-items-center gap-1" style="cursor:pointer;font-size:13px;">
+                <input type="radio" name="level__{{ mod.module_key }}" value=""
+                       {% if not mod.current_level %}checked{% endif %}
+                       onchange="onLevel('{{ mod.module_key }}','')">
+                <span style="color:#64748b;">None</span>
+              </label>
+
+              <label class="d-flex align-items-center gap-1" style="cursor:pointer;font-size:13px;">
+                <input type="radio" name="level__{{ mod.module_key }}" value="view"
+                       {% if mod.current_level == 'view' %}checked{% endif %}
+                       onchange="onLevel('{{ mod.module_key }}','view')">
+                <span style="color:#1e40af;">View</span>
+              </label>
+
+              {% if mod.has_actions %}
+              <label class="d-flex align-items-center gap-1" style="cursor:pointer;font-size:13px;">
+                <input type="radio" name="level__{{ mod.module_key }}" value="part_edit"
+                       {% if mod.current_level == 'part_edit' %}checked{% endif %}
+                       onchange="onLevel('{{ mod.module_key }}','part_edit')">
+                <span style="color:#c2410c;">Part Edit</span>
+              </label>
+              {% endif %}
+
+              <label class="d-flex align-items-center gap-1" style="cursor:pointer;font-size:13px;">
+                <input type="radio" name="level__{{ mod.module_key }}" value="full_edit"
+                       {% if mod.current_level == 'full_edit' %}checked{% endif %}
+                       onchange="onLevel('{{ mod.module_key }}','full_edit')">
+                <span style="color:#166534;">Full Edit</span>
+              </label>
+
+            </div>
+          </div>
+
+          <!-- Action checkboxes: only shown when Part Edit -->
+          <div class="col-lg-8"
+               id="actions_{{ mod.module_key }}"
+               style="display:{% if mod.current_level == 'part_edit' %}block{% else %}none{% endif %};">
+            {% if mod.actions %}
+            <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px;">
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#c2410c;margin-bottom:10px;">
+                Select which actions this staff member can perform:
+              </div>
+              <div class="row g-1">
+                {% for action in mod.actions %}
+                <div class="col-md-6 col-xl-4">
+                  <label class="d-flex align-items-start gap-2" style="cursor:pointer;font-size:12px;padding:3px 0;">
+                    <input type="checkbox"
+                           name="action__{{ mod.module_key }}__{{ action.key }}"
+                           {% if action.checked %}checked{% endif %}
+                           style="margin-top:2px;accent-color:#c2410c;flex-shrink:0;">
+                    <span>{{ action.label }}</span>
+                  </label>
+                </div>
+                {% endfor %}
+              </div>
+              <div class="mt-2 d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        style="font-size:11px;padding:2px 10px;"
+                        onclick="checkAll('{{ mod.module_key }}',true)">All</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        style="font-size:11px;padding:2px 10px;"
+                        onclick="checkAll('{{ mod.module_key }}',false)">None</button>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+
+    <div class="mb-5 mt-2">
+      <button type="submit" class="btn btn-cf-primary px-5">
+        <i class="bi bi-shield-check me-1"></i>Save Permission Matrix
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+function onLevel(moduleKey, level) {
+  const el = document.getElementById('actions_' + moduleKey);
+  if (el) el.style.display = (level === 'part_edit') ? 'block' : 'none';
+}
+
+function checkAll(moduleKey, state) {
+  const el = document.getElementById('actions_' + moduleKey);
+  if (!el) return;
+  el.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = state; });
+}
+
+function clearAll() {
+  if (!confirm('Clear ALL permissions for this staff member?')) return;
+  document.querySelectorAll('input[type="radio"][value=""]').forEach(r => { r.checked = true; });
+  document.querySelectorAll('[id^="actions_"]').forEach(d => { d.style.display = 'none'; });
+}
+</script>
+{% endblock %}

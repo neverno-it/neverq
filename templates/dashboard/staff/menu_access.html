@@ -1,0 +1,100 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-shield-lock me-2"></i>Select Staff User</h5>
+      </div>
+      <div class="cf-card-body p-0">
+        <div class="list-group list-group-flush">
+          {% for u in staff_users %}
+          <a href="?staff_user={{ u.pk }}"
+             class="list-group-item list-group-item-action {% if selected_user and selected_user.pk == u.pk %}active{% endif %}"
+             style="border:none;border-bottom:1px solid var(--cf-border);{% if selected_user and selected_user.pk == u.pk %}background:var(--cf-blue);color:white;{% endif %}">
+            <div class="fw-600">{{ u.name }}</div>
+            <div style="font-size:12px;{% if selected_user and selected_user.pk == u.pk %}color:rgba(255,255,255,.8);{% else %}color:var(--cf-muted);{% endif %}">
+              {{ u.get_role_display }} · {{ u.company.name|default:"No company" }}
+            </div>
+          </a>
+          {% empty %}
+          <div class="p-3 text-muted">No staff users found.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <div>
+          <h5><i class="bi bi-layout-text-sidebar-reverse me-2"></i>Dashboard Menu Access</h5>
+          {% if selected_user %}
+          <div class="text-muted" style="font-size:12px;">Editing {{ selected_user.name }} ({{ selected_user.get_role_display }})</div>
+          {% else %}
+          <div class="text-muted" style="font-size:12px;">Choose a user from the left to start.</div>
+          {% endif %}
+        </div>
+        {% if selected_user and has_custom_access %}
+        <span class="badge bg-warning text-dark">Custom access active</span>
+        {% elif selected_user %}
+        <span class="badge bg-success">Using role default</span>
+        {% endif %}
+      </div>
+
+      <div class="cf-card-body">
+        {% if selected_user %}
+        <div class="alert alert-info mb-3">
+          This page lets you <strong>hide or allow dashboard menus/pages inside the user’s normal role scope</strong>.
+          It does not promote a POS user into Company Admin or bypass business-role security.
+        </div>
+
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="staff_user" value="{{ selected_user.pk }}">
+
+          <div class="row g-3">
+            {% for section, items in menu_groups.items %}
+            <div class="col-md-6">
+              <div style="border:1px solid var(--cf-border);border-radius:10px;padding:14px;height:100%;background:#fff;">
+                <div style="font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;color:var(--cf-blue-dark);margin-bottom:10px;">
+                  {{ section }}
+                </div>
+                {% for item in items %}
+                <label class="d-flex align-items-start gap-2 mb-2" style="cursor:pointer;">
+                  <input type="checkbox" name="allowed_keys" value="{{ item.key }}"
+                         {% if item.key in selected_keys %}checked{% endif %}
+                         style="margin-top:3px;accent-color:var(--cf-blue);width:16px;height:16px;">
+                  <span>
+                    <span class="fw-600 d-block">{{ item.label }}</span>
+                    <span class="text-muted" style="font-size:12px;">{{ item.key }}</span>
+                  </span>
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+          <div class="d-flex gap-2 mt-4 flex-wrap">
+            <button type="submit" name="action" value="save" class="btn btn-cf-primary">
+              <i class="bi bi-check2-circle me-1"></i>Save Access
+            </button>
+            <button type="submit" name="action" value="reset" class="btn btn-cf-outline"
+                    onclick="return confirm('Reset to role default for {{ selected_user.name|escapejs }}?');">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Reset to Role Default
+            </button>
+          </div>
+        </form>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+          <i class="bi bi-person-lines-fill" style="font-size:32px;"></i>
+          <div class="mt-2">Select a staff user to configure dashboard access.</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

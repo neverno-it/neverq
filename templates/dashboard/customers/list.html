@@ -1,0 +1,85 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+{% url 'dashboard:customer_bulk_delete' as bulk_delete_url %}
+<div class="filter-card">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-md-4">
+      <label class="filter-label">Search</label>
+      <div class="input-group">
+        <span class="input-group-text" style="border:1.5px solid var(--cf-border);border-right:none;background:#fff;border-radius:var(--cf-radius-sm) 0 0 var(--cf-radius-sm);"><i class="bi bi-search text-muted"></i></span>
+        <input type="search" name="q" value="{{ q|default:'' }}" class="form-control" placeholder="Name, email, or phone..." style="border-left:none;">
+      </div>
+    </div>
+    {% if companies|length > 1 %}
+    <div class="col-md-3">
+      <label class="filter-label">Company</label>
+      <select name="company" class="form-select" onchange="this.form.submit()">
+        <option value="">All Companies</option>
+        {% for co in companies %}<option value="{{ co.pk }}" {% if company_id == co.pk|stringformat:"s" %}selected{% endif %}>{{ co.name }}</option>{% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div class="col-md-2">
+      <label class="filter-label">Status</label>
+      <select name="status" class="form-select" onchange="this.form.submit()">
+        <option value="">All</option>
+        <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending Approval</option>
+        <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>Approved</option>
+      </select>
+    </div>
+    <div class="col-md-3 d-flex gap-2">
+      <button type="submit" class="btn btn-cf-primary flex-fill">Apply</button>
+      <a href="{% url 'dashboard:customer_list' %}" class="btn btn-cf-ghost">Clear</a>
+    </div>
+  </form>
+</div>
+<div class="cf-card">
+  <div class="cf-card-header">
+    <div><h5><i class="bi bi-people-fill"></i>Customers <span style="margin-left:10px;font-family:inherit;font-size:14px;font-weight:600;background:var(--cf-blue-light);color:var(--cf-blue-dark);border-radius:999px;padding:3px 12px;vertical-align:middle;">{{ total_count }} customer{{ total_count|pluralize }}</span></h5></div>
+    {% if lp.add %}<a href="{% url 'dashboard:customer_add' %}" class="btn btn-cf-primary btn-sm"><i class="bi bi-person-plus me-1"></i>Add Customer</a>{% endif %}
+  </div>
+  <div class="cf-card-body pb-0">
+    {% if lp.delete %}
+    {% include "dashboard/includes/bulk_delete_controls.html" with bulk_form_id='customer-bulk-delete-form' bulk_action=bulk_delete_url bulk_confirm_message='Delete selected customers?' %}
+    {% endif %}
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="cf-table">
+      <thead><tr><th style="width:44px;"></th><th>Customer</th><th>Company</th><th>Phone</th><th>Wallet</th><th>Approval</th><th>Status</th><th style="width:160px;"></th></tr></thead>
+      <tbody>
+        {% for customer in customers %}
+        <tr>
+          <td>{% if lp.delete %}<input type="checkbox" class="form-check-input bulk-item-check" data-bulk-form-input="customer-bulk-delete-form" form="customer-bulk-delete-form" name="ids" value="{{ customer.pk }}">{% endif %}</td>
+          <td><div class="td-main">{{ customer.name }}</div><div class="td-sub">{{ customer.email }}</div></td>
+          <td class="td-sub">{{ customer.company.name|default:"-" }}</td>
+          <td class="td-sub">{{ customer.phone|default:"-" }}</td>
+          <td><span class="fw-600">Rs.{{ customer.wallet_balance|default:"0" }}</span></td>
+          <td>{% if customer.is_approved %}<span class="badge-cf badge-active">Approved</span>{% else %}<span class="badge-cf badge-warning">Pending</span>{% endif %}</td>
+          <td><span class="badge-cf {% if customer.is_active %}badge-active{% else %}badge-inactive{% endif %}">{% if customer.is_active %}Active{% else %}Inactive{% endif %}</span></td>
+          <td>
+            <div class="d-flex gap-1 justify-content-end">
+              {% if lp.edit %}<a href="{% url 'dashboard:customer_edit' customer.pk %}" class="btn btn-cf-ghost btn-icon" title="Edit"><i class="bi bi-pencil"></i></a>{% endif %}
+              {% if lp.wallet_view %}<a href="{% url 'dashboard:customer_wallet' customer.pk %}" class="btn btn-cf-ghost btn-icon" title="Wallet"><i class="bi bi-wallet2"></i></a>{% endif %}
+              {% if lp.delete %}<button type="submit" form="customer-bulk-delete-form" formaction="{% url 'dashboard:customer_delete' customer.pk %}" formmethod="post" class="btn btn-icon" style="border:1.5px solid #fecaca;color:var(--cf-red);background:#fff;border-radius:var(--cf-radius-sm);" title="Delete" onclick="return confirm('Delete {{ customer.name|escapejs }}?');"><i class="bi bi-trash"></i></button>{% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8"><div class="empty-state"><div class="empty-icon">Customers</div><h6>No customers found</h6><p>{% if q %}Try a different search term.{% elif lp.add %}<a href="{% url 'dashboard:customer_add' %}">Add your first customer</a>{% else %}No customers are available for your current scope.{% endif %}</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page_obj.has_other_pages %}
+  <div class="cf-card-footer d-flex justify-content-center">
+    <nav><ul class="pagination mb-0 gap-1">
+      {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}">&lt;</a></li>{% endif %}
+      {% for num in page_obj.paginator.page_range %}
+        {% if page_obj.number == num %}<li class="page-item active"><span class="page-link">{{ num }}</span></li>{% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}<li class="page-item"><a class="page-link" href="?page={{ num }}{% if q %}&q={{ q }}{% endif %}">{{ num }}</a></li>{% endif %}
+      {% endfor %}
+      {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}">&gt;</a></li>{% endif %}
+    </ul></nav>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

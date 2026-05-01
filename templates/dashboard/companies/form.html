@@ -1,0 +1,129 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  .company-form-shell{max-width:860px}
+  .company-form-shell .form-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.65px;color:var(--cf-muted)}
+  .company-form-shell .form-control,.company-form-shell .form-select{min-height:44px}
+  .company-form-shell .section-title{padding:10px 12px;border-radius:10px;background:var(--cf-blue-light);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--cf-blue-dark);margin-bottom:4px;display:flex;align-items:center;gap:8px}
+  .company-form-shell .compact-switch{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--cf-border);border-radius:12px;padding:10px 12px;background:#fff;min-height:44px}
+  .company-form-shell .compact-switch .form-check-input{margin:0;width:38px;height:20px}
+  .company-form-shell .compact-switch .small{line-height:1.2}
+</style>
+{% endblock %}
+{% block content %}
+<div class="company-form-shell">
+  <div class="cf-card">
+    <div class="cf-card-header">
+      <h5><i class="bi bi-building me-2 text-blue"></i>{{ page_title }}</h5>
+      <a href="{% url 'dashboard:company_list' %}" class="btn btn-cf-outline btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    </div>
+    <div class="cf-card-body">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="row g-3">
+          <div class="col-12"><label class="form-label">Company Name *</label><input type="text" name="name" class="form-control" required value="{{ company.name|default:'' }}"></div>
+          <div class="col-md-4"><label class="form-label">Phone</label><input type="text" name="phone" class="form-control" value="{{ company.phone|default:'' }}"></div>
+          <div class="col-md-4"><label class="form-label">GST Number</label><input type="text" name="company_gst" class="form-control" value="{{ company.company_gst|default:'' }}"></div>
+          <div class="col-md-4"><label class="form-label">FSSAI Number</label><input type="text" name="fssai_number" class="form-control" value="{{ company.fssai_number|default:'' }}"></div>
+          <div class="col-12"><label class="form-label">Address</label><textarea name="company_address" class="form-control" rows="2">{{ company.company_address|default:'' }}</textarea></div>
+
+          <div class="col-12"><div class="section-title"><i class="bi bi-cash-coin"></i>Billing & Subsidy</div></div>
+          <div class="col-md-6"><label class="form-label">Billing Mode</label><select name="bill_company" class="form-select" id="billMode"><option value="1" {% if company and company.bill_company == 1 %}selected{% endif %}>Employee Pays</option><option value="2" {% if not company or company.bill_company == 2 %}selected{% endif %}>Company Pays</option></select></div>
+          <div class="col-md-3" id="companyPayMealsRow"><label class="form-label">Free Meals / Day</label><input type="number" name="company_pay_meals_per_day" class="form-control" min="1" max="10" step="1" value="{{ company.company_pay_meals_per_day|default:'1' }}"><div class="small text-muted mt-1">For Company Pays customers.</div></div>
+          <div class="col-md-3" id="subsidyUsesRow"><label class="form-label">Subsidy Uses / Day</label><input type="number" name="subsidy_meals_per_day" class="form-control" min="1" max="10" step="1" value="{{ company.subsidy_meals_per_day|default:'1' }}"><div class="small text-muted mt-1">For Subsidy customers.</div></div>
+      <div class="col-md-6" id="subsidyRow"><label class="form-label">Default Subsidy Amount (₹)</label><input type="number" name="company_meal_amount" class="form-control" step="0.01" min="0" value="{{ company.company_meal_amount|default:'0' }}"><div class="small text-muted mt-1">Used for customers marked as Subsidy. Free-meal customers use the configured free meals/day limit.</div></div>
+
+          <div class="col-12"><div class="section-title"><i class="bi bi-clock"></i>Ordering Schedule</div></div>
+          <div class="col-12">
+            <label class="form-label">Open Days *</label>
+            <div class="row g-2">
+              {% for day_value, day_label in order_day_choices %}
+              <div class="col-md-3 col-sm-4 col-6">
+                <label class="border rounded px-3 py-2 d-flex align-items-center gap-2 h-100" style="cursor:pointer;background:#fff;">
+                  <input type="checkbox" name="order_open_days" value="{{ day_value }}" {% if day_value in selected_order_days %}checked{% endif %} style="accent-color:var(--cf-blue);width:16px;height:16px;">
+                  <span>{{ day_label }}</span>
+                </label>
+              </div>
+              {% endfor %}
+            </div>
+            <div class="small text-muted mt-2">Select the weekdays when ordering is allowed for this site.</div>
+          </div>
+          <div class="col-md-6"><label class="form-label">Orders Open From</label><input type="time" name="order_from_time" class="form-control" value="{{ company.order_from_time|time:'H:i'|default:'' }}"></div>
+          <div class="col-md-6"><label class="form-label">Orders Close At</label><input type="time" name="order_to_time" class="form-control" value="{{ company.order_to_time|time:'H:i'|default:'' }}"></div>
+          <div class="col-12"><div class="small text-muted">If both times are filled, customers can only order inside this window. Outside this window, ordering is blocked automatically.</div></div>
+
+          <div class="col-12"><div class="section-title"><i class="bi bi-shop"></i>Store Settings</div></div>
+          <div class="col-md-6">
+            <label class="form-label">Web Order Prefix</label>
+            <input type="text" name="web_order_prefix" class="form-control text-uppercase" maxlength="10" placeholder="WEB" value="{{ company.web_order_prefix|default:'' }}">
+            <div class="form-text">e.g. <code>WEB</code> → <strong>WEB-260401-0001</strong>.</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Kiosk Order Prefix</label>
+            <input type="text" name="kiosk_order_prefix" class="form-control text-uppercase" maxlength="10" placeholder="KIO" value="{{ company.kiosk_order_prefix|default:'' }}">
+            <div class="form-text">e.g. <code>KIO</code> → <strong>KIO-260401-0001</strong>.</div>
+          </div>
+          <div class="col-md-4"><label class="form-label">COD Payment</label><div class="compact-switch"><span class="small">Cash on delivery</span><input class="form-check-input" type="checkbox" name="cod_payment" id="cod" {% if company and company.cod_payment %}checked{% endif %}></div></div>
+          <div class="col-md-4"><label class="form-label">Online / UPI Payment</label><div class="compact-switch"><span class="small">Allow online payment</span><input class="form-check-input" type="checkbox" name="online_payment" id="online_pay" {% if not company or company.online_payment %}checked{% endif %}></div></div>
+          <div class="col-md-4"><label class="form-label">Monthly Billing</label><div class="compact-switch"><span class="small">Allow monthly billing</span><input class="form-check-input" type="checkbox" name="monthly_payment" id="monthly_pay" {% if company and company.monthly_payment %}checked{% endif %}></div></div>
+          <div class="col-12 mt-2"><div class="section-title"><i class="bi bi-credit-card-2-front"></i>POS Payment Controls</div></div>
+          <div class="col-md-3"><label class="form-label">POS Cash</label><div class="compact-switch"><span class="small">Show Cash</span><input class="form-check-input" type="checkbox" name="pos_cash_enabled" {% if not company or company.pos_cash_enabled %}checked{% endif %}></div></div>
+          <div class="col-md-3"><label class="form-label">POS UPI</label><div class="compact-switch"><span class="small">Show UPI</span><input class="form-check-input" type="checkbox" name="pos_upi_enabled" {% if not company or company.pos_upi_enabled %}checked{% endif %}></div></div>
+          <div class="col-md-3"><label class="form-label">POS Card</label><div class="compact-switch"><span class="small">Show Card</span><input class="form-check-input" type="checkbox" name="pos_card_enabled" {% if not company or company.pos_card_enabled %}checked{% endif %}></div></div>
+          <div class="col-md-3"><label class="form-label">Card Fee %</label><input type="number" name="pos_card_fee_percent" class="form-control" step="0.01" min="0" max="25" value="{{ company.pos_card_fee_percent|default:'3.50' }}"><div class="small text-muted mt-1">Applied only to POS card bills and wallet recharge by card. Web/kiosk online payments are not surcharged.</div></div>
+          <div class="col-md-4"><label class="form-label">Customer Approval</label><div class="compact-switch"><span class="small">Approve new registrations</span><input class="form-check-input" type="checkbox" name="require_customer_approval" {% if company and company.require_customer_approval %}checked{% endif %}></div></div>
+          <div class="col-md-4"><label class="form-label">Manual Store Status</label><div class="compact-switch"><span class="small">Open for orders</span><input class="form-check-input" type="checkbox" name="store_status" id="store" {% if not company or company.store_status %}checked{% endif %}></div><div class="small text-muted mt-1">Admins can still close/open manually. Schedule is enforced automatically.</div></div>
+
+          <div class="col-12"><div class="section-title"><i class="bi bi-truck"></i>Fulfillment Mode</div></div>
+          <div class="col-md-6">
+            <label class="form-label">Order Fulfillment Mode</label>
+            <select name="fulfillment_mode" class="form-select">
+              <option value="pickup" {% if not company or company.fulfillment_mode == 'pickup' %}selected{% endif %}>Pickup — QR-based collection at counter</option>
+              <option value="packet_delivery" {% if company and company.fulfillment_mode == 'packet_delivery' %}selected{% endif %}>Packet Delivery — our staff delivers to company (no QR)</option>
+            </select>
+            <div class="form-text">Choose <strong>Packet Delivery</strong> when food is packed and delivered to the company by our representative. Customers in delivery-mode companies will not see QR codes.</div>
+          </div>
+
+          <div class="col-12 mt-2"><div class="section-title" style="background:#e8f5e9;color:#2e7d32;"><i class="bi bi-star-fill"></i>Royalty Points</div></div>
+          <div class="col-md-3"><label class="form-label">Enable Royalty</label><div class="compact-switch"><span class="small">Active</span><input class="form-check-input" type="checkbox" name="royalty_enabled" {% if company and company.royalty_enabled %}checked{% endif %}></div></div>
+          <div class="col-md-3"><label class="form-label">Points per ₹1 spent</label><input type="number" name="royalty_points_per_rupee" class="form-control" value="{{ company.royalty_points_per_rupee|default:'1' }}" min="0.01" step="0.01"></div>
+          <div class="col-md-3"><label class="form-label">Min points to redeem</label><input type="number" name="royalty_min_redeem" class="form-control" value="{{ company.royalty_min_redeem|default:'100' }}" min="1"></div>
+          <div class="col-md-3"><label class="form-label">Max % of order via points</label><input type="number" name="royalty_max_redeem_pct" class="form-control" value="{{ company.royalty_max_redeem_pct|default:'50' }}" min="0" max="100"></div>
+
+          <div class="col-12 mt-1"><div class="small fw-bold text-success mb-1">Leaderboard Bonus (top customer rewards per period)</div></div>
+          <div class="col-md-3"><label class="form-label">Rank by</label><select name="royalty_reward_mode" class="form-select"><option value="amount" {% if not company or company.royalty_reward_mode == 'amount' %}selected{% endif %}>Highest spend (₹)</option><option value="count" {% if company and company.royalty_reward_mode == 'count' %}selected{% endif %}>Most orders</option></select></div>
+          <div class="col-md-3"><label class="form-label">Reward period</label><select name="royalty_reward_period" class="form-select"><option value="monthly" {% if not company or company.royalty_reward_period == 'monthly' %}selected{% endif %}>Monthly</option><option value="weekly" {% if company and company.royalty_reward_period == 'weekly' %}selected{% endif %}>Weekly</option><option value="daily" {% if company and company.royalty_reward_period == 'daily' %}selected{% endif %}>Daily</option></select></div>
+          <div class="col-md-2"><label class="form-label">#1 Bonus pts</label><input type="number" name="royalty_rank1_points" class="form-control" value="{{ company.royalty_rank1_points|default:'500' }}" min="0"></div>
+          <div class="col-md-2"><label class="form-label">#2 Bonus pts</label><input type="number" name="royalty_rank2_points" class="form-control" value="{{ company.royalty_rank2_points|default:'250' }}" min="0"></div>
+          <div class="col-md-2"><label class="form-label">#3 Bonus pts</label><input type="number" name="royalty_rank3_points" class="form-control" value="{{ company.royalty_rank3_points|default:'100' }}" min="0"></div>
+
+          <div class="col-12 d-flex gap-2 pt-2">
+            <button type="submit" class="btn btn-cf-primary">{{ action|default:'Save' }}</button>
+            <a href="{% url 'dashboard:company_list' %}" class="btn btn-cf-outline">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const billMode = document.getElementById('billMode');
+  const subsidyRow = document.getElementById('subsidyRow');
+  const companyPayMealsRow = document.getElementById('companyPayMealsRow');
+  const subsidyUsesRow = document.getElementById('subsidyUsesRow');
+
+  function syncSubsidy(){
+    const isCompanyPays = billMode && billMode.value === '2';
+    [companyPayMealsRow, subsidyRow, subsidyUsesRow].forEach(function(el){
+      if(!el) return;
+      el.style.display = isCompanyPays ? '' : 'none';
+      el.style.opacity = isCompanyPays ? '1' : '0.45';
+    });
+  }
+
+  billMode?.addEventListener('change', syncSubsidy);
+  syncSubsidy();
+})();
+</script>
+{% endblock %}

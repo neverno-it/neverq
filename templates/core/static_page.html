@@ -1,0 +1,26 @@
+{% extends "base/customer_base.html" %}
+{% block title %}{{ page.title }}{% endblock %}
+{% block content %}
+<div class="container final-page-shell" style="max-width:900px;">
+  <div class="final-page-hero mb-3 mb-md-4">
+    <div class="final-page-kicker"><i class="bi bi-file-earmark-text"></i> Information</div>
+    <h1 class="final-page-title">{{ page.title }}</h1>
+    <p class="final-page-copy">Clear information in the same customer-facing style as the rest of the ordering experience.</p>
+  </div>
+
+  <div class="final-panel final-html-card">
+    {{ page.content|safe }}
+  </div>
+</div>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+window.NEVERQ_PAGE_TOUR_KEY = 'static-page';
+window.NEVERQ_PAGE_TOUR = [
+  {selector:'.final-page-hero', title:'Information page', copy:'This page gives you clean customer-facing information in the same app layout.', placement:'bottom'},
+  {selector:'.final-panel', title:'Main content', copy:'Read the full policy or information text in this content panel.', placement:'top'},
+  {selector:'.bottom-nav', title:'Go back into the app', copy:'Use the bottom navigation anytime to return to menu, orders, cart, profile, or checkout.', placement:'top'}
+];
+</script>
+{% endblock %}

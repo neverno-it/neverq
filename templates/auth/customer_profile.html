@@ -1,0 +1,116 @@
+{% extends "base/customer_base.html" %}
+{% block content %}
+<style>
+  .profile-shell{max-width:720px;margin:0 auto;padding:20px 0 28px;}
+  .profile-hero{background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 100%);border-radius:24px;padding:20px;display:flex;gap:16px;align-items:center;color:#fff;box-shadow:0 14px 40px rgba(15,23,42,.18);}
+  .profile-avatar{width:64px;height:64px;border-radius:20px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-size:30px;font-weight:700;flex-shrink:0;}
+  .profile-hero h1{margin:0;font-size:clamp(24px,4vw,34px);line-height:.95;}
+  .profile-hero p{margin:4px 0 0;color:rgba(255,255,255,.82);font-size:14px;}
+  .profile-card{background:#fff;border:1px solid var(--cf-border);border-radius:22px;padding:22px;box-shadow:var(--cf-shadow-soft);margin-top:18px;}
+  .profile-label{font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--cf-muted);margin-bottom:8px;}
+  .profile-input,.profile-readonly{width:100%;border-radius:16px;border:1px solid var(--cf-border);background:#f8fbff;padding:14px 16px;font-size:15px;}
+  .profile-input:focus{outline:none;border-color:var(--cf-blue);box-shadow:0 0 0 4px rgba(37,99,235,.12);background:#fff;}
+  .profile-readonly{color:var(--cf-muted);display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .lock-note{font-size:12px;color:var(--cf-muted);margin-top:8px;}
+  .profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .profile-actions{margin-top:18px;}
+  .quick-links-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:18px;}
+  .quick-link-card{background:#fff;border:1px solid var(--cf-border);border-radius:18px;padding:16px;text-decoration:none;display:flex;align-items:center;gap:14px;box-shadow:var(--cf-shadow-soft);}
+  .quick-link-card h6{margin:0 0 4px;font-size:18px;}
+  .quick-link-card p{margin:0;color:var(--cf-muted);font-size:13px;}
+  .ql-icon-wrap{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+  .ql-icon-blue{background:#eaf2ff;color:var(--cf-blue);} .ql-icon-red{background:#fff1f2;color:#dc2626;} .ql-icon-navy{background:#eef2ff;color:var(--cf-navy);}
+  .logout-wrap{text-align:center;margin-top:20px;}
+  .logout-btn{display:inline-flex;align-items:center;gap:8px;color:#dc2626;text-decoration:none;font-weight:700;padding:10px 14px;border-radius:14px;}
+  .logout-btn:hover{background:#fff1f2;}
+  @media (max-width: 767.98px){
+    .profile-shell{padding:14px 0 18px;}
+    .profile-hero{padding:16px;border-radius:20px;}
+    .profile-avatar{width:54px;height:54px;border-radius:16px;font-size:26px;}
+    .profile-card{padding:16px;border-radius:18px;margin-top:14px;}
+    .profile-grid{grid-template-columns:1fr;gap:14px;}
+  }
+</style>
+<div class="container profile-shell">
+  <div class="profile-hero">
+    <div class="profile-avatar">{{ customer.name|slice:":1"|upper }}</div>
+    <div>
+      <h1>My Profile</h1>
+      <p>{{ customer.company.name }}</p>
+      <p>{{ customer.email }}</p>
+    </div>
+  </div>
+
+  <div class="profile-card">
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert {% if msg.tags == 'error' %}alert-danger{% else %}alert-success{% endif %} mb-3">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="profile-grid">
+        <div>
+          <label class="profile-label">Full Name</label>
+          <input type="text" name="name" class="profile-input" value="{{ form.name.value|default:customer.name }}" required>
+        </div>
+        <div>
+          <label class="profile-label">Phone Number</label>
+          <input type="tel" name="phone" class="profile-input" value="{{ form.phone.value|default:customer.phone }}" required>
+        </div>
+        <div>
+          <label class="profile-label">Email Address</label>
+          <div class="profile-readonly"><span>{{ customer.email }}</span><i class="bi bi-lock-fill text-muted"></i></div>
+        </div>
+        <div>
+          <label class="profile-label">Registered Company</label>
+          <div class="profile-readonly"><span>{{ customer.company.name }}</span><i class="bi bi-lock-fill text-muted"></i></div>
+        </div>
+        <div>
+          <label class="profile-label">Birth Date</label>
+          <div class="profile-readonly"><span>{% if customer.date_of_birth %}{% if customer.date_of_birth.year == 2000 %}{{ customer.date_of_birth|date:'d M' }}{% else %}{{ customer.date_of_birth|date:'d M Y' }}{% endif %}{% else %}Not set{% endif %}</span><i class="bi bi-lock-fill text-muted"></i></div>
+        </div>
+      </div>
+      <div class="lock-note">Only your name and phone number can be edited here. Birth date, email, company, and other registration details stay locked after signup.</div>
+      <div class="profile-actions">
+        <button type="submit" class="btn btn-cf-primary w-100"><i class="bi bi-check2 me-1"></i>Save Changes</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="quick-links-grid">
+    <a href="{% url 'orders:order_history' %}" class="quick-link-card">
+      <div class="ql-icon-wrap ql-icon-blue"><i class="bi bi-clock-history"></i></div>
+      <div><h6>My Orders</h6><p>Track earlier orders and reorder quickly.</p></div>
+      <i class="bi bi-chevron-right ms-auto text-muted small"></i>
+    </a>
+    <a href="{% url 'reviews:my_reviews' %}" class="quick-link-card">
+      <div class="ql-icon-wrap ql-icon-red"><i class="bi bi-star"></i></div>
+      <div><h6>My Reviews</h6><p>Rate delivered food and view past feedback.</p></div>
+      <i class="bi bi-chevron-right ms-auto text-muted small"></i>
+    </a>
+    <a href="{% url 'accounts:customer_change_password' %}" class="quick-link-card">
+      <div class="ql-icon-wrap ql-icon-navy"><i class="bi bi-shield-lock-fill"></i></div>
+      <div><h6>Change Password</h6><p>Update your account password.</p></div>
+      <i class="bi bi-chevron-right ms-auto text-muted small"></i>
+    </a>
+  </div>
+
+  <div class="logout-wrap">
+    <a href="{% url 'accounts:customer_logout' %}" class="logout-btn"><i class="bi bi-box-arrow-right"></i>Sign Out</a>
+  </div>
+</div>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+window.NEVERQ_PAGE_TOUR_KEY = 'customer-profile';
+window.NEVERQ_PAGE_TOUR = [
+  {selector:'.profile-hero', title:'Profile overview', copy:'This header keeps your basic customer identity and company visible at a glance.', placement:'bottom'},
+  {selector:'.profile-card', title:'Update profile', copy:'You can edit your name and phone number here and save the changes safely.', placement:'bottom'},
+  {selector:'.quick-links-grid', title:'Quick account actions', copy:'Use these cards for order history, reviews, and password updates.', placement:'top'},
+  {selector:'.logout-wrap', title:'Sign out', copy:'Use this button when you need to end the current customer session.', placement:'top'}
+];
+</script>
+{% endblock %}

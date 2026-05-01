@@ -1,0 +1,156 @@
+<style>
+  .public-tour-trigger{position:fixed;right:18px;bottom:18px;z-index:1085;display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:none;border-radius:999px;background:#1565c0;color:#fff;font-weight:700;box-shadow:0 12px 28px rgba(13,71,161,.28);cursor:pointer}
+  .public-tour-trigger:hover{background:#0d47a1}
+  .public-tour-overlay{position:fixed;inset:0;background:rgba(12,18,28,.48);z-index:1082;display:none}
+  .public-tour-popover{position:fixed;z-index:1084;width:min(360px,calc(100vw - 24px));background:#fff;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:18px 18px 16px;display:none;color:#15233b}
+  .public-tour-step{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#1565c0;margin-bottom:6px}
+  .public-tour-title{font-size:22px;font-weight:800;line-height:1.05;margin-bottom:8px}
+  .public-tour-copy{font-size:13px;line-height:1.6;color:#475569;margin-bottom:14px}
+  .public-tour-actions{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .public-tour-progress{font-size:12px;color:#64748b}
+  .public-tour-buttons{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  .public-tour-btn{border:none;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:700;cursor:pointer}
+  .public-tour-btn.ghost{background:#f1f5f9;color:#334155}
+  .public-tour-btn.outline{background:#fff;color:#1565c0;border:1px solid rgba(21,101,192,.28)}
+  .public-tour-btn.primary{background:#1565c0;color:#fff;box-shadow:0 10px 22px rgba(21,101,192,.18)}
+  .public-tour-target{position:relative;z-index:1083;box-shadow:0 0 0 4px rgba(21,101,192,.16),0 0 0 10px rgba(21,101,192,.08)!important;border-radius:14px}
+  @media (max-width: 575.98px){
+    .public-tour-trigger{right:12px;bottom:12px;padding:10px 12px}
+    .public-tour-trigger span{display:none}
+  }
+</style>
+<button type="button" class="public-tour-trigger" id="neverqPublicTourTrigger" hidden><i class="bi bi-stars"></i><span>Tour</span></button>
+<div class="public-tour-overlay" id="neverqPublicTourOverlay"></div>
+<div class="public-tour-popover" id="neverqPublicTourPopover" aria-live="polite">
+  <div class="public-tour-step" id="neverqPublicTourStep"></div>
+  <div class="public-tour-title" id="neverqPublicTourTitle"></div>
+  <div class="public-tour-copy" id="neverqPublicTourCopy"></div>
+  <div class="public-tour-actions">
+    <div class="public-tour-progress" id="neverqPublicTourProgress"></div>
+    <div class="public-tour-buttons">
+      <button type="button" class="public-tour-btn ghost" id="neverqPublicTourDisable">Don't show again</button>
+      <button type="button" class="public-tour-btn ghost" id="neverqPublicTourSkip">Skip</button>
+      <button type="button" class="public-tour-btn outline" id="neverqPublicTourBack">Back</button>
+      <button type="button" class="public-tour-btn primary" id="neverqPublicTourNext">Next</button>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const trigger = document.getElementById('neverqPublicTourTrigger');
+  const overlay = document.getElementById('neverqPublicTourOverlay');
+  const popover = document.getElementById('neverqPublicTourPopover');
+  const stepEl = document.getElementById('neverqPublicTourStep');
+  const titleEl = document.getElementById('neverqPublicTourTitle');
+  const copyEl = document.getElementById('neverqPublicTourCopy');
+  const progressEl = document.getElementById('neverqPublicTourProgress');
+  const nextBtn = document.getElementById('neverqPublicTourNext');
+  const backBtn = document.getElementById('neverqPublicTourBack');
+  const skipBtn = document.getElementById('neverqPublicTourSkip');
+  const disableBtn = document.getElementById('neverqPublicTourDisable');
+  const rawSteps = Array.isArray(window.NEVERQ_PUBLIC_TOUR) ? window.NEVERQ_PUBLIC_TOUR : [];
+  const GLOBAL_TOUR_DISABLE_KEY = 'neverq_tour_disabled_global:v1';
+  if (!trigger || !overlay || !popover || !stepEl || !titleEl || !copyEl || !progressEl || !nextBtn || !backBtn || !skipBtn || !disableBtn) return;
+
+  function isVisible(el){
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+    return !!(el.getClientRects && el.getClientRects().length);
+  }
+  const steps = rawSteps.map(function(step){
+    const element = step && step.selector ? document.querySelector(step.selector) : null;
+    if (!isVisible(element)) return null;
+    return {element, selector: step.selector, title: step.title || 'Tour step', copy: step.copy || '', placement: step.placement || 'bottom'};
+  }).filter(Boolean);
+  if (!steps.length) return;
+  function toursDisabledGlobally(){
+    try { return localStorage.getItem(GLOBAL_TOUR_DISABLE_KEY) === '1'; } catch (e) { return false; }
+  }
+  function disableToursGlobally(){
+    try { localStorage.setItem(GLOBAL_TOUR_DISABLE_KEY, '1'); } catch (e) {}
+  }
+  trigger.hidden = toursDisabledGlobally();
+
+  const pageKey = (window.NEVERQ_PUBLIC_TOUR_KEY || window.location.pathname || 'public-tour').replace(/[^a-z0-9_-]+/gi, '_');
+  const storageKey = 'neverq_public_tour_seen:' + pageKey + ':v2';
+
+  function tourStorageGet(){
+    try {
+      return localStorage.getItem(storageKey) || sessionStorage.getItem(storageKey) || '';
+    } catch (e) {
+      try { return sessionStorage.getItem(storageKey) || ''; } catch (inner) { return ''; }
+    }
+  }
+
+  function tourStorageSetDone(){
+    try { localStorage.setItem(storageKey, '1'); } catch (e) {}
+    try { sessionStorage.setItem(storageKey, '1'); } catch (e) {}
+  }
+
+  function tourStorageClear(){
+    try { localStorage.removeItem(storageKey); } catch (e) {}
+    try { sessionStorage.removeItem(storageKey); } catch (e) {}
+  }
+
+  let index = 0;
+  let activeElement = null;
+
+  function clearHighlight(){
+    if (activeElement) activeElement.classList.remove('public-tour-target');
+    activeElement = null;
+  }
+  function placePopover(target, placement){
+    const rect = target.getBoundingClientRect();
+    const popRect = popover.getBoundingClientRect();
+    const gap = 14;
+    let top = rect.bottom + gap;
+    let left = rect.left;
+    if (placement === 'right') { top = rect.top; left = rect.right + gap; }
+    else if (placement === 'left') { top = rect.top; left = rect.left - popRect.width - gap; }
+    else if (placement === 'top') { top = rect.top - popRect.height - gap; left = rect.left; }
+    left = Math.max(12, Math.min(left, window.innerWidth - popRect.width - 12));
+    top = Math.max(12, Math.min(top, window.innerHeight - popRect.height - 12));
+    popover.style.left = left + 'px';
+    popover.style.top = top + 'px';
+  }
+  function render(){
+    clearHighlight();
+    const step = steps[index];
+    if (!step || !isVisible(step.element)) { close(false); return; }
+    activeElement = step.element;
+    activeElement.classList.add('public-tour-target');
+    try { activeElement.scrollIntoView({behavior:'smooth', block:'center', inline:'nearest'}); } catch (e) {}
+    stepEl.textContent = 'Step ' + (index + 1);
+    titleEl.textContent = step.title;
+    copyEl.textContent = step.copy;
+    progressEl.textContent = (index + 1) + ' of ' + steps.length;
+    backBtn.style.display = index === 0 ? 'none' : 'inline-flex';
+    nextBtn.textContent = index === steps.length - 1 ? 'Finish' : 'Next';
+    overlay.style.display = 'block';
+    popover.style.display = 'block';
+    setTimeout(function(){ placePopover(activeElement, step.placement); }, 80);
+  }
+  function close(markDone){
+    clearHighlight();
+    overlay.style.display = 'none';
+    popover.style.display = 'none';
+    if (markDone) tourStorageSetDone();
+  }
+  function start(force){
+    if (toursDisabledGlobally()) return;
+    if (!force && tourStorageGet() === '1') return;
+    index = 0;
+    render();
+  }
+  trigger.addEventListener('click', function(){ if (toursDisabledGlobally()) return; tourStorageClear(); start(true); });
+  nextBtn.addEventListener('click', function(){ if (index >= steps.length - 1) { close(true); return; } index += 1; render(); });
+  backBtn.addEventListener('click', function(){ if (!index) return; index -= 1; render(); });
+  disableBtn.addEventListener('click', function(){ disableToursGlobally(); trigger.hidden = true; close(true); });
+  skipBtn.addEventListener('click', function(){ close(true); });
+  overlay.addEventListener('click', function(){ close(true); });
+  window.addEventListener('resize', function(){ if (popover.style.display === 'block' && activeElement) placePopover(activeElement, steps[index].placement); });
+  window.NeverQPublicTour = { start: function(){ tourStorageClear(); start(true); }, close: close };
+  if (window.NEVERQ_PUBLIC_TOUR_AUTOSTART !== false) { setTimeout(function(){ start(false); }, 480); }
+})();
+</script>

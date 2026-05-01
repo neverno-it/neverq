@@ -1,0 +1,298 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+
+<div class="filter-bar">
+  <form method="get" class="d-flex flex-wrap gap-2 align-items-end">
+    {% if request.user.is_superadmin %}
+    <div>
+      <label class="form-label">Company</label>
+      <select name="company" class="form-select form-select-sm" style="width:190px;">
+        <option value="">All Companies</option>
+        {% for co in companies %}
+        <option value="{{ co.pk }}" {% if company_filter == co.pk|stringformat:'s' %}selected{% endif %}>{{ co.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div>
+      <label class="form-label">Find Customer</label>
+      <input type="search" name="q" class="form-control form-control-sm" style="width:240px;" value="{{ q }}" placeholder="Name, phone or email">
+    </div>
+    <button type="submit" class="btn btn-cf-primary btn-sm">Search</button>
+    <a href="{% url 'dashboard:wallet_recharge' %}" class="btn btn-cf-outline btn-sm">Reset</a>
+  </form>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-wallet2 me-2 text-blue"></i>Recharge Wallet</h5>
+      </div>
+      <div class="cf-card-body">
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label">Type Customer *</label>
+            <input type="search" name="customer_lookup" id="customerLookup" class="form-control" placeholder="Type name, phone, or email" autocomplete="off">
+            <div class="small text-muted mt-1" id="customerMatchHint">Type to filter the customer list. Exact phone/email or one unique name match will be selected automatically.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Matching Customer</label>
+            <input type="hidden" name="customer" id="customerSelect" value="">
+            <div id="customerMatchList" class="d-flex flex-column gap-2">
+              <div class="small text-muted border rounded-3 px-3 py-2">Type above to find matching customers.</div>
+              {% for customer in customers %}
+              <button
+                type="button"
+                class="customer-match-row d-none text-start border rounded-3 px-3 py-2 bg-white"
+                data-id="{{ customer.pk }}"
+                data-search="{{ customer.name }} {{ customer.phone }} {{ customer.email }} {{ customer.company.name }}"
+                data-company-name="{{ customer.company.name }}"
+                data-card-fee-percent="{{ customer.company.pos_card_fee_percent|default:'3.50'|floatformat:2 }}"
+                data-allow-cash="{{ customer.company.pos_cash_enabled|yesno:'1,0' }}"
+                data-allow-upi="{{ customer.company.pos_upi_enabled|yesno:'1,0' }}"
+                data-allow-card="{{ customer.company.pos_card_enabled|yesno:'1,0' }}"
+                data-allow-online="{{ customer.company.online_payment|yesno:'1,0' }}"
+              >
+                <span class="fw-bold d-block">{{ customer.name }}</span>
+                <span class="small text-muted">{{ customer.phone }} - {{ customer.email }} - {{ customer.company.name }}</span>
+              </button>
+              {% endfor %}
+            </div>
+            <div class="small text-muted mt-1">If more than one customer matches, select the exact customer here before recharge.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Recharge Amount *</label>
+            <input type="number" name="amount" id="rechargeAmount" class="form-control" min="100" max="100000" step="1" placeholder="Minimum Rs.100" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Payment Mode *</label>
+            <select name="payment_mode" id="rechargePaymentMode" class="form-select" required>
+              {% for value, label in payment_modes %}
+              <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+            <div class="small text-muted mt-1">Card recharge applies the configured company card fee. Cash/UPI/online recharge do not add this fee.</div>
+          </div>
+          <div class="mb-3 border rounded-3 p-3" id="rechargeSummaryBox" style="background:#fff8e6;border-color:#facc15!important;">
+            <div class="small fw-bold mb-2" style="color:var(--cf-navy);">Live payable preview</div>
+            <div class="d-flex justify-content-between small mb-1">
+              <span>Wallet credit</span>
+              <strong id="walletCreditPreview">Rs.0.00</strong>
+            </div>
+            <div class="d-flex justify-content-between small mb-1" id="cardFeePreviewRow" style="display:none;">
+              <span id="cardFeePreviewLabel">Card fee (0.00%)</span>
+              <strong id="cardFeePreviewAmt">Rs.0.00</strong>
+            </div>
+            <div class="d-flex justify-content-between small text-muted mb-2">
+              <span>Selected company</span>
+              <span id="rechargeCompanyPreview">Choose customer</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+              <span class="fw-semibold">Customer should pay now</span>
+              <strong id="rechargePayablePreview" style="font-size:1.25rem; color:var(--cf-red);">Rs.0.00</strong>
+            </div>
+            <div class="small text-muted mt-2" id="rechargePayableNote">Select customer, amount, and payment mode to calculate the payable amount.</div>
+          </div>
+          <button type="submit" class="btn btn-cf-primary w-100">
+            <i class="bi bi-plus-circle me-1"></i>Recharge Wallet
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-clock-history me-2 text-blue"></i>Recent Recharges</h5>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="cf-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Order#</th>
+              <th>Customer</th>
+              <th>Company</th>
+              <th>Mode</th>
+              <th style="text-align:right;">Wallet</th>
+              <th style="text-align:right;">Fee</th>
+              <th style="text-align:right;">Collected</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for txn in recent_recharges %}
+            <tr>
+              <td><small>{{ txn.created_at|date:"d M Y, h:i A" }}</small></td>
+              <td><small>{{ txn.order_ref|default:"-" }}</small></td>
+              <td style="font-size:13px;">{{ txn.customer.name }}</td>
+              <td><small>{{ txn.customer.company.name|truncatechars:20 }}</small></td>
+              <td><span class="badge bg-primary">{{ txn.get_payment_mode_display|default:"-" }}</span></td>
+              <td style="text-align:right;font-weight:700;color:var(--cf-green);">Rs.{{ txn.wallet_delta|floatformat:2 }}</td>
+              <td style="text-align:right;">Rs.{{ txn.card_fee_amount|floatformat:2 }}</td>
+              <td style="text-align:right;font-weight:700;">Rs.{{ txn.gross_amount|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="8" class="text-center text-muted py-4">No wallet recharges yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function(){
+  const filter = document.getElementById('customerLookup');
+  const selectedInput = document.getElementById('customerSelect');
+  const matchList = document.getElementById('customerMatchList');
+  const hint = document.getElementById('customerMatchHint');
+  const amountInput = document.getElementById('rechargeAmount');
+  const paymentSelect = document.getElementById('rechargePaymentMode');
+  const walletCreditPreview = document.getElementById('walletCreditPreview');
+  const cardFeePreviewRow = document.getElementById('cardFeePreviewRow');
+  const cardFeePreviewLabel = document.getElementById('cardFeePreviewLabel');
+  const cardFeePreviewAmt = document.getElementById('cardFeePreviewAmt');
+  const payablePreview = document.getElementById('rechargePayablePreview');
+  const payableNote = document.getElementById('rechargePayableNote');
+  const companyPreview = document.getElementById('rechargeCompanyPreview');
+  if (!filter || !selectedInput || !matchList || !amountInput || !paymentSelect) return;
+  const emptyRow = matchList.querySelector('.small.text-muted');
+  const rows = Array.from(matchList.querySelectorAll('.customer-match-row')).map(function(row){
+    return {
+      row: row,
+      id: row.dataset.id || '',
+      text: ((row.dataset.search || row.textContent || '')).toLowerCase(),
+      label: (row.textContent || '').trim().replace(/\s+/g, ' '),
+      companyName: row.dataset.companyName || '',
+      cardFeePercent: parseFloat(row.dataset.cardFeePercent || '0') || 0,
+      allowCash: row.dataset.allowCash === '1',
+      allowUpi: row.dataset.allowUpi === '1',
+      allowCard: row.dataset.allowCard === '1',
+      allowOnline: row.dataset.allowOnline === '1'
+    };
+  });
+
+  function money(v) {
+    return 'Rs.' + (Math.round((Number(v) || 0) * 100) / 100).toFixed(2);
+  }
+
+  function setHint(message, tone) {
+    if (!hint) return;
+    hint.textContent = message;
+    hint.classList.remove('text-success', 'text-danger', 'text-muted');
+    hint.classList.add(tone || 'text-muted');
+  }
+
+  function allowedModes(match) {
+    if (!match) {
+      return { cash: true, upi: true, card: true, online: true };
+    }
+    return {
+      cash: !!match.allowCash,
+      upi: !!match.allowUpi,
+      card: !!match.allowCard,
+      online: !!match.allowOnline
+    };
+  }
+
+  function updatePaymentOptions(match) {
+    const allowed = allowedModes(match);
+    let selectedStillValid = false;
+    Array.from(paymentSelect.options).forEach(function(opt){
+      const enabled = !!allowed[opt.value];
+      opt.disabled = !enabled;
+      opt.hidden = !enabled;
+      if (enabled && paymentSelect.value === opt.value) {
+        selectedStillValid = true;
+      }
+    });
+    if (!selectedStillValid) {
+      const firstEnabled = Array.from(paymentSelect.options).find(function(opt){ return !opt.disabled; });
+      if (firstEnabled) {
+        paymentSelect.value = firstEnabled.value;
+      }
+    }
+  }
+
+  function updateRechargePreview(match) {
+    const amount = parseFloat(amountInput.value || '0') || 0;
+    const feePercent = (match && paymentSelect.value === 'card') ? (match.cardFeePercent || 0) : 0;
+    const fee = amount > 0 ? (amount * feePercent / 100) : 0;
+    const gross = amount + fee;
+    if (walletCreditPreview) walletCreditPreview.textContent = money(amount);
+    if (cardFeePreviewLabel) cardFeePreviewLabel.textContent = 'Card fee (' + feePercent.toFixed(2) + '%)';
+    if (cardFeePreviewAmt) cardFeePreviewAmt.textContent = money(fee);
+    if (cardFeePreviewRow) cardFeePreviewRow.style.display = fee > 0 ? 'flex' : 'none';
+    if (payablePreview) payablePreview.textContent = money(gross);
+    if (payableNote) {
+      payableNote.textContent = paymentSelect.value === 'card'
+        ? 'Customer pays wallet credit plus card fee. Wallet receives only the recharge amount.'
+        : 'Customer pays exactly the wallet recharge amount for this mode.';
+    }
+    if (companyPreview) companyPreview.textContent = match ? (match.companyName + (paymentSelect.value === 'card' ? ' · card fee applies' : '')) : 'Choose customer';
+  }
+
+  function selectRow(match) {
+    selectedInput.value = match ? match.id : '';
+    rows.forEach(function(item){
+      item.row.classList.toggle('border-primary', !!match && item.id === match.id);
+      item.row.classList.toggle('shadow-sm', !!match && item.id === match.id);
+    });
+    updatePaymentOptions(match);
+    updateRechargePreview(match);
+    if (match) {
+      setHint('Selected: ' + match.label, 'text-success');
+    }
+  }
+
+  rows.forEach(function(item){
+    item.row.addEventListener('click', function(){
+      selectRow(item);
+    });
+  });
+
+  filter.addEventListener('input', function(){
+    const needle = filter.value.trim().toLowerCase();
+    const matches = [];
+    rows.forEach(function(item){
+      const visible = !!needle && item.text.includes(needle);
+      item.row.classList.toggle('d-none', !visible);
+      if (visible) {
+        matches.push(item);
+      }
+    });
+    if (emptyRow) {
+      emptyRow.classList.toggle('d-none', !!needle);
+    }
+    if (!needle) {
+      selectRow(null);
+      setHint('Type to filter the customer list. Exact phone/email or one unique name match will be selected automatically.', 'text-muted');
+    } else if (matches.length === 1) {
+      selectRow(matches[0]);
+    } else {
+      selectRow(null);
+      setHint(matches.length ? matches.length + ' matching customers found. Select the exact customer below.' : 'No matching customer found.', matches.length ? 'text-muted' : 'text-danger');
+    }
+  });
+
+  amountInput.addEventListener('input', function(){
+    const current = rows.find(function(item){ return item.id === selectedInput.value; }) || null;
+    updateRechargePreview(current);
+  });
+  paymentSelect.addEventListener('change', function(){
+    const current = rows.find(function(item){ return item.id === selectedInput.value; }) || null;
+    updateRechargePreview(current);
+  });
+
+  updatePaymentOptions(null);
+  updateRechargePreview(null);
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,199 @@
+{% extends "base/customer_base.html" %}
+{% load static %}
+{% block title %}Create Account{% endblock %}
+{% block full_page %}
+<div class="auth-wrapper">
+  <div class="auth-card" style="max-width:560px;">
+    <div class="auth-logo"><img src="{% static "brand/neverq-logo.png" %}" alt="{{ APP_NAME }}"></div>
+    <div class="auth-tagline">Create your customer account for a faster, cleaner ordering experience.</div>
+
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags|default:'info' }} mb-3" role="alert">
+          {% if msg.tags == 'success' %}<i class="bi bi-check-circle me-2"></i>{% else %}<i class="bi bi-exclamation-circle me-2"></i>{% endif %}{{ msg }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <form method="post" id="regForm" autocomplete="off">
+      {% csrf_token %}
+      <input type="hidden" name="_form_token" value="{{ form_token }}">
+      <div style="position:absolute;left:-9999px;top:-9999px;overflow:hidden;" aria-hidden="true" tabindex="-1">
+        <label for="website_url">Website</label>
+        <input type="text" name="website_url" id="website_url" tabindex="-1" autocomplete="off">
+      </div>
+
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label">Full Name *</label>
+          <input type="text" name="name" class="form-control" placeholder="Your full name" required value="{{ form.name.value|default:'' }}">
+          {% if form.name.errors %}<div class="text-danger mt-1" style="font-size:12px;">{{ form.name.errors.0 }}</div>{% endif %}
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Phone Number *</label>
+          <input type="tel" name="phone" class="form-control" placeholder="Phone number" required value="{{ form.phone.value|default:'' }}">
+          {% if form.phone.errors %}<div class="text-danger mt-1" style="font-size:12px;">{{ form.phone.errors.0 }}</div>{% endif %}
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Email Address *</label>
+          <input type="email" name="email" class="form-control" placeholder="your@email.com" required value="{{ form.email.value|default:'' }}" {% if request.session.google_email %}readonly{% endif %}>
+          {% if form.email.errors %}<div class="text-danger mt-1" style="font-size:12px;">{{ form.email.errors.0 }}</div>{% endif %}
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Birth Date *</label>
+          <div class="row g-2">
+            <div class="col-6">
+              <select name="birth_day" class="form-select" required>
+                <option value="">Date</option>
+                {% for day in birth_day_options %}
+                  <option value="{{ day }}" {% if birth_day_value == day|stringformat:"s" %}selected{% endif %}>{{ day }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <select name="birth_month" class="form-select" required>
+                <option value="">Month</option>
+                {% for month in birth_month_options %}
+                  <option value="{{ month }}" {% if birth_month_value == month|stringformat:"s" %}selected{% endif %}>{{ month }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="final-form-help">Choose only date and month. Birth date cannot be changed later.</div>
+          {% if birth_day_month_error %}<div class="text-danger mt-1" style="font-size:12px;">{{ birth_day_month_error }}</div>{% elif form.date_of_birth.errors %}<div class="text-danger mt-1" style="font-size:12px;">{{ form.date_of_birth.errors.0 }}</div>{% endif %}
+        </div>
+
+        <div class="col-12">
+          <label class="form-label">Company *</label>
+          <select name="company" class="form-select" required id="regCompany">
+            <option value="">Select your company</option>
+            {% for c in form.company.field.queryset %}
+              <option value="{{ c.pk }}" {% if form.company.value == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+          </select>
+          {% if form.company.errors %}<div class="text-danger mt-1" style="font-size:12px;">{{ form.company.errors.0 }}</div>{% endif %}
+        </div>
+
+        <div class="col-12">
+          <label class="form-label">Building / Floor *</label>
+          <select name="building" class="form-select" id="regBuilding" required>
+            <option value="">Select building / floor</option>
+            {% if form.building.value %}
+              {% for b in form.building.field.queryset %}
+                <option value="{{ b.pk }}" {% if form.building.value == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+              {% endfor %}
+            {% endif %}
+          </select>
+          <div class="final-form-help" id="regBuildingHelp">Select your company first to load buildings.</div>
+          {% if form.building.errors %}<div class="text-danger mt-1" style="font-size:12px;">{{ form.building.errors.0 }}</div>{% endif %}
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Password *</label>
+          <div style="position:relative;">
+            <input type="password" name="password" class="form-control" placeholder="Minimum 6 characters" required id="pw1" style="padding-right:44px;">
+            <button type="button" onclick="togglePw('pw1',this)" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9ca3af;cursor:pointer;">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+          {% if form.password.errors %}<div class="text-danger mt-1" style="font-size:12px;">{{ form.password.errors.0 }}</div>{% endif %}
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Confirm Password *</label>
+          <div style="position:relative;">
+            <input type="password" name="password2" class="form-control" placeholder="Repeat password" required id="pw2" style="padding-right:44px;">
+            <button type="button" onclick="togglePw('pw2',this)" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9ca3af;cursor:pointer;">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+          {% if form.password2.errors %}<div class="text-danger mt-1" style="font-size:12px;">{{ form.password2.errors.0 }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="final-form-help mt-3">We will verify your email before creating the customer record. T&amp;C Applied.</div>
+      <button type="submit" class="auth-btn">Create Account</button>
+    </form>
+
+    <div class="auth-divider">or</div>
+
+    <a href="{% url 'accounts:google_login' %}" class="btn btn-light w-100 border rounded-4 py-3 d-flex align-items-center justify-content-center gap-2" style="font-weight:700;">
+      <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+        <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.651 32.657 29.24 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.85 1.154 7.971 3.029l5.657-5.657C34.046 6.053 29.27 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
+        <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.85 1.154 7.971 3.029l5.657-5.657C34.046 6.053 29.27 4 24 4c-7.682 0-14.347 4.337-17.694 10.691z"/>
+        <path fill="#4CAF50" d="M24 44c5.167 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.145 35.091 26.715 36 24 36c-5.219 0-9.617-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/>
+        <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.793 2.237-2.231 4.166-4.084 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
+      </svg>
+      <span>Continue with Google</span>
+    </a>
+
+    <div class="auth-footer-link">Already have an account? <a href="{% url 'accounts:customer_login' %}">Sign in</a></div>
+  </div>
+</div>
+
+<script>
+function togglePw(id, btn) {
+  const el = document.getElementById(id);
+  const ic = btn.querySelector('i');
+  el.type = el.type === 'password' ? 'text' : 'password';
+  ic.className = el.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+}
+(function() {
+  const companySelect  = document.getElementById('regCompany');
+  const buildingSelect = document.getElementById('regBuilding');
+  const buildingHelp   = document.getElementById('regBuildingHelp');
+  const ajaxUrl        = '{% url "accounts:get_buildings" %}';
+
+  function loadBuildings(companyId) {
+    buildingSelect.innerHTML = '<option value="">Loading…</option>';
+    buildingSelect.disabled  = true;
+
+    if (!companyId) {
+      buildingSelect.innerHTML = '<option value="">Select building / floor</option>';
+      buildingSelect.disabled  = false;
+      if (buildingHelp) buildingHelp.textContent = 'Select your company first to load buildings.';
+      return;
+    }
+
+    fetch(ajaxUrl + '?company_id=' + encodeURIComponent(companyId), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+      var buildings = data.buildings || [];
+      buildingSelect.innerHTML = '<option value="">Select building / floor</option>';
+      buildings.forEach(function(b) {
+        var opt = document.createElement('option');
+        opt.value       = b.id;
+        opt.textContent = b.name;
+        buildingSelect.appendChild(opt);
+      });
+      buildingSelect.disabled = false;
+      if (buildingHelp) {
+        buildingHelp.textContent = buildings.length
+          ? 'Choose the building registered under your company.'
+          : 'No buildings configured for this company.';
+      }
+    })
+    .catch(function() {
+      buildingSelect.innerHTML = '<option value="">Could not load buildings — try refreshing</option>';
+      buildingSelect.disabled  = false;
+    });
+  }
+
+  if (companySelect) {
+    companySelect.addEventListener('change', function() {
+      loadBuildings(this.value);
+    });
+    // On page-load after a validation error the company may already be selected;
+    // re-populate buildings so the user does not lose their selection.
+    if (companySelect.value) {
+      loadBuildings(companySelect.value);
+    }
+  }
+})();
+</script>
+{% endblock %}

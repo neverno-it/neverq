@@ -1,0 +1,449 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  .err-row-sheet { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px;
+                   padding:2px 7px; border-radius:10px; flex-shrink:0; }
+  .err-row-sheet.products   { background:#FFF3E0; color:#E65100; }
+  .err-row-sheet.counter    { background:#E3F2FD; color:#1565C0; }
+  .err-row-sheet.other      { background:#ECEFF1; color:#37474F; }
+  .err-msg { font-size:13px; color:#1A1A2E; }
+  .err-loc  { font-size:12px; color:var(--cf-muted); }
+  .stat-card { background:#fff; border:1px solid var(--cf-border); border-radius:var(--cf-radius-sm);
+               padding:14px 16px; text-align:center; }
+  .stat-card .stat-num { font-family:'Rajdhani',sans-serif; font-size:32px; font-weight:700; color:var(--cf-navy); line-height:1; }
+  .stat-card .stat-lbl { font-size:12px; color:var(--cf-muted); margin-top:4px; }
+  .stat-card.stat-created .stat-num { color:#2E7D32; }
+  .stat-card.stat-updated .stat-num { color:#1565C0; }
+  .stat-card.stat-skipped .stat-num { color:#E65100; }
+  .col-ref { font-family:monospace; font-size:12px; color:var(--cf-blue); }
+  .bulk-preview-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .bulk-preview-table th { padding:8px; font-size:11px; color:var(--cf-muted); text-transform:uppercase; letter-spacing:.45px; text-align:left; border-bottom:1.5px solid var(--cf-border); }
+  .bulk-preview-table td { padding:9px 8px; border-bottom:1px solid #edf1f7; vertical-align:top; }
+  .bulk-status { display:inline-flex; align-items:center; gap:5px; border-radius:999px; padding:3px 9px; font-size:11px; font-weight:700; }
+  .bulk-status.ready { background:#E8F5E9; color:#2E7D32; }
+  .bulk-status.blocked { background:#FFF5F5; color:#B91C1C; }
+  .bulk-note { color:var(--cf-muted); font-size:12px; }
+</style>
+{% endblock %}
+{% block content %}
+
+{# ── Header ────────────────────────────────────────────────── #}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <div>
+    <h4 style="margin:0;font-family:'Rajdhani',sans-serif;color:var(--cf-navy);">
+      <i class="bi bi-upload me-2"></i>Bulk Product Upload
+    </h4>
+    <div style="font-size:13px;color:var(--cf-muted);margin-top:2px;">
+      Upload an XLSX workbook to create or update products in bulk
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'dashboard:product_bulk_sample_download' %}"
+       class="btn btn-cf-primary btn-sm">
+      <i class="bi bi-file-earmark-excel me-1"></i>Download Excel Template
+    </a>
+    <a href="{% url 'dashboard:product_list' %}" class="btn btn-cf-ghost btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back to Products
+    </a>
+  </div>
+</div>
+
+{# ── Upload Card ───────────────────────────────────────────── #}
+<div class="cf-card mb-3">
+  <div class="cf-card-header">
+    <h5><i class="bi bi-cloud-upload me-2 text-blue"></i>Verify Workbook</h5>
+  </div>
+  <div class="cf-card-body">
+    <form method="post" enctype="multipart/form-data" class="row g-3">
+      {% csrf_token %}
+      {% if request.user.is_superadmin %}
+      <div class="col-md-4">
+        <label class="form-label">Default Company</label>
+        <select name="company" class="form-select">
+          <option value="">Read company from file</option>
+          {% for c in companies %}
+          <option value="{{ c.id }}" {% if selected_company_id == c.id|stringformat:'s' %}selected{% endif %}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
+        <div class="form-text">Blank company cells in the file will use this company.</div>
+      </div>
+      {% endif %}
+
+      <div class="col-md-{% if request.user.is_superadmin %}8{% else %}12{% endif %}">
+        <label class="form-label">XLSX / CSV File <span class="text-danger">*</span></label>
+        <input type="file" name="csv_file" accept=".csv,.xlsx,.xlsm" class="form-control" required>
+        <div class="form-text">Sheets: <code>Products</code>, <code>CounterMapping</code></div>
+      </div>
+
+      <div class="col-12">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="replace_product_data" id="rp"
+                     {% if import_options.replace_product_data %}checked{% endif %}>
+              <label class="form-check-label" for="rp">Replace existing product data</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="replace_counter_mappings" id="rc"
+                     {% if import_options.replace_counter_mappings %}checked{% endif %}>
+              <label class="form-check-label" for="rc">Replace existing counter mappings</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="auto_create_categories" id="ac"
+                     {% if import_options.auto_create_categories %}checked{% endif %}>
+              <label class="form-check-label" for="ac">Auto-create missing categories</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="auto_create_offerings" id="ao"
+                     {% if import_options.auto_create_offerings %}checked{% endif %}>
+              <label class="form-check-label" for="ao">Auto-create missing offerings</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 d-flex gap-2">
+        <button type="submit" name="action" value="preview" class="btn btn-cf-primary">
+          <i class="bi bi-search me-1"></i>Verify Workbook
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Results ───────────────────────────────────────────────── #}
+{% if summary %}
+<div class="cf-card mb-3">
+  <div class="cf-card-header">
+    <div>
+      <h5><i class="bi {% if summary.is_preview %}bi-clipboard-check{% else %}bi-bar-chart{% endif %} me-2 text-blue"></i>{% if summary.is_preview %}Verification Preview{% else %}Upload Results{% endif %}</h5>
+      {% if summary.is_preview %}<div style="font-size:13px;color:var(--cf-muted);margin-top:2px;">Review what can be uploaded before saving.</div>{% endif %}
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      {% if summary.mode %}<span class="badge-cf badge-info">{{ summary.mode|upper }}</span>{% endif %}
+      {% if summary.is_preview and summary.can_import and summary.preview_token %}
+      <form method="post" class="m-0">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="import_verified">
+        <input type="hidden" name="preview_token" value="{{ summary.preview_token }}">
+        <button type="submit" class="btn btn-cf-primary btn-sm">
+          <i class="bi bi-cloud-upload me-1"></i>Upload Verified Rows
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  <div class="cf-card-body">
+    <div class="row g-2 mb-3">
+      {% if summary.is_preview %}
+      <div class="col-6 col-md-3"><div class="stat-card stat-created"><div class="stat-num">{{ summary.preview_products_ready }}</div><div class="stat-lbl">Products Can Upload</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card stat-skipped"><div class="stat-num">{{ summary.preview_products_blocked }}</div><div class="stat-lbl">Products Blocked</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card stat-created"><div class="stat-num">{{ summary.preview_counter_ready }}</div><div class="stat-lbl">Counter Maps Ready</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-num">{{ summary.calories_estimated }}</div><div class="stat-lbl">Calories Auto-filled</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-num">{{ summary.products_sheet_rows }}</div><div class="stat-lbl">Products Sheet Rows</div></div></div>
+      {% else %}
+      <div class="col-6 col-md-3"><div class="stat-card stat-created"><div class="stat-num">{{ summary.products_created }}</div><div class="stat-lbl">Products Created</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card stat-updated"><div class="stat-num">{{ summary.products_updated }}</div><div class="stat-lbl">Products Updated</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card stat-created"><div class="stat-num">{{ summary.counter_mappings_created }}</div><div class="stat-lbl">Counter Maps Created</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card stat-updated"><div class="stat-num">{{ summary.counter_mappings_updated }}</div><div class="stat-lbl">Counter Maps Updated</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-num" style="color:var(--cf-purple);">{{ summary.offerings_created }}</div><div class="stat-lbl">Offerings Created</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-num" style="color:var(--cf-purple);">{{ summary.categories_created }}</div><div class="stat-lbl">Categories Created</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-num">{{ summary.calories_estimated }}</div><div class="stat-lbl">Calories Auto-filled</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card stat-skipped"><div class="stat-num">{{ summary.skipped }}</div><div class="stat-lbl">Rows Skipped / Errored</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-num">{{ summary.products_sheet_rows }}</div><div class="stat-lbl">Products Sheet Rows</div></div></div>
+      {% endif %}
+    </div>
+
+    {# ── Row-level errors ─────────────────────────────────── #}
+    {% if summary.errors and summary.errors.0.message %}
+    <div style="background:#FFF5F5;border:1.5px solid #fecaca;border-radius:var(--cf-radius-sm);padding:16px;">
+      <div style="font-size:14px;font-weight:700;color:var(--cf-red);margin-bottom:12px;">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        {{ summary.errors|length }} Error{{ summary.errors|length|pluralize }} - Review Before Uploading
+      </div>
+      <div style="max-height:360px;overflow-y:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:1.5px solid #fecaca;">
+              <th style="padding:6px 8px;font-size:11px;color:var(--cf-muted);text-align:left;width:30px;">#</th>
+              <th style="padding:6px 8px;font-size:11px;color:var(--cf-muted);text-align:left;width:140px;">Location</th>
+              <th style="padding:6px 8px;font-size:11px;color:var(--cf-muted);text-align:left;width:180px;">Product</th>
+              <th style="padding:6px 8px;font-size:11px;color:var(--cf-muted);text-align:left;">Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for err in summary.errors %}
+            <tr style="border-bottom:1px solid #fee2e2;">
+              <td style="padding:7px 8px;font-size:12px;color:var(--cf-muted);">{{ forloop.counter }}</td>
+              <td style="padding:7px 8px;">
+                {% if err.sheet == 'Products' %}
+                <span class="err-row-sheet products">Products</span>
+                {% elif err.sheet == 'CounterMapping' %}
+                <span class="err-row-sheet counter">CounterMap</span>
+                {% else %}
+                <span class="err-row-sheet other">Info</span>
+                {% endif %}
+                {% if err.line %}<div class="err-loc">Line {{ err.line }}</div>{% endif %}
+              </td>
+              <td style="padding:7px 8px;font-size:13px;color:var(--cf-navy);">{{ err.product|default:"-" }}</td>
+              <td style="padding:7px 8px;"><div class="err-msg">{{ err.message }}</div></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% elif summary.errors %}
+    <div style="background:#FFF5F5;border:1.5px solid #fecaca;border-radius:var(--cf-radius-sm);padding:16px;">
+      <div style="font-size:14px;font-weight:700;color:var(--cf-red);margin-bottom:12px;">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        {{ summary.errors|length }} Row Error{{ summary.errors|length|pluralize }} — Review Before Re-uploading
+      </div>
+      <div style="max-height:360px;overflow-y:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:1.5px solid #fecaca;">
+              <th style="padding:6px 8px;font-size:11px;color:var(--cf-muted);text-align:left;width:30px;">#</th>
+              <th style="padding:6px 8px;font-size:11px;color:var(--cf-muted);text-align:left;width:110px;">Location</th>
+              <th style="padding:6px 8px;font-size:11px;color:var(--cf-muted);text-align:left;">Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for err in summary.errors %}
+            {% with err_lower=err|lower %}
+            <tr style="border-bottom:1px solid #fee2e2;">
+              <td style="padding:7px 8px;font-size:12px;color:var(--cf-muted);">{{ forloop.counter }}</td>
+              <td style="padding:7px 8px;">
+                {% if 'products line' in err_lower %}
+                <span class="err-row-sheet products">Products</span>
+                {% elif 'countermapping line' in err_lower %}
+                <span class="err-row-sheet counter">CounterMap</span>
+                {% else %}
+                <span class="err-row-sheet other">Info</span>
+                {% endif %}
+              </td>
+              <td style="padding:7px 8px;">
+                <div class="err-msg">
+                  {# Extract the message after the "line N: " prefix #}
+                  {% if 'line' in err_lower %}
+                    {{ err|slice:"0:30" }}<span style="color:var(--cf-muted);">…</span>
+                    <div class="err-loc">{{ err }}</div>
+                  {% else %}
+                    {{ err }}
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endwith %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% else %}
+    <div style="background:#E8F5E9;border:1px solid #a5d6a7;border-radius:var(--cf-radius-sm);padding:10px 14px;font-size:13px;color:#2E7D32;">
+      <i class="bi bi-check-circle me-2"></i>No row errors — all processed rows were valid.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Bulk Image Upload ─────────────────────────────────────── #}
+<div class="cf-card mb-3">
+  <div class="cf-card-header">
+    <div>
+      <h5><i class="bi bi-images me-2 text-blue"></i>Bulk Image Upload</h5>
+      <div style="font-size:13px;color:var(--cf-muted);margin-top:2px;">
+        Upload product images after bulk upload — image filename must match <strong>product code</strong>
+      </div>
+    </div>
+  </div>
+  <div class="cf-card-body">
+    <form method="post" enctype="multipart/form-data" action="{% url 'dashboard:product_bulk_image_upload' %}" class="row g-3">
+      {% csrf_token %}
+      {% if request.user.is_superadmin %}
+      <div class="col-md-4">
+        <label class="form-label">Company <span class="text-danger">*</span></label>
+        <select name="company" class="form-select" required>
+          <option value="">— Select company —</option>
+          {% for c in companies %}
+          <option value="{{ c.id }}" {% if selected_company_id == c.id|stringformat:'s' %}selected{% endif %}>{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% else %}
+      {# Non-superadmin: company is implicit #}
+      {% endif %}
+
+      <div class="col-md-{% if request.user.is_superadmin %}8{% else %}12{% endif %}">
+        <label class="form-label">ZIP File of Images <span class="text-danger">*</span></label>
+        <input type="file" name="image_zip" accept=".zip" class="form-control" required>
+        <div class="form-text">
+          ZIP must contain image files named by product code — e.g. <code>VT-001.jpg</code>, <code>CR-001.png</code>.
+          Supported: JPG, PNG, WEBP, GIF.
+        </div>
+      </div>
+
+      <div class="col-12">
+        <button type="submit" class="btn btn-cf-primary">
+          <i class="bi bi-images me-1"></i>Upload Images
+        </button>
+      </div>
+    </form>
+
+    <div class="alert alert-info mt-3 mb-0 small">
+      <i class="bi bi-info-circle me-1"></i>
+      <strong>How it works:</strong> Each image filename (without extension) is matched to a product's
+      <strong>Product Code</strong> field for the selected company. Products without a code cannot be
+      matched. Set codes during bulk upload via the <code>product_code</code> column.
+    </div>
+  </div>
+</div>
+
+{# ── Column Reference ──────────────────────────────────────── #}
+<div class="cf-card mb-3">
+  <div class="cf-card-header">
+    <h5><i class="bi bi-table me-2"></i>Column Reference</h5>
+    <a href="{% url 'dashboard:product_bulk_sample_download' %}" class="btn btn-cf-primary btn-sm">
+      <i class="bi bi-file-earmark-excel me-1"></i>Download Excel Template
+    </a>
+  </div>
+  <div class="cf-card-body">
+    <div class="row g-3">
+      <div class="col-lg-6">
+        <div style="border:1px solid var(--cf-border);border-radius:var(--cf-radius-sm);padding:14px;">
+          <div style="font-size:13px;font-weight:700;color:var(--cf-navy);margin-bottom:8px;">
+            <i class="bi bi-table me-1 text-blue"></i>Products Sheet <span style="color:var(--cf-red);">*required</span>
+          </div>
+          <div style="font-size:12px;color:var(--cf-muted);margin-bottom:8px;">Core product fields. One row = one product.</div>
+          <div class="col-ref" style="line-height:2.2;">
+            company<span style="color:var(--cf-red);">*</span>,
+            product_code,
+            product_name<span style="color:var(--cf-red);">*</span>,
+            description,
+            offering,
+            offering_active,
+            category<span style="color:var(--cf-red);">*</span>,
+            category_active,
+            food_types,
+            counters,
+            Staff/Base Price (Rs)<span style="color:var(--cf-red);">*</span>,
+            Visitor Price (Rs),
+            Room Service Extra (%),
+            Packing Price (Rs),
+            min_qty,
+            max_qty,
+            web_qty,
+            pos_qty,
+            position_order,
+            is_active,
+            is_kiosk_active,
+            featured_in_web,
+            featured_in_kiosk_extra,
+            is_free_meal_product,
+            menu_date,
+            schedule_enabled,
+            start_date,
+            end_date,
+            start_time,
+            end_time,
+            preparation_time_minutes,
+            calories,
+            schedule_bypass
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div style="border:1px solid var(--cf-border);border-radius:var(--cf-radius-sm);padding:14px;">
+          <div style="font-size:13px;font-weight:700;color:var(--cf-navy);margin-bottom:8px;">
+            <i class="bi bi-qr-code me-1 text-blue"></i>CounterMapping Sheet <span style="color:var(--cf-muted);">optional</span>
+          </div>
+          <div style="font-size:12px;color:var(--cf-muted);margin-bottom:8px;">Links products to kitchen counters.</div>
+          <div class="col-ref" style="line-height:2.2;">
+            company<span style="color:var(--cf-red);">*</span>,
+            product_code<span style="color:var(--cf-red);">*</span>,
+            state,
+            city,
+            building,
+            cafe,
+            counter<span style="color:var(--cf-red);">*</span>,
+            is_primary,
+            is_active,
+            position_order
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert alert-warning mt-3 mb-0 small">
+      <i class="bi bi-diagram-3 me-1"></i>
+      <strong>Hierarchy:</strong> Offering → Category → Product. There is no subcategory level.
+      Use <code>product_code</code> for reliable matching across all sheets and for image upload.
+      Legacy aliases like <code>veg_type</code> and <code>is_featured</code> are still accepted during import for backward compatibility.
+    </div>
+  </div>
+</div>
+
+{% if summary.is_preview and summary.preview_products %}
+<div class="cf-card mb-3">
+  <div class="cf-card-header">
+    <h5><i class="bi bi-box-seam me-2 text-blue"></i>Products Preview</h5>
+  </div>
+  <div class="cf-card-body p-0">
+    <div style="max-height:430px;overflow:auto;">
+      <table class="bulk-preview-table">
+        <thead><tr><th>Line</th><th>Status</th><th>Action</th><th>Product</th><th>Category</th><th>Price</th><th>Calories</th><th>Notes / Errors</th></tr></thead>
+        <tbody>
+          {% for row in summary.preview_products %}
+          <tr>
+            <td>{{ row.line }}</td>
+            <td><span class="bulk-status {% if row.status == 'Ready' %}ready{% else %}blocked{% endif %}">{{ row.status }}</span></td>
+            <td>{{ row.action }}</td>
+            <td><strong>{{ row.product }}</strong>{% if row.code %}<div class="bulk-note">{{ row.code }}</div>{% endif %}</td>
+            <td>{{ row.category|default:"-" }}</td>
+            <td>{{ row.price|default:"0" }}</td>
+            <td>{% if row.calories %}{{ row.calories }} <span class="bulk-note">{{ row.calories_source }}</span>{% else %}-{% endif %}</td>
+            <td>
+              {% for note in row.notes %}<div class="bulk-note">{{ note }}</div>{% endfor %}
+              {% for err in row.errors %}<div style="color:var(--cf-red);font-size:12px;">{{ err }}</div>{% endfor %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if summary.is_preview and summary.preview_counter_mappings %}
+<div class="cf-card mb-3">
+  <div class="cf-card-header"><h5><i class="bi bi-qr-code me-2 text-blue"></i>Counter Mapping Preview</h5></div>
+  <div class="cf-card-body p-0">
+    <div style="max-height:260px;overflow:auto;">
+      <table class="bulk-preview-table">
+        <thead><tr><th>Line</th><th>Status</th><th>Product</th><th>Counter</th><th>Errors</th></tr></thead>
+        <tbody>
+          {% for row in summary.preview_counter_mappings %}
+          <tr>
+            <td>{{ row.line }}</td>
+            <td><span class="bulk-status {% if row.status == 'Ready' %}ready{% else %}blocked{% endif %}">{{ row.status }}</span></td>
+            <td>{{ row.product }}</td><td>{{ row.counter }}</td>
+            <td>{% for err in row.errors %}<div style="color:var(--cf-red);font-size:12px;">{{ err }}</div>{% empty %}-{% endfor %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

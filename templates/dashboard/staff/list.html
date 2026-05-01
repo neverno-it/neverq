@@ -1,0 +1,232 @@
+{% extends "base/dashboard_base.html" %}
+
+{% block extra_css_vars %}
+  .staff-admin-layout{align-items:flex-start}
+  .staff-card-table{min-width:760px;table-layout:fixed}
+  .staff-card-table tbody td{height:68px;line-height:1.35}
+  .staff-name{font-weight:700;color:var(--cf-navy);line-height:1.25}
+  .staff-meta{display:block;color:var(--cf-muted);font-size:12px;margin-top:3px}
+  .staff-email,.staff-company{display:block;color:var(--cf-text);font-size:12.5px;line-height:1.4;word-break:break-word}
+  .staff-company{color:var(--cf-muted)}
+  .site-check-list{display:grid;gap:7px;max-height:150px;overflow:auto;border:1px solid var(--cf-border);border-radius:8px;padding:8px;background:#fff}
+  .site-check-item{display:flex;align-items:flex-start;gap:7px;font-size:12.5px;color:var(--cf-text);line-height:1.25}
+  .site-check-item input{margin-top:2px;accent-color:var(--cf-blue)}
+  .staff-role-badge{display:inline-flex;align-items:center;justify-content:center;min-width:106px;min-height:34px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;line-height:1.15;padding:5px 9px;border-radius:9px}
+  .staff-status-badge{display:inline-flex;align-items:center;justify-content:center;min-width:48px;height:22px;font-size:10px;font-weight:700;border-radius:999px}
+  .staff-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;white-space:nowrap}
+  .staff-actions form{margin:0;display:inline-flex}
+  .staff-action-btn{width:34px;height:34px;padding:0;display:inline-grid;place-items:center;border-radius:8px;border:0;line-height:1;text-decoration:none}
+  .staff-action-btn.matrix{background:var(--cf-blue);color:#fff}
+  .staff-action-btn.matrix:hover{background:var(--cf-blue-dark);color:#fff;box-shadow:0 8px 18px rgba(32,43,122,.18)}
+  .staff-action-btn.delete{background:var(--cf-red);color:#fff}
+  .staff-action-btn.delete:hover{background:var(--cf-red-dark);color:#fff;box-shadow:0 8px 18px rgba(255,31,45,.18)}
+  .staff-guide-tile{border-radius:8px;padding:12px;min-height:84px}
+  .staff-guide-title{font-weight:700;font-family:'Rajdhani',sans-serif;font-size:15px;display:flex;align-items:center;gap:6px}
+  .staff-guide-copy{font-size:12px;color:var(--cf-muted);margin-top:4px;line-height:1.4}
+  @media(max-width:1199.98px){.staff-card-table{min-width:820px}}
+{% endblock %}
+
+{% block content %}
+<div class="row g-3 staff-admin-layout">
+  <div class="col-xl-3 col-lg-4">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-person-plus me-2"></i>Add Staff User</h5>
+      </div>
+      <div class="cf-card-body">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add">
+
+          <div class="mb-3">
+            <label class="form-label">Full Name</label>
+            <input type="text" name="name" class="form-control" placeholder="John Smith" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Email *</label>
+            <input type="email" name="email" class="form-control" placeholder="user@company.com" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Phone</label>
+            <input type="tel" name="phone" class="form-control" placeholder="9876543210">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Role *</label>
+            <select name="role" class="form-select" required id="roleSelect" onchange="toggleSiteAccess(this.value)">
+              {% for val, lbl in role_choices %}
+              {% if val != 'superadmin' %}
+              <option value="{{ val }}">{{ lbl }}</option>
+              {% endif %}
+              {% endfor %}
+            </select>
+            <small class="text-muted mt-1 d-block">Operation Manager = dashboard - Chef = kitchen - POS = counter</small>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Default Site</label>
+            <select name="company" class="form-select">
+              <option value="">-- Select company --</option>
+              {% for co in companies %}
+              <option value="{{ co.pk }}">{{ co.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3" id="siteAccessBlock">
+            <label class="form-label">Site Access</label>
+            <div class="site-check-list">
+              {% for co in companies %}
+              <label class="site-check-item">
+                <input type="checkbox" name="site_access" value="{{ co.pk }}">
+                <span>{{ co.name }}</span>
+              </label>
+              {% empty %}
+              <span class="text-muted small">No active sites available.</span>
+              {% endfor %}
+            </div>
+            <small class="text-muted mt-1 d-block">Select all sites this staff user can access.</small>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input type="text" name="password" class="form-control" value="admin123">
+            <small class="text-muted">User should change this after first login.</small>
+          </div>
+
+          <button type="submit" class="btn btn-cf-primary w-100">Create Staff User</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-9 col-lg-8">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-person-badge me-2"></i>Staff Users</h5>
+        <small class="text-muted">{{ staff|length }} user{{ staff|length|pluralize }}</small>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="cf-table staff-card-table">
+          <colgroup>
+            <col style="width:16%;">
+            <col style="width:22%;">
+            <col style="width:17%;">
+            <col style="width:20%;">
+            <col style="width:10%;">
+            <col style="width:96px;">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Sites</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in staff %}
+            <tr>
+              <td>
+                <div class="staff-name">{{ s.name }}</div>
+                {% if s.phone %}<span class="staff-meta">{{ s.phone }}</span>{% endif %}
+              </td>
+              <td><span class="staff-email">{{ s.email }}</span></td>
+              <td>
+                <span class="staff-role-badge {{ s.role }}" style="background:{% if s.role == 'superadmin' %}#FFEBEE;color:#C62828{% elif s.role == 'admin' %}#E3F2FD;color:#1565C0{% elif s.role == 'cafeman' %}#E8F5E9;color:#2E7D32{% else %}#FFF3E0;color:#E65100{% endif %};">
+                  {{ s.get_role_display }}
+                </span>
+              </td>
+              <td>
+                <span class="staff-company">{{ s.site_names_display }}</span>
+                {% if s.site_count > 1 %}<span class="staff-meta">{{ s.site_count }} sites</span>{% endif %}
+              </td>
+              <td>
+                {% if s.is_active %}
+                <span class="staff-status-badge bg-success text-white">Active</span>
+                {% else %}
+                <span class="staff-status-badge bg-secondary text-white">Inactive</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if s.role != 'superadmin' %}
+                <div class="staff-actions">
+                  <a href="{% url 'dashboard:permission_matrix' s.pk %}" class="staff-action-btn matrix" title="Permission Matrix">
+                    <i class="bi bi-sliders"></i>
+                  </a>
+                  <form method="post" onsubmit="return confirm('Delete {{ s.name|escapejs }}?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="uid" value="{{ s.pk }}">
+                    <button type="submit" class="staff-action-btn delete" title="Delete">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                </div>
+                {% else %}
+                <div class="staff-actions"><span class="text-muted" style="font-size:11px;">System</span></div>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-muted py-4">No staff users yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="cf-card mt-3">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-info-circle me-2"></i>Role Guide</h5>
+      </div>
+      <div class="cf-card-body">
+        <div class="row g-2">
+          <div class="col-sm-6">
+            <div class="staff-guide-tile" style="background:#E3F2FD;">
+              <div class="staff-guide-title" style="color:var(--cf-blue);"><i class="bi bi-shield-lock"></i>Super Admin</div>
+              <div class="staff-guide-copy">Full access to all companies, all data, all settings.</div>
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="staff-guide-tile" style="background:#E3F2FD;">
+              <div class="staff-guide-title" style="color:var(--cf-blue);"><i class="bi bi-building"></i>Operation Manager</div>
+              <div class="staff-guide-copy">Access is limited to assigned sites, then controlled by the granular matrix.</div>
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="staff-guide-tile" style="background:#E8F5E9;">
+              <div class="staff-guide-title" style="color:#2E7D32;"><i class="bi bi-cup-hot"></i>Chef (Cafe Manager)</div>
+              <div class="staff-guide-copy">Kitchen orders view. Mark orders as Preparing / Ready / Delivered.</div>
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <div class="staff-guide-tile" style="background:#FFF3E0;">
+              <div class="staff-guide-title" style="color:#E65100;"><i class="bi bi-credit-card"></i>Cashier (POS)</div>
+              <div class="staff-guide-copy">POS counter terminal + today's POS order list only.</div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:12px;padding:10px 14px;background:#F8FAFC;border-radius:7px;font-size:12px;color:var(--cf-muted);">
+          <strong>Customer login:</strong> Separate portal at
+          <a href="{% url 'accounts:customer_login' %}" target="_blank" style="color:var(--cf-red);">{{ request.scheme }}://{{ request.get_host }}/auth/customer/login/</a>
+          - customers register with email + phone.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleSiteAccess(role) {
+  document.getElementById('siteAccessBlock').style.display = role ? 'block' : 'none';
+}
+toggleSiteAccess(document.getElementById('roleSelect').value);
+</script>
+{% endblock %}

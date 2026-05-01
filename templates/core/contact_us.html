@@ -1,0 +1,83 @@
+{% extends "base/customer_base.html" %}
+{% block title %}Contact Us{% endblock %}
+{% block content %}
+<div class="container final-page-shell" style="max-width:860px;">
+  <div class="final-page-hero mb-3 mb-md-4">
+    <div class="final-page-kicker"><i class="bi bi-headset"></i> Support</div>
+    <h1 class="final-page-title">Contact Us</h1>
+    <p class="final-page-copy">Share a question, support request, or feedback. We will get back to you as soon as possible.</p>
+  </div>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="alert alert-{{ msg.tags|default:'info' }} mb-3" style="border-radius:14px;border:none;">{{ msg }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="row g-3 g-lg-4">
+    <div class="col-lg-5">
+      <div class="final-panel h-100">
+        <h3 class="final-panel-title">Ways to reach us</h3>
+        <p class="final-panel-subtitle">Use the form or browse the support pages from the footer.</p>
+        <div class="d-grid gap-3">
+          <div class="final-list-card">
+            <div class="final-list-icon"><i class="bi bi-envelope"></i></div>
+            <div>
+              <h5 class="final-list-title">Email support</h5>
+              <p class="final-list-copy">Use the form to send us a message and include all order details if your query is order-related.</p>
+            </div>
+          </div>
+          <div class="final-list-card">
+            <div class="final-list-icon"><i class="bi bi-shield-check"></i></div>
+            <div>
+              <h5 class="final-list-title">Policy pages</h5>
+              <p class="final-list-copy">Terms, privacy, and refund information are available from the footer on every customer page.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-7">
+      {% if page %}
+      <div class="final-panel final-html-card mb-3">
+        {{ page.content|safe }}
+      </div>
+      {% endif %}
+      <div class="final-panel">
+        <h3 class="final-panel-title">Send a message</h3>
+        <p class="final-panel-subtitle">Keep it short and clear so the team can help you faster.</p>
+        <form method="post">
+          {% csrf_token %}
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Your Name</label>
+              <input type="text" name="name" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Email</label>
+              <input type="email" name="email" class="form-control" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Message</label>
+              <textarea name="message" class="form-control" rows="5" required></textarea>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-cf-primary w-100 mt-4">Send Message</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+window.NEVERQ_PAGE_TOUR_KEY = 'contact-us';
+window.NEVERQ_PAGE_TOUR = [
+  {selector:'.final-page-hero', title:'Support page', copy:'This page helps you contact the team for support, questions, or feedback.', placement:'bottom'},
+  {selector:'.final-panel h3.final-panel-title', title:'Support options', copy:'You can review support guidance here before sending a message.', placement:'bottom'},
+  {selector:'form', title:'Message form', copy:'Fill out your details and message here so the team can respond.', placement:'top'},
+  {selector:'button[type="submit"]', title:'Send the message', copy:'Use this button to submit the form once your note is ready.', placement:'top'}
+];
+</script>
+{% endblock %}

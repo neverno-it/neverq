@@ -1,0 +1,1991 @@
+{% load static core_extras %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{{ page_title|default:"Dashboard" }}{% endblock %} - {{ APP_NAME }}</title>
+  {% include "includes/favicon_links.html" %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root{
+      --cf-blue:#202B7A;--cf-blue-dark:#182161;--cf-blue-light:#EEF2FF;
+      --cf-red:#FF1F2D;--cf-red-dark:#D91724;--cf-red-light:#FFF0F2;
+      --cf-navy:#202B7A;--cf-text:#18213F;--cf-muted:#6C7498;
+      --cf-border:#E4E7F2;--cf-surface:#F6F8FF;--cf-white:#FFFFFF;
+      --cf-green:#2E7D32;--cf-green-light:#E8F5E9;
+      --cf-orange:#E65100;--cf-orange-light:#FFF3E0;
+      --cf-purple:#6A1B9A;--cf-purple-light:#F3E5F5;
+      --cf-warning:#F59E0B;--cf-warning-light:#FFFBEB;
+      --cf-shadow:0 8px 24px rgba(32,43,122,.10);
+      --cf-shadow-lg:0 18px 42px rgba(32,43,122,.16);
+      --cf-radius:12px;--cf-radius-sm:8px;
+      --sidebar-w:260px;
+      --sidebar-collapsed-w:72px;
+      --sidebar-visible-w:var(--sidebar-w);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{font-family:'DM Sans',sans-serif;color:var(--cf-text);background:var(--cf-surface);font-size:15px;line-height:1.65}
+    body.sidebar-collapsed{--sidebar-visible-w:var(--sidebar-collapsed-w)}
+    h1,h2,h3,h4,h5,h6{font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:.3px;line-height:1.2}
+
+    /* ── Sidebar ── */
+    #sidebar{width:var(--sidebar-w);height:100vh;background:
+      radial-gradient(circle at top left, rgba(123,165,255,.26) 0%, rgba(123,165,255,0) 34%),
+      linear-gradient(180deg, #173B93 0%, #122F7A 46%, #0C235D 100%);
+      position:fixed;top:0;left:0;z-index:1040;display:flex;flex-direction:column;
+      transition:width .25s cubic-bezier(.4,0,.2,1),transform .25s cubic-bezier(.4,0,.2,1),box-shadow .25s ease;
+      box-shadow:16px 0 42px rgba(12,35,93,.26);overflow:hidden}
+    body.sidebar-collapsed #sidebar{width:var(--sidebar-collapsed-w);transform:none;box-shadow:10px 0 28px rgba(12,35,93,.22)}
+    .sidebar-brand{padding:16px 16px 14px;border-bottom:1px solid rgba(203,220,255,.14);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-shrink:0;background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02))}
+    .brand-logo-link{display:flex;align-items:center;gap:10px;text-decoration:none;color:#fff;min-width:0;flex:1}
+    .brand-logo-img{display:block;width:42px;height:42px;object-fit:contain;border-radius:12px;box-shadow:0 10px 24px rgba(7,18,54,.25);flex-shrink:0;background:linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.08))}
+    .brand-wordmark{font-family:'Rajdhani',sans-serif;font-size:27px;line-height:1;font-weight:700;letter-spacing:.4px;color:#fff;white-space:nowrap;text-shadow:0 2px 10px rgba(7,18,54,.18)}
+    .brand-icon,.brand-text,.brand-sub{display:none}
+    .sidebar-brand-toggle{flex-shrink:0}
+    body.sidebar-collapsed .sidebar-brand{position:relative;min-height:58px;padding:12px 8px;justify-content:center;gap:0}
+    body.sidebar-collapsed .brand-logo-link{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);gap:0;justify-content:center;flex:none;opacity:1;pointer-events:auto;transition:opacity .16s ease}
+    body.sidebar-collapsed .brand-wordmark{display:none}
+    body.sidebar-collapsed .brand-logo-img{width:30px;height:30px;border-radius:8px}
+    body.sidebar-collapsed .sidebar-brand-toggle{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);opacity:0;pointer-events:none;transition:opacity .16s ease}
+    body.sidebar-collapsed #sidebar:hover .brand-logo-link{opacity:0;pointer-events:none}
+    body.sidebar-collapsed #sidebar:hover .sidebar-brand-toggle{opacity:1;pointer-events:auto}
+    body.sidebar-collapsed .sidebar-nav,body.sidebar-collapsed .sidebar-footer{display:none}
+    .sidebar-nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:10px 0 16px;scrollbar-width:thin;scrollbar-color:rgba(214,227,255,.28) transparent}
+    .sidebar-nav::-webkit-scrollbar{width:4px}
+    .sidebar-nav::-webkit-scrollbar-thumb{background:rgba(214,227,255,.24);border-radius:4px}
+    .nav-section{padding:14px 18px 7px;font-size:10px;color:rgba(214,227,255,.52);text-transform:uppercase;letter-spacing:1.8px;font-weight:800}
+    .nav-group{margin:5px 12px 12px 10px}
+    .nav-group-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 16px;background:transparent;border:none;color:rgba(241,245,255,.86);font-size:13.5px;font-weight:700;text-align:left;border:1px solid transparent;border-radius:15px;transition:all .18s ease}
+    .nav-group-toggle:hover{color:#fff;background:rgba(255,255,255,.08);border-color:rgba(209,223,255,.12)}
+    .nav-group.open .nav-group-toggle,.nav-group.has-active .nav-group-toggle{color:#fff;background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.08));border-color:rgba(191,210,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+    .nav-group-toggle .group-left{display:flex;align-items:center;gap:10px;min-width:0}
+    .nav-group-toggle .group-left .bi{font-size:15px;opacity:.92;width:18px;text-align:center;flex-shrink:0;color:#cfe0ff}
+    .nav-group-toggle .group-caret{font-size:12px;opacity:.74;transition:transform .18s ease;color:#d6e4ff}
+    .nav-group.open .group-caret{transform:rotate(90deg);opacity:1}
+    .nav-group-body{display:none;padding:6px 0 4px 6px}
+    .nav-group.open .nav-group-body{display:block}
+    #sidebar .nav-link{display:flex;align-items:center;gap:10px;padding:10px 16px;color:rgba(237,243,255,.78);font-size:13px;font-weight:600;border:1px solid transparent;text-decoration:none;transition:all .18s ease;border-radius:13px;margin:4px 0}
+    .nav-group-body .nav-link{padding-left:18px;font-size:12.8px;color:rgba(233,241,255,.76)}
+    #sidebar .nav-link:hover{color:#fff;background:rgba(255,255,255,.08);border-color:rgba(207,223,255,.12);transform:translateX(2px)}
+    #sidebar .nav-link.active{color:#fff;background:linear-gradient(90deg, rgba(132,176,255,.24), rgba(255,255,255,.10));border-color:rgba(173,201,255,.22);box-shadow:0 10px 22px rgba(7,18,54,.18)}
+    #sidebar .nav-link .bi{font-size:15px;opacity:.9;flex-shrink:0;width:18px;text-align:center;color:#d6e4ff}
+    #sidebar .nav-link.active .bi{opacity:1;color:#ffffff}
+    .role-badge{display:inline-block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;padding:2px 8px;border-radius:10px;margin-top:2px}
+    .role-badge.superadmin{background:rgba(255,255,255,.12);color:#eef4ff}
+    .role-badge.admin{background:rgba(141,186,255,.18);color:#e6f0ff}
+    .role-badge.cafeman{background:rgba(118,201,143,.18);color:#dff9e5}
+    .role-badge.pos{background:rgba(255,255,255,.12);color:#eef4ff}
+    .role-badge.reports{background:rgba(186,160,255,.20);color:#efe6ff}
+    .sidebar-footer{flex-shrink:0;padding:16px 18px 18px;border-top:1px solid rgba(203,220,255,.12);background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02))}
+    .sidebar-shell-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid rgba(214,227,255,.24);background:rgba(255,255,255,.10);color:#fff;border-radius:10px;width:32px;height:32px;padding:0;font-size:12px;font-weight:700;line-height:1;box-shadow:none;transition:all .18s ease;text-decoration:none}
+    .sidebar-shell-btn:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.40);color:#fff;box-shadow:none}
+    .sidebar-shell-btn i{font-size:14px}
+    .topbar-mobile-toggle{display:none;border:1px solid rgba(32,43,122,.16);background:#fff;color:var(--cf-blue-dark);border-radius:999px;width:38px;height:38px;padding:0;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(32,43,122,.10);flex-shrink:0}
+    .topbar-mobile-toggle i{font-size:16px}
+
+    /* ── Main layout ── */
+    #main-content{margin-left:var(--sidebar-visible-w);min-height:100vh;display:flex;flex-direction:column;transition:margin-left .25s cubic-bezier(.4,0,.2,1)}
+    .topbar{height:60px;background:var(--cf-white);border-bottom:1px solid var(--cf-border);display:flex;align-items:center;padding:0 24px;gap:14px;position:sticky;top:0;z-index:100;box-shadow:0 6px 18px rgba(32,43,122,.06)}
+    .topbar-title{font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:var(--cf-blue-dark);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .topbar-avatar{width:36px;height:36px;border-radius:50%;background:var(--cf-blue);color:white;display:grid;place-items:center;font-size:14px;font-weight:700;cursor:pointer;border:none;outline:none;flex-shrink:0}
+    .staff-tour-trigger{display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--cf-blue);color:var(--cf-blue);background:#fff;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:700;line-height:1;box-shadow:0 6px 16px rgba(32,43,122,.10);transition:all .18s;white-space:nowrap}
+    .staff-tour-trigger:hover{background:var(--cf-blue);color:#fff;box-shadow:0 10px 26px rgba(32,43,122,.20)}
+    .staff-tour-trigger i{font-size:13px}
+    .staff-tour-trigger[hidden]{display:none!important}
+    .staff-tour-trigger-text{display:inline-block}
+    .tour-overlay{position:fixed;inset:0;background:rgba(11,18,32,.58);z-index:3000;display:none}
+    .tour-target-active{position:relative!important;z-index:3002!important;box-shadow:0 0 0 4px rgba(255,255,255,.96),0 18px 48px rgba(0,0,0,.24)!important;border-radius:16px}
+    .tour-popover{position:fixed;z-index:3003;max-width:340px;width:min(340px,calc(100vw - 24px));background:#fff;border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.24);padding:18px 18px 16px;display:none}
+    .tour-step{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--cf-blue);margin-bottom:6px}
+    .tour-title{font-family:'Rajdhani',sans-serif;font-size:24px;font-weight:700;color:var(--cf-navy);margin-bottom:6px;line-height:1}
+    .tour-copy{font-size:13px;line-height:1.55;color:var(--cf-text);margin-bottom:14px}
+    .tour-actions{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .tour-progress{font-size:12px;color:var(--cf-muted)}
+    .tour-buttons{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .tour-buttons .btn{min-width:88px}
+
+    /* ── Page header (optional inside content) ── */
+    .page-header{margin-bottom:20px}
+    .page-header h4{margin:0 0 2px;font-size:22px;color:var(--cf-navy)}
+    .page-header .page-desc{font-size:13.5px;color:var(--cf-muted);margin:0}
+
+    /* ── Cards ── */
+    .cf-card{background:var(--cf-white);border:1px solid var(--cf-border);border-radius:var(--cf-radius);box-shadow:var(--cf-shadow);overflow:hidden}
+    .cf-card+.cf-card{margin-top:16px}
+    .cf-card-header{padding:16px 20px;border-bottom:1px solid var(--cf-border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--cf-white)}
+    .cf-card-header h5{margin:0;font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;color:var(--cf-navy);display:flex;align-items:center;gap:8px}
+    .cf-card-body{padding:20px}
+    .cf-card-footer{padding:14px 20px;border-top:1px solid var(--cf-border);background:var(--cf-surface)}
+
+    /* ── Filter bar ── */
+    .filter-card{background:var(--cf-white);border:1px solid var(--cf-border);border-radius:var(--cf-radius);padding:16px 20px;margin-bottom:16px;box-shadow:var(--cf-shadow)}
+    .filter-card .filter-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--cf-muted);margin-bottom:5px;display:block}
+
+    /* ── Stat cards ── */
+    .stat-card{background:var(--cf-white);border:1px solid var(--cf-border);border-radius:var(--cf-radius);padding:20px;display:flex;align-items:flex-start;gap:16px;box-shadow:var(--cf-shadow);transition:box-shadow .2s,transform .18s;text-decoration:none;color:inherit}
+    .stat-card:hover{box-shadow:var(--cf-shadow-lg);transform:translateY(-2px);color:inherit}
+    .stat-icon{width:48px;height:48px;border-radius:var(--cf-radius-sm);display:grid;place-items:center;font-size:21px;flex-shrink:0}
+    .stat-icon.blue{background:var(--cf-blue-light);color:var(--cf-blue)}
+    .stat-icon.red{background:var(--cf-red-light);color:var(--cf-red)}
+    .stat-icon.green{background:var(--cf-green-light);color:var(--cf-green)}
+    .stat-icon.orange{background:var(--cf-orange-light);color:var(--cf-orange)}
+    .stat-icon.navy{background:rgba(26,35,126,.1);color:var(--cf-navy)}
+    .stat-icon.purple{background:#f3e5f5;color:#7b1fa2}
+    .stat-icon.teal{background:#e0f7fa;color:#00796b}
+    .stat-icon.indigo{background:#e8eaf6;color:#3949ab}
+    .stat-value{font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:var(--cf-text);line-height:1}
+    .stat-label{font-size:11.5px;color:var(--cf-muted);text-transform:uppercase;letter-spacing:.7px;margin-top:4px}
+
+    /* ── Buttons ── */
+    .btn{font-weight:600;border-radius:var(--cf-radius-sm);transition:all .18s;font-size:13.5px}
+    .btn-cf-primary{background:var(--cf-blue);border-color:var(--cf-blue);color:#fff;padding:8px 18px}
+    .btn-cf-primary:hover{background:var(--cf-blue-dark);border-color:var(--cf-blue-dark);color:#fff;box-shadow:0 8px 18px rgba(32,43,122,.24);transform:translateY(-1px)}
+    .btn-cf-danger{background:var(--cf-red);border-color:var(--cf-red);color:#fff;padding:8px 18px}
+    .btn-cf-danger:hover{background:var(--cf-red-dark);border-color:var(--cf-red-dark);color:#fff;box-shadow:0 8px 18px rgba(255,31,45,.20);transform:translateY(-1px)}
+    .btn-cf-outline{border:1.5px solid var(--cf-blue);color:var(--cf-blue);background:transparent;padding:7px 18px}
+    .btn-cf-outline:hover{background:var(--cf-blue);color:#fff}
+    .btn-cf-ghost{border:1.5px solid var(--cf-border);color:var(--cf-text);background:transparent;padding:7px 14px}
+    .btn-cf-ghost:hover{background:var(--cf-surface);color:var(--cf-text)}
+    .btn-icon{width:34px;height:34px;padding:0;display:inline-grid;place-items:center;border-radius:var(--cf-radius-sm);font-size:15px}
+
+    /* ── Tables ── */
+    .cf-table{width:100%;border-collapse:collapse}
+    .cf-table thead th{background:var(--cf-blue-dark);color:rgba(255,255,255,.92);font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;padding:13px 16px;white-space:nowrap;border:none}
+    .cf-table thead th:first-child{border-radius:0}
+    .cf-table tbody tr{border-bottom:1px solid #F1F3F7}
+    .cf-table tbody tr:last-child{border-bottom:none}
+    .cf-table tbody tr:hover{background:rgba(32,43,122,.035)}
+    .cf-table tbody td{padding:13px 16px;vertical-align:middle;font-size:14px}
+    .cf-table .td-main{font-weight:600;color:var(--cf-navy)}
+    .cf-table .td-sub{font-size:12px;color:var(--cf-muted);margin-top:2px}
+
+    /* ── Forms ── */
+    .form-control,.form-select{border-radius:var(--cf-radius-sm);border:1.5px solid var(--cf-border);font-size:14.5px;padding:9px 13px;transition:border-color .2s,box-shadow .2s;background:#fff}
+    .form-control:focus,.form-select:focus{border-color:var(--cf-blue);box-shadow:0 0 0 3px rgba(32,43,122,.10);outline:none}
+    .form-control-sm,.form-select-sm{padding:6px 10px;font-size:13.5px}
+    .form-label{font-size:12px;font-weight:700;color:var(--cf-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+    .form-text{font-size:12px;color:var(--cf-muted);margin-top:4px}
+    .form-section{background:var(--cf-surface);border:1px solid var(--cf-border);border-radius:var(--cf-radius-sm);padding:18px 20px;margin-bottom:20px}
+    .form-section-title{font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;color:var(--cf-navy);margin:0 0 14px;padding-bottom:10px;border-bottom:1px solid var(--cf-border);display:flex;align-items:center;gap:8px}
+
+    /* ── Badges ── */
+    .badge-cf{font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:20px}
+    .badge-active{background:#E8F5E9;color:#2E7D32}
+    .badge-inactive{background:#F5F5F5;color:#757575}
+    .badge-warning{background:#FFF8E1;color:#E65100}
+    .badge-info{background:var(--cf-blue-light);color:var(--cf-blue-dark)}
+
+    /* ── Alerts ── */
+    .alert{border-radius:var(--cf-radius-sm);border:none;font-size:14px;padding:13px 16px}
+    .alert-success{background:var(--cf-green-light);color:#1B5E20}
+    .alert-danger{background:var(--cf-red-light);color:var(--cf-red-dark)}
+    .alert-warning{background:#FFF8E1;color:#E65100}
+    .alert-info{background:var(--cf-blue-light);color:var(--cf-blue-dark)}
+
+    /* ── Empty state ── */
+    .empty-state{text-align:center;padding:56px 24px;color:var(--cf-muted)}
+    .empty-state .empty-icon{font-size:52px;margin-bottom:12px;opacity:.35}
+    .empty-state h6{font-family:'Rajdhani',sans-serif;font-size:18px;color:var(--cf-text);margin-bottom:6px}
+    .empty-state p{font-size:13.5px;margin:0}
+
+    /* ── Toggle switch styled badges ── */
+    .toggle-badge{cursor:pointer;border:none;padding:5px 12px;border-radius:20px;font-size:11.5px;font-weight:600;transition:all .15s}
+    .toggle-badge.on{background:#E8F5E9;color:#2E7D32}
+    .toggle-badge.off{background:#F5F5F5;color:#9E9E9E}
+    .toggle-badge:hover{filter:brightness(.96)}
+
+    /* ── Pagination ── */
+    .pagination .page-link{color:var(--cf-blue);border-color:var(--cf-border);padding:7px 13px;font-size:13.5px}
+    .pagination .page-item.active .page-link{background:var(--cf-blue);border-color:var(--cf-blue)}
+
+    /* ── Utils ── */
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:8px}
+    .text-blue{color:var(--cf-blue)!important}.text-red{color:var(--cf-red)!important}
+    .text-navy{color:var(--cf-navy)!important}.text-green{color:var(--cf-green)!important}
+    .text-orange{color:var(--cf-orange)!important}.text-purple{color:var(--cf-purple)!important}
+    .fw-500{font-weight:500}.fw-600{font-weight:600}.fw-700{font-weight:700}
+    /* ── Filter bar — used in reports, orders, reviews ── */
+    .filter-bar{background:var(--cf-white);border:1px solid var(--cf-border);border-radius:var(--cf-radius);padding:16px 20px;margin-bottom:20px;box-shadow:var(--cf-shadow)}
+    .filter-bar .form-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--cf-muted);margin-bottom:5px;display:block}
+    .gap-8{gap:8px}.gap-12{gap:12px}
+    .rounded-pill-sm{border-radius:20px}
+    .divider{height:1px;background:var(--cf-border);margin:16px 0}
+
+    @media(max-width:991px){
+      body.sidebar-collapsed{--sidebar-visible-w:0px}
+      body.sidebar-collapsed #sidebar{width:var(--sidebar-w);transform:translateX(-100%);box-shadow:16px 0 42px rgba(12,35,93,.26)}
+      body.sidebar-collapsed .sidebar-nav,body.sidebar-collapsed .sidebar-footer{display:block}
+      body.sidebar-collapsed .brand-logo-link{position:static;left:auto;top:auto;transform:none;gap:10px;justify-content:flex-start;flex:1;opacity:1;pointer-events:auto}
+      body.sidebar-collapsed .brand-logo-img{width:40px;height:40px;border-radius:10px}
+      body.sidebar-collapsed .sidebar-brand-toggle{position:static;left:auto;top:auto;transform:none;opacity:1;pointer-events:auto}
+      body.sidebar-collapsed #sidebar:hover .brand-logo-link{opacity:1;pointer-events:auto}
+      body.sidebar-collapsed #sidebar:hover .sidebar-brand-toggle{opacity:1;pointer-events:auto}
+      #sidebar{transform:translateX(-100%)}
+      #sidebar.open{transform:translateX(0)}
+      #main-content{margin-left:0}
+      .topbar-mobile-toggle{display:inline-flex}
+      #btToast{left:12px!important;right:12px!important;max-width:none!important}
+    }
+    {% block extra_css_vars %}{% endblock %}
+  </style>
+  <style>@media (max-width: 767.98px){.staff-tour-trigger{padding:8px 10px}.staff-tour-trigger-text{display:none}.tour-popover{padding:16px 16px 14px}.tour-title{font-size:22px}}</style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body data-role="{{ request.user.role|default:'' }}" data-urlname="{{ request.resolver_match.url_name|default:'' }}" data-viewname="{{ request.resolver_match.view_name|default:'' }}">
+{% block body %}
+
+<!-- SIDEBAR -->
+<nav id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-logo-link" role="img" aria-label="{{ APP_NAME }}">
+      <img src="{% static "brand/neverq-logo.png" %}" alt="{{ APP_NAME }}" class="brand-logo-img">
+      <span class="brand-wordmark">NeverQ</span>
+    </div>
+    <button type="button" class="sidebar-shell-btn sidebar-brand-toggle" data-sidebar-toggle aria-expanded="true" aria-label="Toggle sidebar">
+      <i class="bi bi-layout-sidebar-inset"></i>
+    </button>
+  </div>
+
+  <!-- SCROLLABLE NAV -->
+  <div class="sidebar-nav" id="sidebarNav">
+
+    {% with role=request.user.role urlname=request.resolver_match.url_name|default:'' viewname=request.resolver_match.view_name|default:'' %}
+
+    {% if role == 'superadmin' or role == 'admin' or role == 'reports' %}
+
+    {% if 'dashboard' in visible_menus or 'cashier_dash' in visible_menus or 'kitchen' in visible_menus %}
+    <div class="nav-group {% if urlname == 'home' or 'cashier' in urlname or 'kitchen' in urlname %}has-active{% endif %}" data-group="overview">
+      <div class="nav-section">Overview</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-grid-1x2-fill"></i><span>Overview</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body">
+        {% if 'dashboard' in visible_menus %}<a href="{% url 'dashboard:home' %}" class="nav-link {% if urlname == 'home' %}active{% endif %}"><i class="bi bi-speedometer2"></i> Dashboard</a>{% endif %}
+        {% if 'cashier_dash' in visible_menus %}<a href="{% url 'dashboard:cashier' %}" class="nav-link {% if 'cashier' in urlname %}active{% endif %}"><i class="bi bi-speedometer2"></i> Cashier Dashboard</a>{% endif %}
+        {% if 'kitchen' in visible_menus %}<a href="{% url 'dashboard:kitchen' %}" class="nav-link {% if 'kitchen' in urlname %}active{% endif %}"><i class="bi bi-fire"></i> Kitchen Orders</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if 'orders' in visible_menus or 'counter_tickets' in visible_menus or 'pos_terminal' in visible_menus or 'display_board' in visible_menus or 'pos_orders' in visible_menus or 'flash_order' in visible_menus or 'wallet_recharge' in visible_menus %}
+    <div class="nav-group {% if viewname == 'dashboard:order_list' or viewname == 'dashboard:order_detail' or viewname == 'dashboard:counter_ticket_board' or viewname == 'dashboard:counter_ticket_update' or viewname == 'dashboard:counter_ticket_kot' or viewname == 'pos:terminal' or viewname == 'dashboard:display_board_select' or viewname == 'pos:order_list' or viewname == 'dashboard:flash_order' or viewname == 'dashboard:wallet_recharge' %}has-active{% endif %}" data-group="operations">
+      <div class="nav-section">Operations</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-gear-fill"></i><span>Operations</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body">
+        {% if 'orders' in visible_menus %}<a href="{% url 'dashboard:order_list' %}" class="nav-link {% if viewname == 'dashboard:order_list' or viewname == 'dashboard:order_detail' %}active{% endif %}"><i class="bi bi-bag-check"></i> Web Orders</a>{% endif %}
+        {% if 'counter_tickets' in visible_menus %}<a href="{% url 'dashboard:counter_ticket_board' %}" class="nav-link {% if viewname == 'dashboard:counter_ticket_board' or viewname == 'dashboard:counter_ticket_update' or viewname == 'dashboard:counter_ticket_kot' %}active{% endif %}"><i class="bi bi-grid-3x3-gap-fill"></i> Counter Tickets</a>{% endif %}
+        {% if 'pos_terminal' in visible_menus %}<a href="{% url 'pos:terminal' %}" class="nav-link {% if viewname == 'pos:terminal' %}active{% endif %}"><i class="bi bi-display"></i> POS Terminal</a>{% endif %}
+        {% if 'display_board' in visible_menus %}<a href="{% url 'dashboard:display_board_select' %}" class="nav-link {% if viewname == 'dashboard:display_board_select' %}active{% endif %}"><i class="bi bi-tv"></i> Display Board</a>{% endif %}
+        {% if 'pos_orders' in visible_menus %}<a href="{% url 'pos:order_list' %}" class="nav-link {% if viewname == 'pos:order_list' %}active{% endif %}"><i class="bi bi-receipt"></i> POS Orders</a>{% endif %}
+        {% if 'flash_order' in visible_menus %}<a href="{% url 'dashboard:flash_order' %}" class="nav-link {% if viewname == 'dashboard:flash_order' %}active{% endif %}"><i class="bi bi-lightning-charge"></i> Flash Order</a>{% endif %}
+        {% if 'wallet_recharge' in visible_menus %}<a href="{% url 'dashboard:wallet_recharge' %}" class="nav-link {% if viewname == 'dashboard:wallet_recharge' %}active{% endif %}"><i class="bi bi-wallet2"></i> Recharge Wallet</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if 'products' in visible_menus or 'offerings' in visible_menus or 'counters' in visible_menus or 'add_product' in visible_menus or 'bulk_upload' in visible_menus or 'categories' in visible_menus or 'add_category' in visible_menus or 'stock_mgmt' in visible_menus or role == 'superadmin' %}
+    <div class="nav-group {% if urlname == 'product_list' or urlname == 'product_edit' or urlname == 'product_add' or 'bulk_upload' in urlname or urlname == 'offering_list' or urlname == 'offering_add' or urlname == 'offering_edit' or urlname == 'stock_management' or urlname == 'counter_list' or urlname == 'counter_add' or urlname == 'counter_edit' or urlname == 'category_list' or urlname == 'category_edit' or urlname == 'category_add' or urlname == 'category_bulk_copy' %}has-active{% endif %}" data-group="menu-catalog">
+      <div class="nav-section">Menu</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-journal-richtext"></i><span>Menu Catalog</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body">
+        {% if 'products' in visible_menus %}<a href="{% url 'dashboard:product_list' %}" class="nav-link {% if urlname == 'product_list' or urlname == 'product_edit' %}active{% endif %}"><i class="bi bi-egg-fried"></i> Products</a>{% endif %}
+        {% if 'add_product' in visible_menus %}<a href="{% url 'dashboard:product_add' %}" class="nav-link {% if urlname == 'product_add' %}active{% endif %}"><i class="bi bi-plus-square"></i> Add Product</a>{% endif %}
+        {% if 'bulk_upload' in visible_menus %}<a href="{% url 'dashboard:product_bulk_upload' %}" class="nav-link {% if 'bulk_upload' in urlname %}active{% endif %}"><i class="bi bi-upload"></i> Bulk Upload</a>{% endif %}
+        {% if 'categories' in visible_menus %}<a href="{% url 'dashboard:category_list' %}" class="nav-link {% if urlname == 'category_list' or urlname == 'category_edit' %}active{% endif %}"><i class="bi bi-grid-3x3-gap"></i> Categories</a>{% endif %}
+        {% if 'add_category' in visible_menus %}<a href="{% url 'dashboard:category_add' %}" class="nav-link {% if urlname == 'category_add' or urlname == 'category_bulk_copy' %}active{% endif %}"><i class="bi bi-folder-plus"></i> Add Category</a>{% endif %}
+        {% if 'offerings' in visible_menus %}<a href="{% url 'dashboard:offering_list' %}" class="nav-link {% if urlname == 'offering_list' or urlname == 'offering_add' or urlname == 'offering_edit' %}active{% endif %}"><i class="bi bi-sunrise"></i> Offerings</a>{% endif %}
+        {% if 'counters' in visible_menus %}<a href="{% url 'dashboard:counter_list' %}" class="nav-link {% if urlname == 'counter_list' or urlname == 'counter_add' or urlname == 'counter_edit' %}active{% endif %}"><i class="bi bi-qr-code-scan"></i> Counters</a>{% endif %}
+        {% if 'stock_mgmt' in visible_menus %}<a href="{% url 'dashboard:stock_management' %}" class="nav-link {% if urlname == 'stock_management' %}active{% endif %}"><i class="bi bi-boxes"></i> Stock</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if 'coupons' in visible_menus or 'offers' in visible_menus %}
+    <div class="nav-group {% if 'offer_' in urlname or 'coupon' in urlname %}has-active{% endif %}" data-group="pricing-promotions">
+      <div class="nav-section">Commerce</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-tags-fill"></i><span>Pricing & Promotions</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body">
+        {% if 'offers' in visible_menus %}<a href="{% url 'dashboard:offer_list' %}" class="nav-link {% if urlname == 'offer_list' or urlname == 'offer_add' or urlname == 'offer_edit' %}active{% endif %}"><i class="bi bi-megaphone-fill"></i> Offers</a>{% endif %}
+        {% if 'coupons' in visible_menus %}<a href="{% url 'dashboard:coupon_list' %}" class="nav-link {% if 'coupon' in urlname %}active{% endif %}"><i class="bi bi-ticket-perforated"></i> Coupons</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if 'banners' in visible_menus or 'media_library' in visible_menus or 'holidays' in visible_menus or 'add_product' in visible_menus or role == 'superadmin' %}
+    <div class="nav-group {% if 'advertise' in urlname or 'media_library' in urlname or 'product_gallery' in urlname or 'offering_gallery' in urlname or 'holiday' in urlname %}has-active{% endif %}" data-group="media-scheduling">
+      <div class="nav-section">Content</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-images"></i><span>Media & Scheduling</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body">
+        {% if 'banners' in visible_menus %}<a href="{% url 'dashboard:advertise_list' %}" class="nav-link {% if 'advertise' in urlname %}active{% endif %}"><i class="bi bi-megaphone"></i> Banners</a>{% endif %}
+        {% if 'media_library' in visible_menus %}<a href="{% url 'dashboard:media_library' %}" class="nav-link {% if 'media_library' in urlname %}active{% endif %}"><i class="bi bi-images"></i> Media Library</a>{% endif %}
+        {% if 'add_product' in visible_menus %}<a href="{% url 'dashboard:product_gallery' %}" class="nav-link {% if 'product_gallery' in urlname %}active{% endif %}"><i class="bi bi-grid-3x3"></i> Product Gallery</a>{% endif %}
+        {% if 'add_product' in visible_menus %}<a href="{% url 'dashboard:offering_gallery' %}" class="nav-link {% if 'offering_gallery' in urlname %}active{% endif %}"><i class="bi bi-image-alt"></i> Offering Image Gallery</a>{% endif %}
+        {% if 'holidays' in visible_menus %}<a href="{% url 'dashboard:holiday_list' %}" class="nav-link {% if 'holiday' in urlname %}active{% endif %}"><i class="bi bi-calendar-heart"></i> Holiday Schedules</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if 'customers' in visible_menus or 'add_customer' in visible_menus or 'reviews' in visible_menus or 'broadcast_notifications' in visible_menus %}
+    <div class="nav-group {% if urlname == 'customer_list' or urlname == 'customer_edit' or urlname == 'customer_wallet' or urlname == 'customer_approve' or urlname == 'customer_toggle_subsidy' or urlname == 'customer_set_meal_benefit' or urlname == 'customer_add' or 'reviews' in urlname or 'broadcast_notification' in urlname %}has-active{% endif %}" data-group="users">
+      <div class="nav-section">Customers</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-people-fill"></i><span>Customers</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body">
+        {% if 'customers' in visible_menus %}<a href="{% url 'dashboard:customer_list' %}" class="nav-link {% if urlname == 'customer_list' or urlname == 'customer_edit' or urlname == 'customer_wallet' or urlname == 'customer_approve' or urlname == 'customer_toggle_subsidy' or urlname == 'customer_set_meal_benefit' %}active{% endif %}">
+          <i class="bi bi-people"></i> Customers
+          {% if pending_approvals %}<span class="badge bg-warning text-dark ms-1" style="font-size:10px;">{{ pending_approvals }}</span>{% endif %}
+        </a>{% endif %}
+        {% if 'add_customer' in visible_menus %}<a href="{% url 'dashboard:customer_add' %}" class="nav-link {% if urlname == 'customer_add' %}active{% endif %}"><i class="bi bi-person-plus"></i> Add Customer</a>{% endif %}
+        {% if 'reviews' in visible_menus %}<a href="{% url 'dashboard:reviews_list' %}" class="nav-link {% if 'reviews' in urlname %}active{% endif %}"><i class="bi bi-star"></i> Reviews</a>{% endif %}
+        {% if 'broadcast_notifications' in visible_menus %}<a href="{% url 'dashboard:broadcast_notification_list' %}" class="nav-link {% if 'broadcast_notification' in urlname %}active{% endif %}"><i class="bi bi-megaphone"></i> Broadcast Notifications</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if 'reports' in visible_menus or 'royalty_leaderboard' in visible_menus %}
+    <div class="nav-group {% if urlname == 'reports' or 'royalty' in urlname %}has-active{% endif %}" data-group="reports">
+      <div class="nav-section">Reports</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-bar-chart-steps"></i><span>Reports</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body">
+        {% if 'reports' in visible_menus %}<a href="{% url 'dashboard:reports' %}" class="nav-link {% if urlname == 'reports' %}active{% endif %}"><i class="bi bi-bar-chart-line"></i> Reports</a>{% endif %}
+        {% if 'royalty_leaderboard' in visible_menus %}<a href="{% url 'dashboard:royalty_leaderboard' %}" class="nav-link {% if 'royalty' in urlname %}active{% endif %}"><i class="bi bi-trophy-fill" style="color:#f59e0b;"></i> Royalty Leaderboard</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if role == 'superadmin' %}
+    <div class="nav-group {% if 'hierarchy' in urlname or 'kiosk_config' in urlname or 'web_config' in urlname or 'display_config' in urlname or 'royalty' in urlname or 'company' in urlname or 'location' in urlname or 'building' in urlname or 'cafe' in urlname or 'staff' in urlname or 'static_page' in urlname %}has-active{% endif %}" data-group="admin">
+      <div class="nav-section">Administration</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-shield-lock-fill"></i><span>Administration</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body">
+        <a href="{% url 'dashboard:hierarchy' %}" class="nav-link {% if 'hierarchy' in urlname %}active{% endif %}"><i class="bi bi-diagram-3-fill"></i> Company Hierarchy</a>
+        <a href="{% url 'dashboard:kiosk_config_list' %}" class="nav-link {% if 'kiosk_config' in urlname %}active{% endif %}"><i class="bi bi-display"></i> Kiosk Configs</a>
+        <a href="{% url 'dashboard:web_config_list' %}" class="nav-link {% if 'web_config' in urlname %}active{% endif %}"><i class="bi bi-window"></i> Web Configs</a>
+        <a href="{% url 'dashboard:display_config_list' %}" class="nav-link {% if 'display_config' in urlname %}active{% endif %}"><i class="bi bi-tv"></i> Display Configs</a>
+        <a href="{% url 'dashboard:royalty_leaderboard' %}" class="nav-link {% if 'royalty' in urlname %}active{% endif %}"><i class="bi bi-trophy-fill" style="color:#f59e0b;"></i> Royalty Leaderboard</a>
+        {% if 'companies' in visible_menus %}<a href="{% url 'dashboard:company_list' %}" class="nav-link {% if 'company' in urlname %}active{% endif %}"><i class="bi bi-building"></i> Companies</a>{% endif %}
+        {% if 'companies' in visible_menus %}<a href="{% url 'dashboard:location_list' %}" class="nav-link {% if 'location' in urlname %}active{% endif %}"><i class="bi bi-geo-alt-fill"></i> Locations</a>{% endif %}
+        {% if 'companies' in visible_menus %}<a href="{% url 'dashboard:building_list' %}" class="nav-link {% if 'building' in urlname %}active{% endif %}"><i class="bi bi-buildings"></i> Buildings</a>{% endif %}
+        {% if 'companies' in visible_menus %}<a href="{% url 'dashboard:cafe_list' %}" class="nav-link {% if 'cafe' in urlname %}active{% endif %}"><i class="bi bi-cup-hot"></i> Cafeterias</a>{% endif %}
+        {% if 'add_company' in visible_menus %}<a href="{% url 'dashboard:company_add' %}" class="nav-link {% if urlname == 'company_add' %}active{% endif %}"><i class="bi bi-building-add"></i> Add Company</a>{% endif %}
+        {% if 'staff' in visible_menus %}<a href="{% url 'dashboard:staff_list' %}" class="nav-link {% if 'staff' in urlname %}active{% endif %}"><i class="bi bi-person-badge"></i> Staff Users</a>{% endif %}
+        {% if 'static_pages' in visible_menus %}<a href="{% url 'dashboard:static_page_list' %}" class="nav-link {% if 'static_page' in urlname %}active{% endif %}"><i class="bi bi-file-earmark-text"></i> Static Pages</a>{% endif %}
+        {% pending_changes_count as pcc %}
+        <a href="{% url 'dashboard:pending_changes' %}" class="nav-link {% if 'pending_change' in urlname %}active{% endif %}">
+          <i class="bi bi-hourglass-split"></i> Pending Changes
+          {% if pcc %}<span class="badge bg-danger ms-1" style="font-size:10px;">{{ pcc }}</span>{% endif %}
+        </a>
+      </div>
+    </div>
+    {% endif %}
+
+    {% elif role == 'cafeman' %}
+    {% if 'kitchen' in visible_menus or 'orders' in visible_menus or 'flash_order' in visible_menus or 'counter_tickets' in visible_menus or 'display_board' in visible_menus or 'wallet_recharge' in visible_menus or 'pickup_scan' in visible_menus %}
+    <div class="nav-group {% if 'kitchen' in urlname or 'order' in urlname or viewname == 'dashboard:flash_order' or viewname == 'dashboard:counter_ticket_board' or viewname == 'dashboard:display_board_select' or viewname == 'dashboard:wallet_recharge' %}has-active{% endif %}" data-group="cafeman-kitchen">
+      <div class="nav-section">Kitchen</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-fire"></i><span>Kitchen</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body">
+        {% if 'kitchen' in visible_menus %}<a href="{% url 'dashboard:kitchen' %}" class="nav-link {% if 'kitchen' in urlname %}active{% endif %}"><i class="bi bi-fire"></i> Kitchen Orders</a>{% endif %}
+        {% if 'orders' in visible_menus %}<a href="{% url 'dashboard:order_list' %}" class="nav-link {% if 'order' in urlname %}active{% endif %}"><i class="bi bi-bag-check"></i> All Orders</a>{% endif %}
+        {% if 'flash_order' in visible_menus %}<a href="{% url 'dashboard:flash_order' %}" class="nav-link {% if viewname == 'dashboard:flash_order' %}active{% endif %}"><i class="bi bi-lightning-charge"></i> Flash Order</a>{% endif %}
+        {% if 'counter_tickets' in visible_menus %}<a href="{% url 'dashboard:counter_ticket_board' %}" class="nav-link {% if viewname == 'dashboard:counter_ticket_board' %}active{% endif %}"><i class="bi bi-grid-3x3-gap-fill"></i> Counter Tickets</a>{% endif %}
+        {% if 'display_board' in visible_menus %}<a href="{% url 'dashboard:display_board_select' %}" class="nav-link {% if viewname == 'dashboard:display_board_select' %}active{% endif %}"><i class="bi bi-tv"></i> Display Board</a>{% endif %}
+        {% if 'pickup_scan' in visible_menus %}<a href="{% url 'orders:pickup_scan_terminal' %}" class="nav-link"><i class="bi bi-qr-code-scan"></i> Pickup Scan</a>{% endif %}
+        {% if 'wallet_recharge' in visible_menus %}<a href="{% url 'dashboard:wallet_recharge' %}" class="nav-link {% if viewname == 'dashboard:wallet_recharge' %}active{% endif %}"><i class="bi bi-wallet2"></i> Recharge Wallet</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+    {% if 'products' in visible_menus %}
+    <div class="nav-group {% if 'product' in urlname %}has-active{% endif %}" data-group="cafeman-menu">
+      <div class="nav-section">Menu</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-journal-richtext"></i><span>Menu</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body"><a href="{% url 'dashboard:product_list' %}" class="nav-link {% if 'product' in urlname %}active{% endif %}"><i class="bi bi-egg-fried"></i> Products</a></div>
+    </div>
+    {% endif %}
+    {% if 'reports' in visible_menus %}
+    <div class="nav-group {% if urlname == 'reports' %}has-active{% endif %}" data-group="cafeman-reports">
+      <div class="nav-section">Reports</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-bar-chart-line"></i><span>Reports</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body"><a href="{% url 'dashboard:reports' %}" class="nav-link {% if urlname == 'reports' %}active{% endif %}"><i class="bi bi-bar-chart-line"></i> Reports</a></div>
+    </div>
+    {% endif %}
+
+    {% elif role == 'pos' %}
+    {% if 'cashier_dash' in visible_menus %}
+    <div class="nav-group {% if viewname == 'dashboard:cashier' %}has-active{% endif %}" data-group="pos-overview">
+      <div class="nav-section">Overview</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-grid-1x2-fill"></i><span>Overview</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body"><a href="{% url 'dashboard:cashier' %}" class="nav-link {% if viewname == 'dashboard:cashier' %}active{% endif %}"><i class="bi bi-speedometer2"></i> Dashboard</a></div>
+    </div>
+    {% endif %}
+    {% if 'categories' in visible_menus or 'products' in visible_menus or 'offerings' in visible_menus or 'counters' in visible_menus or 'offers' in visible_menus %}
+    <div class="nav-group {% if urlname == 'category_list' or urlname == 'product_list' or urlname == 'product_edit' or urlname == 'offering_list' or urlname == 'offering_edit' or urlname == 'counter_list' or urlname == 'counter_edit' or urlname == 'offer_list' or urlname == 'offer_edit' %}has-active{% endif %}" data-group="pos-menu">
+      <div class="nav-section">Menu</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-journal-richtext"></i><span>Menu</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body">
+        {% if 'categories' in visible_menus %}<a href="{% url 'dashboard:category_list' %}" class="nav-link {% if urlname == 'category_list' or urlname == 'category_edit' %}active{% endif %}"><i class="bi bi-grid"></i> Categories</a>{% endif %}
+        {% if 'products' in visible_menus %}<a href="{% url 'dashboard:product_list' %}" class="nav-link {% if urlname == 'product_list' or urlname == 'product_edit' %}active{% endif %}"><i class="bi bi-egg-fried"></i> Web Menu Items</a>{% endif %}
+        {% if 'offerings' in visible_menus %}<a href="{% url 'dashboard:offering_list' %}" class="nav-link {% if urlname == 'offering_list' or urlname == 'offering_edit' %}active{% endif %}"><i class="bi bi-sunrise"></i> Offerings</a>{% endif %}
+        {% if 'counters' in visible_menus %}<a href="{% url 'dashboard:counter_list' %}" class="nav-link {% if urlname == 'counter_list' or urlname == 'counter_edit' %}active{% endif %}"><i class="bi bi-qr-code-scan"></i> Counters</a>{% endif %}
+        {% if 'offers' in visible_menus %}<a href="{% url 'dashboard:offer_list' %}" class="nav-link {% if urlname == 'offer_list' or urlname == 'offer_edit' %}active{% endif %}"><i class="bi bi-megaphone-fill"></i> Offers</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if 'customers' in visible_menus %}
+    <div class="nav-group {% if urlname == 'customer_list' or urlname == 'customer_edit' or urlname == 'customer_wallet' or urlname == 'customer_approve' or urlname == 'customer_toggle_subsidy' or urlname == 'customer_set_meal_benefit' %}has-active{% endif %}" data-group="pos-customers">
+      <div class="nav-section">Customers</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-people-fill"></i><span>Customers</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body">
+        <a href="{% url 'dashboard:customer_list' %}" class="nav-link {% if urlname == 'customer_list' or urlname == 'customer_edit' or urlname == 'customer_wallet' or urlname == 'customer_approve' or urlname == 'customer_toggle_subsidy' or urlname == 'customer_set_meal_benefit' %}active{% endif %}">
+          <i class="bi bi-people"></i> Customers
+          {% if pending_approvals %}<span class="badge bg-warning text-dark ms-1" style="font-size:10px;">{{ pending_approvals }}</span>{% endif %}
+        </a>
+      </div>
+    </div>
+    {% endif %}
+    {% if 'pos_orders' in visible_menus or 'orders' in visible_menus or 'pos_terminal' in visible_menus or 'wallet_recharge' in visible_menus or 'flash_order' in visible_menus or 'counter_tickets' in visible_menus or 'display_board' in visible_menus or 'pickup_scan' in visible_menus %}
+    <div class="nav-group {% if viewname == 'pos:order_list' or viewname == 'dashboard:order_list' or viewname == 'dashboard:order_detail' or viewname == 'pos:terminal' or viewname == 'dashboard:display_board_select' or viewname == 'dashboard:wallet_recharge' or viewname == 'dashboard:flash_order' or viewname == 'dashboard:counter_ticket_board' %}has-active{% endif %}" data-group="pos-sales">
+      <div class="nav-section">Sales</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-receipt-cutoff"></i><span>Sales</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body">
+        {% if 'pos_orders' in visible_menus %}<a href="{% url 'pos:order_list' %}" class="nav-link {% if viewname == 'pos:order_list' %}active{% endif %}"><i class="bi bi-receipt"></i> POS Sales</a>{% endif %}
+        {% if 'orders' in visible_menus %}<a href="{% url 'dashboard:order_list' %}" class="nav-link {% if viewname == 'dashboard:order_list' or viewname == 'dashboard:order_detail' %}active{% endif %}"><i class="bi bi-bag-check"></i> Web Orders</a>{% endif %}
+        {% if 'flash_order' in visible_menus %}<a href="{% url 'dashboard:flash_order' %}" class="nav-link {% if viewname == 'dashboard:flash_order' %}active{% endif %}"><i class="bi bi-lightning-charge"></i> Flash Order</a>{% endif %}
+        {% if 'pos_terminal' in visible_menus %}<a href="{% url 'pos:terminal' %}" class="nav-link {% if viewname == 'pos:terminal' %}active{% endif %}"><i class="bi bi-display"></i> POS Terminal</a>{% endif %}
+        {% if 'display_board' in visible_menus %}<a href="{% url 'dashboard:display_board_select' %}" class="nav-link {% if viewname == 'dashboard:display_board_select' %}active{% endif %}"><i class="bi bi-tv"></i> Display Board</a>{% endif %}
+        {% if 'counter_tickets' in visible_menus %}<a href="{% url 'dashboard:counter_ticket_board' %}" class="nav-link {% if viewname == 'dashboard:counter_ticket_board' %}active{% endif %}"><i class="bi bi-grid-3x3-gap-fill"></i> Counter Tickets</a>{% endif %}
+        {% if 'pickup_scan' in visible_menus %}<a href="{% url 'orders:pickup_scan_terminal' %}" class="nav-link"><i class="bi bi-qr-code-scan"></i> Pickup Scan</a>{% endif %}
+        {% if 'wallet_recharge' in visible_menus %}<a href="{% url 'dashboard:wallet_recharge' %}" class="nav-link {% if viewname == 'dashboard:wallet_recharge' %}active{% endif %}"><i class="bi bi-wallet2"></i> Recharge Wallet</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+    {% if 'reports' in visible_menus or 'banners' in visible_menus or 'media_library' in visible_menus or 'reviews' in visible_menus or 'royalty_leaderboard' in visible_menus %}
+    <div class="nav-group {% if urlname == 'reports' or 'advertise' in urlname or 'media_library' in urlname or 'reviews' in urlname or 'royalty' in urlname %}has-active{% endif %}" data-group="pos-more">
+      <div class="nav-section">More</div>
+      <button type="button" class="nav-group-toggle"><span class="group-left"><i class="bi bi-three-dots"></i><span>More</span></span><i class="bi bi-chevron-right group-caret"></i></button>
+      <div class="nav-group-body">
+        {% if 'reports' in visible_menus %}<a href="{% url 'dashboard:reports' %}" class="nav-link {% if urlname == 'reports' %}active{% endif %}"><i class="bi bi-bar-chart-line"></i> Reports</a>{% endif %}
+        {% if 'royalty_leaderboard' in visible_menus %}<a href="{% url 'dashboard:royalty_leaderboard' %}" class="nav-link {% if 'royalty' in urlname %}active{% endif %}"><i class="bi bi-trophy-fill" style="color:#f59e0b;"></i> Royalty Leaderboard</a>{% endif %}
+        {% if 'reviews' in visible_menus %}<a href="{% url 'dashboard:reviews_list' %}" class="nav-link {% if 'reviews' in urlname %}active{% endif %}"><i class="bi bi-star"></i> Reviews</a>{% endif %}
+        {% if 'banners' in visible_menus %}<a href="{% url 'dashboard:advertise_list' %}" class="nav-link {% if 'advertise' in urlname %}active{% endif %}"><i class="bi bi-megaphone"></i> Banners</a>{% endif %}
+        {% if 'media_library' in visible_menus %}<a href="{% url 'dashboard:media_library' %}" class="nav-link {% if 'media_library' in urlname %}active{% endif %}"><i class="bi bi-images"></i> Media Library</a>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% endif %}
+    {% endwith %}
+
+  </div>
+  </div>
+
+  <!-- FOOTER (fixed at bottom) -->
+  <div class="sidebar-footer">
+    <div style="color:rgba(255,255,255,.8);font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+      {{ request.user.name|default:request.user.email|truncatechars:22 }}
+    </div>
+    <div class="role-badge {{ request.user.role }}">{{ request.user.get_role_display }}</div>
+    <div class="mt-2">
+      <form method="post" action="{% url 'accounts:logout' %}" style="margin:0;">
+        {% csrf_token %}
+        <button type="submit"
+                style="background:linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.08));border:1px solid rgba(214,227,255,.22);color:#ffffff;border-radius:12px;padding:9px 12px;font-size:12px;font-weight:700;cursor:pointer;width:100%;text-align:left;transition:all .2s;box-shadow:0 12px 24px rgba(7,18,54,.18);">
+          <i class="bi bi-box-arrow-left me-1"></i> Sign Out
+        </button>
+      </form>
+    </div>
+  </div>
+</nav>
+
+<!-- MAIN CONTENT -->
+<div id="main-content">
+  <div class="topbar">
+    <button type="button" class="topbar-mobile-toggle" data-sidebar-toggle aria-expanded="false" aria-label="Toggle sidebar">
+      <i class="bi bi-layout-sidebar"></i>
+    </button>
+    <div class="topbar-title">{% block page_heading %}{{ page_title|default:"Dashboard" }}{% endblock %}</div>
+    <div class="d-flex align-items-center gap-2">
+      {% if request.user.company %}
+      <span class="badge {% if request.user.company.is_store_open %}bg-success{% else %}bg-danger{% endif %}" style="font-size:12px;">
+        <i class="bi bi-circle-fill me-1" style="font-size:7px;"></i>
+        Store {% if request.user.company.is_store_open %}Open{% else %}Closed{% endif %}
+        {% if request.user.company.has_order_schedule %}
+          <span style="font-size:9px;opacity:.8;">({{ request.user.company.order_window_label }})</span>
+        {% endif %}
+      </span>
+      {% endif %}
+      <button type="button" class="staff-tour-trigger" data-staff-tour-trigger hidden title="Start Tour">
+        <i class="bi bi-stars"></i><span class="staff-tour-trigger-text">Start Tour</span>
+      </button>
+      <!-- Notification bell -->
+      <div class="dropdown" id="notifDropdown">
+        <button class="btn btn-sm position-relative" data-bs-toggle="dropdown" aria-expanded="false"
+                style="background:none;border:none;color:var(--cf-navy);padding:5px 8px;">
+          <i class="bi bi-bell" style="font-size:18px;"></i>
+          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+      style="font-size:9px;{% if not unread_notifs %}display:none;{% endif %}"
+      id="notifBadge">
+  {{ unread_notifs|default:"0" }}
+</span>
+        </button>
+        <div class="dropdown-menu dropdown-menu-end p-0" style="min-width:300px;max-height:350px;overflow-y:auto;border-radius:10px;box-shadow:var(--cf-shadow-lg);">
+          <div style="padding:12px 16px;border-bottom:1px solid var(--cf-border);display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-weight:600;font-size:13px;">Notifications</span>
+            <a href="#" style="font-size:11px;color:var(--cf-blue);text-decoration:none;" id="markAllRead">Mark all read</a>
+          </div>
+          <div id="notifList" style="font-size:13px;">
+            <div class="text-center py-3 text-muted" style="font-size:12px;">No new notifications</div>
+          </div>
+        </div>
+      </div>
+      <div class="dropdown">
+        <button class="topbar-avatar dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+          {{ request.user.name|slice:":1"|upper }}
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end" style="min-width:190px;border-radius:8px;box-shadow:var(--cf-shadow-lg);">
+          <li>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--cf-border);">
+              <div style="font-weight:600;font-size:13px;">{{ request.user.name|default:request.user.email }}</div>
+              <div style="font-size:11px;color:var(--cf-muted);">{{ request.user.get_role_display }}</div>
+            </div>
+          </li>
+          <li><hr class="dropdown-divider my-1"></li>
+          <li><button type="button" class="dropdown-item staff-tour-trigger" data-staff-tour-trigger hidden><i class="bi bi-stars me-2"></i>Start Tour</button></li>
+          <li>
+            <form method="post" action="{% url 'accounts:logout' %}" style="margin:0;">
+              {% csrf_token %}
+              <button type="submit" class="dropdown-item text-danger">
+                <i class="bi bi-box-arrow-right me-2"></i>Sign Out
+              </button>
+            </form>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  {% if messages %}
+  <div class="px-4 pt-3">
+    {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show" role="alert">
+      {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="flex-grow-1 p-3 p-md-4">
+    {% block content %}{% endblock %}
+  </div>
+
+  <footer style="text-align:center;padding:12px;font-size:11.5px;color:var(--cf-muted);border-top:1px solid var(--cf-border);">
+    {{ APP_NAME }} v{{ APP_VERSION }} &nbsp;·&nbsp; Corporate Cafeteria Management
+  </footer>
+</div>
+
+<div id="sidebarOverlay" onclick="closeSidebar()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1039;"></div>
+
+{% endblock body %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  const sidebar=document.getElementById('sidebar');
+  const overlay=document.getElementById('sidebarOverlay');
+  const sidebarToggleButtons=Array.from(document.querySelectorAll('[data-sidebar-toggle]'));
+  const desktopSidebarQuery=window.matchMedia('(min-width: 992px)');
+  const SIDEBAR_COLLAPSE_KEY='neverq.sidebar.collapsed';
+
+  function setOverlayVisible(visible){
+    if (!overlay) return;
+    overlay.style.display=visible ? 'block' : 'none';
+  }
+
+  function setDesktopCollapsed(collapsed, persist=true){
+    document.body.classList.toggle('sidebar-collapsed', collapsed);
+    if (sidebar) sidebar.classList.remove('open');
+    setOverlayVisible(false);
+    if (persist){
+      try { localStorage.setItem(SIDEBAR_COLLAPSE_KEY, collapsed ? '1' : '0'); } catch(e) {}
+    }
+    syncSidebarToggleButtons();
+  }
+
+  function openMobileSidebar(){
+    if (sidebar) sidebar.classList.add('open');
+    setOverlayVisible(true);
+    syncSidebarToggleButtons();
+  }
+
+  function closeSidebar(){
+    if (!desktopSidebarQuery.matches && sidebar){
+      sidebar.classList.remove('open');
+      setOverlayVisible(false);
+      syncSidebarToggleButtons();
+      return;
+    }
+    setDesktopCollapsed(true);
+  }
+
+  function toggleSidebar(){
+    if (desktopSidebarQuery.matches){
+      setDesktopCollapsed(!document.body.classList.contains('sidebar-collapsed'));
+      return;
+    }
+    const isOpen=sidebar?.classList.contains('open');
+    if (isOpen) closeSidebar();
+    else openMobileSidebar();
+  }
+
+  function syncSidebarToggleButtons(){
+    const isDesktop=desktopSidebarQuery.matches;
+    const collapsed=isDesktop ? document.body.classList.contains('sidebar-collapsed') : !(sidebar?.classList.contains('open'));
+    document.body.classList.toggle('sidebar-visible', !collapsed);
+    sidebarToggleButtons.forEach((btn)=>{
+      const icon=btn.querySelector('i');
+      if (icon){
+        icon.className = collapsed ? 'bi bi-layout-sidebar' : 'bi bi-layout-sidebar-inset';
+      }
+      btn.setAttribute('aria-expanded', String(!collapsed));
+      btn.setAttribute('aria-label', 'Toggle sidebar');
+    });
+  }
+
+  sidebarToggleButtons.forEach((btn)=>btn.addEventListener('click', toggleSidebar));
+
+  try {
+    if (desktopSidebarQuery.matches && localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === '1'){
+      document.body.classList.add('sidebar-collapsed');
+    }
+  } catch(e) {}
+  syncSidebarToggleButtons();
+
+  desktopSidebarQuery.addEventListener('change', (event) => {
+    if (event.matches){
+      if (sidebar) sidebar.classList.remove('open');
+      setOverlayVisible(false);
+      try {
+        document.body.classList.toggle('sidebar-collapsed', localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === '1');
+      } catch(e) {
+        document.body.classList.remove('sidebar-collapsed');
+      }
+    } else {
+      document.body.classList.remove('sidebar-collapsed');
+      if (sidebar) sidebar.classList.remove('open');
+      setOverlayVisible(false);
+    }
+    syncSidebarToggleButtons();
+  });
+</script>
+
+<!-- ══ Bluetooth KOT Printer ════════════════════════════════════
+     Route-aware architecture:
+     - Browser remembers printers per counter/printer label.
+     - printKOT() routes by data.printer_route_key / data.printer_label.
+     - If a ticket belongs to another counter, the browser reconnects to that
+       saved printer before printing.
+     - Silent physical printing still depends on Chrome/Web Bluetooth + the
+       printer/browser configuration on that POS machine.
+════════════════════════════════════════════════════════════════ -->
+
+<!-- Hidden iframe for explicit system-print fallback only -->
+<iframe id="kotPrintFrame"
+        style="position:fixed;left:-9999px;top:-9999px;width:80mm;height:1px;border:none;"
+        aria-hidden="true"></iframe>
+
+<!-- Toast for BT print status (non-blocking, auto-dismisses) -->
+<div id="btToast"
+     style="display:none;position:fixed;bottom:18px;left:calc(var(--sidebar-visible-w) + 22px);right:22px;transform:none;
+            background:var(--cf-navy);color:white;padding:10px 16px;border-radius:10px;
+            font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.3);
+            align-items:center;justify-content:center;gap:10px;white-space:normal;flex-wrap:wrap;line-height:1.35;
+            max-width:min(760px, calc(100vw - var(--sidebar-visible-w) - 44px));margin:0 auto;">
+  <span id="btToastMsg"></span>
+  <button id="btToastRetry" onclick="window._btRetryPrint()"
+          style="background:#ef9a9a;border:none;color:var(--cf-navy);padding:3px 10px;
+                 border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;display:none;">
+    Retry BT
+  </button>
+  <button id="btToastSystem" onclick="window._btSystemPrint()"
+          style="background:rgba(255,255,255,.15);border:none;color:white;padding:3px 10px;
+                 border-radius:5px;font-size:12px;cursor:pointer;display:none;">
+    System Print
+  </button>
+  <button onclick="window._btDismissToast()"
+          style="background:none;border:none;color:rgba(255,255,255,.5);font-size:16px;
+                 cursor:pointer;padding:0 0 0 4px;line-height:1;">✕</button>
+</div>
+
+<script>
+(function() {
+  const LS_KEY = 'nq_bt_printer';
+  const LS_KEY_ID = 'nq_bt_printer_id';
+  const MAP_KEY = 'nq_bt_printer_map';
+  const ACTIVE_ROUTE_KEY = 'nq_bt_active_route';
+
+  const SERVICE_UUIDS = [
+    '000018f0-0000-1000-8000-00805f9b34fb',
+    '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+    '0000ff00-0000-1000-8000-00805f9b34fb',
+    '0000ffe0-0000-1000-8000-00805f9b34fb',
+    '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+  ];
+  const CHAR_UUIDS = [
+    '00002af1-0000-1000-8000-00805f9b34fb',
+    '49535343-8841-43f4-a8d4-ecbe34729bb3',
+    '0000ff02-0000-1000-8000-00805f9b34fb',
+    '0000ffe1-0000-1000-8000-00805f9b34fb',
+    '6e400002-b5a3-f393-e0a9-e50e24dcca9e',
+  ];
+  const BACKOFF = [1500, 3000, 6000, 12000, 20000];
+
+  window.btDevice = null;
+  window.btChar = null;
+  window.btRouteKey = '';
+  window.btRouteLabel = '';
+  window.btPreferredRouteKey = '';
+  window.btPreferredRouteLabel = '';
+  window._printQueue = [];
+  window._pendingPrintJob = null;
+
+  let reconnecting = false;
+  let reconnectTimer = null;
+  let backoffIdx = 0;
+
+  function safeGet(key) {
+    try { return localStorage.getItem(key) || ''; } catch { return ''; }
+  }
+  function safeSet(key, value) {
+    try { localStorage.setItem(key, value); } catch {}
+  }
+  function safeRemove(key) {
+    try { localStorage.removeItem(key); } catch {}
+  }
+
+  function slugifyLabel(value) {
+    return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || '';
+  }
+
+  function normalizePrinterRoute(routeKey, routeLabel) {
+    const direct = String(routeKey || '').trim();
+    if (direct) return direct;
+    const labelSlug = slugifyLabel(routeLabel);
+    return labelSlug ? `label:${labelSlug}` : 'default';
+  }
+
+  function loadPrinterMap() {
+    try {
+      const raw = localStorage.getItem(MAP_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function savePrinterMap(map) {
+    try { localStorage.setItem(MAP_KEY, JSON.stringify(map || {})); } catch {}
+  }
+
+  function savedRecordFor(routeKey, routeLabel) {
+    const map = loadPrinterMap();
+    const normalized = normalizePrinterRoute(routeKey, routeLabel);
+    if (map[normalized]) return { ...map[normalized], routeKey: normalized };
+
+    const labelOnly = slugifyLabel(routeLabel);
+    if (labelOnly && map[`label:${labelOnly}`]) return { ...map[`label:${labelOnly}`], routeKey: `label:${labelOnly}` };
+
+    const activeKey = safeGet(ACTIVE_ROUTE_KEY);
+    if (activeKey && map[activeKey]) return { ...map[activeKey], routeKey: activeKey };
+
+    const fallbackName = safeGet(LS_KEY);
+    const fallbackId = safeGet(LS_KEY_ID);
+    if (fallbackName || fallbackId) {
+      return {
+        routeKey: normalized || 'default',
+        id: fallbackId,
+        name: fallbackName,
+        label: (routeLabel || fallbackName || 'KOT Printer').trim(),
+      };
+    }
+    return null;
+  }
+
+  function saveRouteRecord(routeKey, routeLabel, device) {
+    const normalized = normalizePrinterRoute(routeKey, routeLabel || device?.name || '');
+    const map = loadPrinterMap();
+    map[normalized] = {
+      id: String(device?.id || '').trim(),
+      name: String(device?.name || '').trim(),
+      label: String(routeLabel || device?.name || 'KOT Printer').trim(),
+    };
+    if (normalized !== 'default' && !map.default && (device?.name || device?.id)) {
+      map.default = { ...map[normalized] };
+    }
+    savePrinterMap(map);
+    if (device?.name) safeSet(LS_KEY, String(device.name).trim()); else safeRemove(LS_KEY);
+    if (device?.id) safeSet(LS_KEY_ID, String(device.id).trim()); else safeRemove(LS_KEY_ID);
+    return normalized;
+  }
+
+  function hasSavedPrinterFor(routeKey, routeLabel) {
+    return !!savedRecordFor(routeKey, routeLabel);
+  }
+
+  function hasAnySavedPrinter() {
+    const map = loadPrinterMap();
+    return Object.keys(map).length > 0 || !!safeGet(LS_KEY) || !!safeGet(LS_KEY_ID);
+  }
+
+  function resolveRouteInfo(routeKey, routeLabel) {
+    const key = normalizePrinterRoute(routeKey || window.btPreferredRouteKey || safeGet(ACTIVE_ROUTE_KEY) || 'default', routeLabel || window.btPreferredRouteLabel || '');
+    let label = String(routeLabel || window.btPreferredRouteLabel || '').trim();
+    if (!label) {
+      const saved = savedRecordFor(key, routeLabel);
+      label = saved?.label || '';
+    }
+    if (!label && key.startsWith('counter:')) label = 'Counter Printer';
+    if (!label && key.startsWith('label:')) label = key.replace(/^label:/, '').replace(/-/g, ' ');
+    return { key, label: label || 'KOT Printer' };
+  }
+
+  function setActiveRoute(routeKey, routeLabel, persist = true) {
+    const info = resolveRouteInfo(routeKey, routeLabel);
+    window.btPreferredRouteKey = info.key;
+    window.btPreferredRouteLabel = info.label;
+    if (persist) safeSet(ACTIVE_ROUTE_KEY, info.key);
+    return info;
+  }
+  window.setPreferredPrinterRoute = setActiveRoute;
+
+  function buttonRouteInfo(btn) {
+    if (!btn) return resolveRouteInfo();
+    const dataKey = btn.dataset.routeKey || '';
+    const dataLabel = btn.dataset.routeLabel || '';
+    return resolveRouteInfo(dataKey, dataLabel);
+  }
+
+  function updateButtons(state) {
+    document.querySelectorAll('.nq-bt-btn').forEach((btn) => {
+      const labelEl = btn.querySelector('.nq-bt-label');
+      const info = buttonRouteInfo(btn);
+      const activeForButton = !window.btRouteKey || window.btRouteKey === info.key || info.key === 'default';
+      btn.classList.remove('connected', 'disconnected', 'reconnecting');
+
+      if (state === 'connected' && window.btChar && activeForButton) {
+        btn.classList.add('connected');
+        if (labelEl) labelEl.textContent = '✓ ' + (window.btDevice?.name || info.label || 'KOT Printer');
+      } else if (state === 'reconnecting' && (info.key === window.btPreferredRouteKey || info.key === window.btRouteKey || info.key === 'default')) {
+        btn.classList.add('disconnected');
+        if (labelEl) labelEl.textContent = '↻ Reconnecting ' + (info.label || 'Printer') + '…';
+      } else {
+        btn.classList.add('disconnected');
+        if (labelEl) labelEl.textContent = 'Connect ' + (info.label || 'KOT Printer');
+      }
+    });
+  }
+
+  function showToast(msg, showRetry, showSystem, autoHideMs) {
+    const toast = document.getElementById('btToast');
+    if (!toast) return;
+    document.getElementById('btToastMsg').textContent = msg;
+    document.getElementById('btToastRetry').style.display = showRetry ? '' : 'none';
+    document.getElementById('btToastSystem').style.display = showSystem ? '' : 'none';
+    toast.style.display = 'flex';
+    if (autoHideMs) setTimeout(() => { if (toast) toast.style.display = 'none'; }, autoHideMs);
+  }
+  window._btDismissToast = () => {
+    const toast = document.getElementById('btToast');
+    if (toast) toast.style.display = 'none';
+  };
+
+  async function connectDevice(device, routeKey, routeLabel) {
+    const server = await device.gatt.connect();
+
+    let service = null;
+    for (const uuid of SERVICE_UUIDS) {
+      try { service = await server.getPrimaryService(uuid); break; } catch {}
+    }
+    if (!service) {
+      try { const all = await server.getPrimaryServices(); service = all[0]; } catch {}
+    }
+    if (!service) throw new Error('No print service found. Is the printer on?');
+
+    let char = null;
+    for (const uuid of CHAR_UUIDS) {
+      try { char = await service.getCharacteristic(uuid); break; } catch {}
+    }
+    if (!char) {
+      try {
+        const all = await service.getCharacteristics();
+        char = all.find((c) => c.properties.writeWithoutResponse || c.properties.write);
+      } catch {}
+    }
+    if (!char) throw new Error('No writable characteristic found.');
+
+    const info = setActiveRoute(routeKey, routeLabel || device?.name || 'KOT Printer');
+    window.btDevice = device;
+    window.btChar = char;
+    window.btRouteKey = info.key;
+    window.btRouteLabel = info.label;
+    saveRouteRecord(info.key, info.label, device);
+
+    device.removeEventListener('gattserverdisconnected', onDrop);
+    device.addEventListener('gattserverdisconnected', onDrop);
+    updateButtons('connected');
+    flushQueue();
+  }
+
+  function onDrop() {
+    window.btChar = null;
+    if (window.btRouteKey || hasAnySavedPrinter()) {
+      updateButtons('reconnecting');
+      scheduleReconnect(BACKOFF[0], window.btRouteKey || window.btPreferredRouteKey || safeGet(ACTIVE_ROUTE_KEY), window.btRouteLabel || window.btPreferredRouteLabel);
+    } else {
+      updateButtons('disconnected');
+    }
+  }
+
+  function scheduleReconnect(delayMs, routeKey, routeLabel) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(async () => {
+      const info = resolveRouteInfo(routeKey, routeLabel);
+      if (window.btChar && (!info.key || window.btRouteKey === info.key)) return;
+      const ok = await silentReconnect(info.key, info.label);
+      if (!ok && backoffIdx < BACKOFF.length - 1) {
+        backoffIdx += 1;
+        scheduleReconnect(BACKOFF[backoffIdx], info.key, info.label);
+      } else if (!ok) {
+        updateButtons('disconnected');
+      }
+    }, delayMs);
+  }
+
+  async function silentReconnect(routeKey, routeLabel) {
+    if (!navigator.bluetooth?.getDevices) return false;
+    const info = resolveRouteInfo(routeKey, routeLabel);
+    if (window.btChar && (!info.key || window.btRouteKey === info.key || window.btRouteKey === 'default')) return true;
+    const saved = savedRecordFor(info.key, info.label);
+    if (!saved || (!saved.id && !saved.name)) return false;
+    if (reconnecting) return false;
+
+    reconnecting = true;
+    try {
+      const devices = await navigator.bluetooth.getDevices();
+      const target = (saved.id && devices.find((d) => d.id === saved.id))
+        || (saved.name && devices.find((d) => d.name === saved.name));
+      if (!target) return false;
+      if (window.btDevice?.gatt?.connected && window.btDevice.id !== target.id) {
+        try { window.btDevice.gatt.disconnect(); } catch {}
+        window.btDevice = null;
+        window.btChar = null;
+      }
+      await connectDevice(target, info.key, saved.label || info.label);
+      backoffIdx = 0;
+      return true;
+    } catch {
+      return false;
+    } finally {
+      reconnecting = false;
+    }
+  }
+
+  async function dispatchPrintJob(job) {
+    const info = resolveRouteInfo(job.routeKey, job.routeLabel);
+    const liveRoute = window.btRouteKey || '';
+    const hasRouteMismatch = !!(info.key && liveRoute && liveRoute !== 'default' && info.key !== 'default' && info.key !== liveRoute);
+    if (!window.btChar || hasRouteMismatch) {
+      const ok = await silentReconnect(info.key, info.label);
+      if (!ok) {
+        window._pendingPrintJob = job;
+        updateButtons('reconnecting');
+        scheduleReconnect(BACKOFF[0], info.key, info.label);
+        showToast(`⚠ ${info.label} is not connected. Connect or power on that counter printer.`, true, true, 0);
+        if (job.resolve) job.resolve(false);
+        return;
+      }
+    }
+
+    try {
+      await window.sendToPrinter(window.buildEscPos(job.data, job.title));
+      showToast('✓ Printed via Bluetooth', false, false, 2200);
+      if (job.resolve) job.resolve(true);
+    } catch (error) {
+      window.btChar = null;
+      updateButtons('reconnecting');
+      scheduleReconnect(BACKOFF[0], info.key, info.label);
+      window._pendingPrintJob = job;
+      showToast('⚠ Print failed: ' + error.message, true, true, 0);
+      if (job.resolve) job.resolve(false);
+    }
+  }
+
+  function flushQueue() {
+    if (!window._printQueue.length) return;
+    const remaining = [];
+    const currentRoute = window.btRouteKey || 'default';
+    const queue = window._printQueue.splice(0);
+    for (const job of queue) {
+      const info = resolveRouteInfo(job.routeKey, job.routeLabel);
+      if (!window.btChar || (currentRoute !== 'default' && info.key && info.key !== 'default' && info.key !== currentRoute)) {
+        remaining.push(job);
+      } else {
+        dispatchPrintJob(job);
+      }
+    }
+    if (remaining.length) {
+      window._printQueue = remaining;
+      const next = remaining[0];
+      const info = resolveRouteInfo(next.routeKey, next.routeLabel);
+      silentReconnect(info.key, info.label);
+    }
+  }
+
+  window._btRetryPrint = async () => {
+    window._btDismissToast();
+    const job = window._pendingPrintJob;
+    if (!job) return;
+    const info = resolveRouteInfo(job.routeKey, job.routeLabel);
+    const ok = await silentReconnect(info.key, info.label);
+    if (ok && window.btChar) {
+      dispatchPrintJob(job);
+    } else {
+      showToast(`⚠ ${info.label} not found. Turn it on and try again.`, true, true, 0);
+    }
+  };
+
+  window._btSystemPrint = () => {
+    window._btDismissToast();
+    const job = window._pendingPrintJob;
+    if (job) window.printViaIframe(job.data, job.title, job.frameId || 'kotPrintFrame');
+  };
+
+  window.connectBluetooth = async function(btnEl, routeKey, routeLabel) {
+    if (!navigator.bluetooth) {
+      alert('Web Bluetooth not supported. Use Google Chrome on Windows or Android over https:// or localhost.');
+      return false;
+    }
+
+    const info = setActiveRoute(routeKey || btnEl?.dataset?.routeKey || '', routeLabel || btnEl?.dataset?.routeLabel || '');
+    const labelEl = btnEl?.querySelector('.nq-bt-label');
+
+    if (window.btChar && window.btRouteKey === info.key) {
+      window.disconnectBluetooth(false);
+      return true;
+    }
+
+    if (window.btChar && window.btRouteKey !== info.key) {
+      try { window.btDevice?.gatt?.disconnect(); } catch {}
+      window.btDevice = null;
+      window.btChar = null;
+      window.btRouteKey = '';
+      window.btRouteLabel = '';
+    }
+
+    if (hasSavedPrinterFor(info.key, info.label)) {
+      if (labelEl) labelEl.textContent = '↻ Reconnecting ' + info.label + '…';
+      if (btnEl) btnEl.disabled = true;
+      const ok = await silentReconnect(info.key, info.label);
+      if (btnEl) btnEl.disabled = false;
+      if (ok) return true;
+    }
+
+    if (labelEl) labelEl.textContent = '⏳ Scanning…';
+    if (btnEl) btnEl.disabled = true;
+    try {
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: SERVICE_UUIDS,
+      });
+      await connectDevice(device, info.key, info.label);
+      return true;
+    } catch (error) {
+      if (error.name !== 'NotFoundError') alert('Bluetooth error: ' + error.message);
+      updateButtons(hasAnySavedPrinter() ? 'reconnecting' : 'disconnected');
+      return false;
+    } finally {
+      if (btnEl) btnEl.disabled = false;
+    }
+  };
+
+  window.disconnectBluetooth = function(clearSaved = true) {
+    clearTimeout(reconnectTimer);
+    try { window.btDevice?.gatt?.disconnect(); } catch {}
+    window.btDevice = null;
+    window.btChar = null;
+    window.btRouteKey = '';
+    window.btRouteLabel = '';
+
+    if (clearSaved) {
+      safeRemove(LS_KEY);
+      safeRemove(LS_KEY_ID);
+      safeRemove(MAP_KEY);
+      safeRemove(ACTIVE_ROUTE_KEY);
+      window.btPreferredRouteKey = '';
+      window.btPreferredRouteLabel = '';
+    }
+    updateButtons('disconnected');
+  };
+
+  window.buildEscPos = function(data, title) {
+    const ESC = 0x1B, GS = 0x1D, LF = 0x0A;
+    const enc = new TextEncoder();
+    const buf = [];
+    const push = (...b) => buf.push(...b);
+    const pushStr = (s) => buf.push(...enc.encode(String(s || '')));
+    const nl = () => push(LF);
+    const hr = () => { pushStr('-'.repeat(32)); nl(); };
+    const left = () => push(ESC, 0x61, 0x00);
+    const center = () => push(ESC, 0x61, 0x01);
+    const bold = (on) => push(ESC, 0x45, on ? 0x01 : 0x00);
+    const size = (mode) => push(GS, 0x21, mode);
+    const money = (value) => {
+      const n = parseFloat(value || 0);
+      return (Number.isFinite(n) ? n : 0).toFixed(2);
+    };
+    const wrapText = (value, width) => {
+      const text = String(value || '').trim();
+      if (!text) return [''];
+      const words = text.split(/\s+/);
+      const lines = [];
+      let line = '';
+      for (const word of words) {
+        if (word.length > width) {
+          if (line) { lines.push(line); line = ''; }
+          for (let i = 0; i < word.length; i += width) lines.push(word.slice(i, i + width));
+        } else if (!line) {
+          line = word;
+        } else if ((line + ' ' + word).length <= width) {
+          line += ' ' + word;
+        } else {
+          lines.push(line);
+          line = word;
+        }
+      }
+      if (line) lines.push(line);
+      return lines.length ? lines : [''];
+    };
+    const printWrapped = (value, width = 32) => {
+      wrapText(value, width).forEach((line) => { pushStr(line); nl(); });
+    };
+    const isPosReceipt = String(title || '').toUpperCase().includes('POS ORDER RECEIPT');
+
+    push(ESC, 0x40); // init
+
+    if (isPosReceipt) {
+      center();
+      bold(true); size(0x11);
+      pushStr(String(data.receipt_brand || 'NEVERNO').substring(0, 16)); nl();
+      size(0x00); bold(false);
+      if (data.company_name) printWrapped(data.company_name, 32);
+      if (data.company_phone) { pushStr('Phone: ' + String(data.company_phone).substring(0, 25)); nl(); }
+      if (data.company_gst) { pushStr('GSTIN: ' + String(data.company_gst).substring(0, 24)); nl(); }
+      if (data.company_fssai) { pushStr('FSSAI: ' + String(data.company_fssai).substring(0, 24)); nl(); }
+      pushStr(title || 'POS ORDER RECEIPT'); nl();
+      left();
+      hr();
+      pushStr('Order : ' + (data.order_number || '')); nl();
+      pushStr('Date  : ' + (data.created_at || '')); nl();
+      pushStr('Name  : ' + (data.customer_name || 'Walk-in Customer')); nl();
+      if (data.customer_phone) { pushStr('Phone : ' + data.customer_phone); nl(); }
+      hr();
+      bold(true);
+      pushStr('Item Name'.padEnd(12) + 'Qty'.padStart(4) + 'Price'.padStart(7) + 'Amount'.padStart(9)); nl();
+      bold(false);
+      hr();
+      for (const item of (data.items || [])) {
+        const qty = parseInt(item.qty || 0, 10) || 0;
+        const price = parseFloat(item.price || 0);
+        const amount = parseFloat(item.amount != null ? item.amount : (price * qty));
+        const qtyTxt = String(qty).padStart(4).slice(-4);
+        const priceTxt = money(price).padStart(7).slice(-7);
+        const amountTxt = money(amount).padStart(9).slice(-9);
+        const nameLines = wrapText(item.name || 'Item', 12);
+        pushStr(String(nameLines[0] || '').substring(0, 12).padEnd(12) + qtyTxt + priceTxt + amountTxt); nl();
+        nameLines.slice(1).forEach((line) => { pushStr(String(line).substring(0, 12)); nl(); });
+      }
+      hr();
+      if (parseFloat(data.card_fee || 0) > 0) {
+        pushStr(('Subtotal: Rs.' + money(data.base_total || data.total)).padStart(32)); nl();
+        pushStr(('Card fee: Rs.' + money(data.card_fee)).padStart(32)); nl();
+      }
+      bold(true);
+      pushStr(('TOTAL: Rs.' + money(data.total)).padStart(32)); nl();
+      bold(false);
+      if (data.payment_mode) { pushStr('Payment: ' + data.payment_mode); nl(); }
+      nl();
+      center(); pushStr('Thank you!'); nl();
+      push(ESC, 0x64, 0x05); // feed paper before cut so totals stay above the tear edge
+      push(GS, 0x56, 0x41, 0x03); // cut
+      return new Uint8Array(buf);
+    }
+
+    center();
+    bold(true); size(0x11);
+    pushStr((data.company_name || '').substring(0, 24)); nl();
+    size(0x00); bold(false);
+    pushStr(title || 'ORDER RECEIPT'); nl();
+    if (data.counter_name) { pushStr(String(data.counter_name).substring(0, 28)); nl(); }
+    left();
+    hr();
+    pushStr('Order : ' + (data.order_number || '')); nl();
+    if (data.ticket_number) { pushStr('Ticket: ' + data.ticket_number); nl(); }
+    if (data.scan_code) { pushStr('Scan  : ' + data.scan_code); nl(); }
+    pushStr('Date  : ' + (data.created_at || '')); nl();
+    pushStr('Name  : ' + (data.customer_name || 'Customer')); nl();
+    if (data.customer_phone) { pushStr('Phone : ' + data.customer_phone); nl(); }
+    if (data.scheduled_date) { pushStr('Deliv : ' + data.scheduled_date); nl(); }
+    hr();
+    bold(true); pushStr('ITEM                     QTY'); nl(); bold(false); hr();
+    for (const item of (data.items || [])) {
+      pushStr(String(item.name || '').substring(0, 24).padEnd(24) + String(item.qty || '').padStart(4)); nl();
+    }
+    hr();
+    bold(true);
+    pushStr(('TOTAL: Rs.' + money(data.total)).padEnd(32)); nl();
+    bold(false);
+    if (data.payment_mode) { pushStr('Payment: ' + data.payment_mode); nl(); }
+    push(ESC, 0x64, 0x05); // feed paper before cut so the footer is not trimmed
+    push(GS, 0x56, 0x41, 0x03); // cut
+    return new Uint8Array(buf);
+  };
+
+  window.sendToPrinter = async function(bytes) {
+    if (!window.btChar) throw new Error('Printer not connected.');
+
+    // BLE ATT minimum MTU payload is 20 bytes.
+    // ATPOS and most budget BLE thermal printers do NOT negotiate a larger MTU,
+    // so sending chunks > 20 bytes causes the printer to silently drop the data
+    // even though the JS call returns without error.
+    // 20 bytes × ~50ms = roughly 1s per KB — fully acceptable for receipts.
+    const chunkSize = 20;
+    const delayMs = 20;
+    const supportsWriteWithoutResponse = !!window.btChar.properties?.writeWithoutResponse;
+    const supportsWrite = !!window.btChar.properties?.write;
+
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const slice = bytes.slice(i, i + chunkSize);
+      // Try writeWithoutResponse first (no ACK needed, faster).
+      // Fall back to writeValue (waits for ACK) if the characteristic requires it.
+      // If both fail, throw so the caller can show a clear error.
+      let sent = false;
+      if (supportsWriteWithoutResponse) {
+        try {
+          await window.btChar.writeValueWithoutResponse(slice);
+          sent = true;
+        } catch (_) { /* fall through to writeValue */ }
+      }
+      if (!sent && supportsWrite) {
+        await window.btChar.writeValue(slice);
+        sent = true;
+      }
+      if (!sent) {
+        // Last resort — attempt writeValue regardless of advertised properties
+        await window.btChar.writeValue(slice);
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    return true;
+  };
+
+  window.printKOT = function(data, title, frameId) {
+    return new Promise((resolve) => {
+      const info = resolveRouteInfo(data?.printer_route_key || '', data?.printer_label || '');
+      setActiveRoute(info.key, info.label, false);
+      const job = {
+        data,
+        title,
+        frameId,
+        resolve,
+        routeKey: info.key,
+        routeLabel: info.label,
+      };
+
+      if (window.btChar && (!window.btRouteKey || window.btRouteKey === info.key || window.btRouteKey === 'default' || info.key === 'default')) {
+        dispatchPrintJob(job);
+        return;
+      }
+
+      if (hasSavedPrinterFor(info.key, info.label)) {
+        window._pendingPrintJob = job;
+        window._printQueue.push(job);
+        updateButtons('reconnecting');
+        showToast(`⏳ Waiting for ${info.label}… It will print when that counter printer reconnects.`, false, true, 0);
+        silentReconnect(info.key, info.label);
+        return;
+      }
+
+      window._pendingPrintJob = job;
+      showToast(`🖨 No printer connected for ${info.label}. Connect it once in this browser, or use System Print.`, true, true, 0);
+      resolve(false);
+    });
+  };
+
+  window.ensurePrinterReady = async function(routeKey, routeLabel) {
+    if (window.btChar && (!routeKey || routeKey === window.btRouteKey || window.btRouteKey === 'default')) return true;
+    return await silentReconnect(routeKey, routeLabel);
+  };
+
+  window.printViaIframe = function(data, title, frameId) {
+    const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const money = (value) => {
+      const n = parseFloat(value || 0);
+      return (Number.isFinite(n) ? n : 0).toFixed(2);
+    };
+    const isPosReceipt = String(title || '').toUpperCase().includes('POS ORDER RECEIPT');
+
+    function writeHtml(html) {
+      const frame = document.getElementById(frameId || 'kotPrintFrame');
+      if (!frame) return;
+
+      try {
+        const doc = frame.contentWindow.document;
+        doc.open();
+        doc.write(html);
+        doc.close();
+        setTimeout(() => {
+          try {
+            frame.contentWindow.focus();
+            frame.contentWindow.print();
+          } catch {
+            const popup = window.open('', '_blank', 'width=350,height=500');
+            if (popup) {
+              popup.document.write(html);
+              popup.document.close();
+              popup.focus();
+              popup.print();
+            }
+          }
+        }, 250);
+      } catch {
+        const popup = window.open('', '_blank', 'width=350,height=500');
+        if (popup) {
+          popup.document.write(html);
+          popup.document.close();
+          popup.focus();
+          popup.print();
+        }
+      }
+    }
+
+    if (isPosReceipt) {
+      let posRows = '';
+      for (const item of (data.items || [])) {
+        const qty = parseInt(item.qty || 0, 10) || 0;
+        const price = parseFloat(item.price || 0);
+        const amount = item.amount != null ? parseFloat(item.amount) : price * qty;
+        posRows += `<tr>
+          <td class="name">${esc(item.name)}</td>
+          <td class="qty">${qty}</td>
+          <td class="num">Rs.${money(price)}</td>
+          <td class="num">Rs.${money(amount)}</td>
+        </tr>`;
+      }
+
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@page { size:80mm auto; margin:4mm }
+body { font-family:'Courier New',monospace; font-size:11px; width:72mm; margin:0; color:#000 }
+.c { text-align:center }
+.brand { font-size:19px; font-weight:800; text-transform:uppercase; line-height:1.05 }
+.company { font-size:10px; font-weight:700; line-height:1.15; margin-top:2px }
+.meta { font-size:9.5px; line-height:1.2 }
+.ti { font-size:10px; margin-top:4px }
+.d { border-bottom:1px dashed #333; margin:5px 0 }
+table { width:100%; border-collapse:collapse; table-layout:fixed }
+th,td { padding:2px 0; vertical-align:top }
+th { border-bottom:1px dashed #333; font-size:10px }
+.name { width:41%; text-align:left; word-break:break-word }
+.qty { width:11%; text-align:right }
+.num { width:24%; text-align:right }
+.tot { font-size:14px; font-weight:700; display:flex; justify-content:space-between; margin-top:4px }
+.paper-feed { height:22mm }
+</style>
+</head>
+<body>
+<div class="c">
+  <div class="brand">${esc(data.receipt_brand || 'NEVERNO')}</div>
+  <div class="company">${esc(data.company_name)}</div>
+  ${data.company_phone ? '<div class="meta">Phone: ' + esc(data.company_phone) + '</div>' : ''}
+  ${data.company_gst ? '<div class="meta">GSTIN: ' + esc(data.company_gst) + '</div>' : ''}
+  ${data.company_fssai ? '<div class="meta">FSSAI: ' + esc(data.company_fssai) + '</div>' : ''}
+  <div class="ti">${esc(title || 'POS ORDER RECEIPT')}</div>
+</div>
+<div class="d"></div>
+<div>Order  : <b>${esc(data.order_number)}</b></div>
+<div>Date   : ${esc(data.created_at)}</div>
+<div>Name   : ${esc(data.customer_name)}${data.customer_phone ? ' / ' + esc(data.customer_phone) : ''}</div>
+<div class="d"></div>
+<table>
+  <thead><tr><th class="name">Item Name</th><th class="qty">Qty</th><th class="num">Price</th><th class="num">Amount</th></tr></thead>
+  <tbody>${posRows}</tbody>
+</table>
+<div class="d"></div>
+${parseFloat(data.card_fee || 0) > 0 ? '<div style="display:flex;justify-content:space-between;"><span>Subtotal</span><span>Rs.' + money(data.base_total || data.total) + '</span></div><div style="display:flex;justify-content:space-between;"><span>Card fee</span><span>Rs.' + money(data.card_fee) + '</span></div>' : ''}
+<div class="tot"><span>TOTAL</span><span>Rs.${money(data.total)}</span></div>
+${data.payment_mode ? '<div style="margin-top:4px;">Payment: ' + esc(data.payment_mode) + '</div>' : ''}
+<div style="text-align:center;margin-top:8px;font-size:10px;">Thank you!</div>
+<div class="paper-feed"></div>
+</body>
+</html>`;
+
+      writeHtml(html);
+      return;
+    }
+
+    let rows = '';
+    for (const item of (data.items || [])) {
+      rows += `<div style="display:flex;justify-content:space-between;padding:2px 0;"><span style="flex:1;">${esc(item.name)}</span><span style="min-width:40px;text-align:right;font-weight:700;">x ${item.qty}</span></div>`;
+    }
+
+    const extraHeader = [
+      data.counter_name ? `<div>Counter: <b>${esc(data.counter_name)}</b></div>` : '',
+      data.ticket_number ? `<div>Ticket : <b>${esc(data.ticket_number)}</b></div>` : '',
+      data.scan_code ? `<div>Scan   : ${esc(data.scan_code)}</div>` : '',
+    ].filter(Boolean).join('');
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@page { size:80mm auto; margin:4mm }
+body { font-family:'Courier New',monospace; font-size:12px; width:72mm; margin:0; color:#000 }
+.c { text-align:center }
+.co { font-size:15px; font-weight:700; text-transform:uppercase }
+.ti { font-size:11px; letter-spacing:2px }
+.d { border-bottom:1px dashed #333; margin:5px 0 }
+.tot { font-size:14px; font-weight:700; display:flex; justify-content:space-between; margin-top:4px }
+.paper-feed { height:22mm }
+</style>
+</head>
+<body>
+<div class="c">
+  <div class="co">${esc(data.company_name)}</div>
+  <div class="ti">${esc(title || 'ORDER RECEIPT')}</div>
+</div>
+<div class="d"></div>
+${extraHeader}
+<div>Order  : <b>${esc(data.order_number)}</b></div>
+<div>Date   : ${esc(data.created_at)}</div>
+<div>Name   : ${esc(data.customer_name)}${data.customer_phone ? ' / ' + esc(data.customer_phone) : ''}</div>
+${data.scheduled_date ? '<div>Delivery: ' + esc(data.scheduled_date) + '</div>' : ''}
+${data.payment_mode ? '<div>Payment: ' + esc(data.payment_mode) + '</div>' : ''}
+<div class="d"></div>
+<div style="display:flex;justify-content:space-between;font-weight:700;"><span>ITEM</span><span>QTY</span></div>
+<div class="d"></div>
+${rows}
+<div class="d"></div>
+<div class="tot"><span>TOTAL</span><span>Rs.${money(data.total)}</span></div>
+<div style="text-align:center;margin-top:8px;font-size:10px;">Thank you!</div>
+<div class="paper-feed"></div>
+</body>
+</html>`;
+
+    writeHtml(html);
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    backoffIdx = 0;
+    const bodyRouteKey = document.body?.dataset?.printerRouteKey || '';
+    const bodyRouteLabel = document.body?.dataset?.printerRouteLabel || '';
+    if (bodyRouteKey || bodyRouteLabel) {
+      setActiveRoute(bodyRouteKey, bodyRouteLabel, false);
+    } else if (safeGet(ACTIVE_ROUTE_KEY)) {
+      setActiveRoute(safeGet(ACTIVE_ROUTE_KEY), '', false);
+    }
+
+    if (hasSavedPrinterFor(window.btPreferredRouteKey, window.btPreferredRouteLabel)) {
+      updateButtons('reconnecting');
+      silentReconnect(window.btPreferredRouteKey, window.btPreferredRouteLabel).then((ok) => {
+        if (!ok && hasAnySavedPrinter()) scheduleReconnect(BACKOFF[0], window.btPreferredRouteKey, window.btPreferredRouteLabel);
+      });
+    } else {
+      updateButtons('disconnected');
+    }
+  });
+
+  window.addEventListener('load', () => {
+    if (!window.btChar && hasSavedPrinterFor(window.btPreferredRouteKey, window.btPreferredRouteLabel)) {
+      silentReconnect(window.btPreferredRouteKey, window.btPreferredRouteLabel);
+    }
+  });
+
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted && !window.btChar && hasSavedPrinterFor(window.btPreferredRouteKey, window.btPreferredRouteLabel)) {
+      updateButtons('reconnecting');
+      silentReconnect(window.btPreferredRouteKey, window.btPreferredRouteLabel);
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !window.btChar && hasSavedPrinterFor(window.btPreferredRouteKey, window.btPreferredRouteLabel)) {
+      silentReconnect(window.btPreferredRouteKey, window.btPreferredRouteLabel);
+    }
+  });
+
+  window.addEventListener('focus', () => {
+    if (!window.btChar && hasSavedPrinterFor(window.btPreferredRouteKey, window.btPreferredRouteLabel)) {
+      silentReconnect(window.btPreferredRouteKey, window.btPreferredRouteLabel);
+    }
+  });
+
+  document.querySelectorAll('form[action*="logout"]').forEach((form) => {
+    form.addEventListener('submit', () => window.disconnectBluetooth(true));
+  });
+})();
+</script>
+
+<!-- Notification polling -->
+<script>
+(function(){
+  const list = document.getElementById('notifList');
+  const badge = document.getElementById('notifBadge');
+  const markAll = document.getElementById('markAllRead');
+  if(!list) return;
+
+  function pollNotifs(){
+    fetch('{% url "core:notifications_poll" %}')
+      .then(r => r.json())
+      .then(data => {
+        if(badge){
+          if(data.count > 0){ badge.textContent = data.count; badge.style.display=''; }
+          else { badge.style.display='none'; }
+        }
+        if(data.items && data.items.length){
+          list.innerHTML = data.items.map(n =>
+            `<a href="${n.link||'#'}" class="d-block px-3 py-2 text-decoration-none border-bottom" style="color:var(--cf-text);">
+              <div style="font-weight:600;font-size:12.5px;">${n.title}</div>
+              <div style="font-size:11.5px;color:var(--cf-muted);">${n.message}</div>
+              <div style="font-size:10px;color:#9CA3AF;margin-top:2px;">${n.time}</div>
+            </a>`
+          ).join('');
+        } else {
+          list.innerHTML = '<div class="text-center py-3 text-muted" style="font-size:12px;">No new notifications</div>';
+        }
+      }).catch(()=>{});
+  }
+
+  pollNotifs();
+  setInterval(pollNotifs, 30000);
+
+  if(markAll){
+    markAll.addEventListener('click', function(e){
+      e.preventDefault();
+      const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+      fetch('{% url "core:notification_mark_read" %}', {
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':csrf},
+        body:'all=1'
+      }).then(()=>{ pollNotifs(); });
+    });
+  }
+})();
+</script>
+
+
+<script>
+(function(){
+  const nav = document.getElementById('sidebarNav');
+  if (!nav) return;
+  const KEY_PREFIX = 'neverq.sidebar.group.';
+  const toggleGroup = (group, open) => {
+    group.classList.toggle('open', open);
+    const key = group.dataset.group;
+    if (key) localStorage.setItem(KEY_PREFIX + key, open ? '1' : '0');
+  };
+  nav.querySelectorAll('.nav-group').forEach((group) => {
+    const key = group.dataset.group || '';
+    const btn = group.querySelector('.nav-group-toggle');
+    const hasActive = group.classList.contains('has-active') || !!group.querySelector('.nav-link.active');
+    const saved = key ? localStorage.getItem(KEY_PREFIX + key) : null;
+    const shouldOpen = saved === null ? hasActive : saved === '1';
+    group.classList.toggle('has-active', hasActive);
+    group.classList.toggle('open', shouldOpen || hasActive);
+    if (btn) {
+      btn.addEventListener('click', () => toggleGroup(group, !group.classList.contains('open')));
+    }
+  });
+  const active = nav.querySelector('.nav-link.active');
+  const sb = document.getElementById('sidebar');
+  if (active) {
+    requestAnimationFrame(() => {
+      try { active.scrollIntoView({block:'center', behavior:'smooth'}); } catch(e) {}
+    });
+  }
+  if (nav) {
+    const sKey='neverq.sidebar.scroll';
+    const savedScroll = sessionStorage.getItem(sKey);
+    if (savedScroll && !active) nav.scrollTop = parseInt(savedScroll,10) || 0;
+    nav.addEventListener('scroll', () => sessionStorage.setItem(sKey, String(nav.scrollTop)));
+  }
+})();
+</script>
+
+{% block extra_js %}{% endblock %}
+
+<div class="tour-overlay" id="staffGlobalTourOverlay"></div>
+<div class="tour-popover" id="staffGlobalTourPopover" aria-live="polite">
+  <div class="tour-step" id="staffGlobalTourStep"></div>
+  <div class="tour-title" id="staffGlobalTourTitle"></div>
+  <div class="tour-copy" id="staffGlobalTourCopy"></div>
+  <div class="tour-actions">
+    <div class="tour-progress" id="staffGlobalTourProgress"></div>
+    <div class="tour-buttons">
+      <button type="button" class="btn btn-cf-ghost btn-sm" id="staffTourDisableBtn">Don't show again</button>
+      <button type="button" class="btn btn-cf-ghost btn-sm" id="staffTourSkipBtn">Skip</button>
+      <button type="button" class="btn btn-cf-outline btn-sm" id="staffTourBackBtn">Back</button>
+      <button type="button" class="btn btn-cf-primary btn-sm" id="staffTourNextBtn">Next</button>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const overlay = document.getElementById('staffGlobalTourOverlay');
+  const popover = document.getElementById('staffGlobalTourPopover');
+  const stepLabel = document.getElementById('staffGlobalTourStep');
+  const titleEl = document.getElementById('staffGlobalTourTitle');
+  const copyEl = document.getElementById('staffGlobalTourCopy');
+  const progressEl = document.getElementById('staffGlobalTourProgress');
+  const nextBtn = document.getElementById('staffTourNextBtn');
+  const backBtn = document.getElementById('staffTourBackBtn');
+  const skipBtn = document.getElementById('staffTourSkipBtn');
+  const disableBtn = document.getElementById('staffTourDisableBtn');
+  const triggerButtons = Array.from(document.querySelectorAll('[data-staff-tour-trigger]'));
+  const GLOBAL_TOUR_DISABLE_KEY = 'neverq_tour_disabled_global:v1';
+  if (!overlay || !popover || !nextBtn || !disableBtn || !triggerButtons.length) return;
+
+  function isVisible(el){
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+    return !!(el.getClientRects && el.getClientRects().length);
+  }
+
+  function resolveSteps(stepList){
+    return (Array.isArray(stepList) ? stepList : []).map((step) => {
+      const element = step && step.selector ? document.querySelector(step.selector) : null;
+      if (!isVisible(element)) return null;
+      return {
+        selector: step.selector,
+        element,
+        title: step.title || 'Tour step',
+        copy: step.copy || '',
+        placement: step.placement || 'bottom'
+      };
+    }).filter(Boolean);
+  }
+
+  function step(selector, title, copy, placement){
+    return {selector, title, copy, placement: placement || 'bottom'};
+  }
+
+  function visibleText(selector, fallback){
+    const el = document.querySelector(selector);
+    const value = el ? (el.textContent || '').trim() : '';
+    return value || fallback;
+  }
+
+  function pageLabel(fallback){
+    const heading = visibleText('.topbar-title', '');
+    if (heading) return heading;
+    const title = (document.title || '').split(' - ')[0].trim();
+    return title || fallback || 'This page';
+  }
+
+  function buildListSteps(label){
+    return [
+      step('#sidebar .nav-group.open, #sidebar .nav-group.has-active, #sidebar .nav-group', 'Sidebar navigation', 'Use the sidebar to move between operations, master data, reports, and administration screens.', 'right'),
+      step('.topbar-title', label + ' overview', 'This heading tells the team which record set they are managing right now.', 'bottom'),
+      step('#main-content .filter-card, #main-content .filter-bar, #main-content form[method="get"], #main-content .orders-page-filter, #main-content .surface-card form .row.g-2', 'Filters and search', 'Start here whenever you need to narrow the list by company, date, status, or free-text search.', 'bottom'),
+      step('#main-content form[action*="bulk-delete"], #main-content .bulk-delete-bar, #main-content .select-all-row, #main-content .toolbar-actions', 'Bulk actions', 'Select multiple rows here for delete or other mass actions instead of handling records one by one.', 'bottom'),
+      step('#main-content .cf-table, #main-content table, #main-content .gallery-grid, #main-content .row.g-3', label + ' records', 'This main area shows the current records, their statuses, and the row-level details you need before taking action.', 'top'),
+      step('#main-content .btn-cf-primary, #main-content .btn.btn-primary, #main-content .btn.btn-outline-primary, #main-content .btn.btn-outline-secondary, #main-content .btn.btn-danger, #main-content .btn.btn-success', 'Page actions', 'Use the visible buttons here for add, edit, export, print, toggle, approve, or delete workflows.', 'top')
+    ];
+  }
+
+  function buildFormSteps(label){
+    return [
+      step('#sidebar .nav-group.open, #sidebar .nav-group.has-active, #sidebar .nav-group', 'Sidebar navigation', 'The sidebar keeps related master and operational pages grouped together so you can switch tasks without losing context.', 'right'),
+      step('.topbar-title', label + ' setup', 'This heading confirms whether you are creating, updating, or reviewing a record.', 'bottom'),
+      step('#main-content form, #main-content .surface-card form, #main-content .cf-card form', 'Form details', 'Complete the main fields here. Required items, mapped relationships, and notes live inside this section.', 'top'),
+      step('#main-content .alert, #main-content .form-text, #main-content .text-muted, #main-content .surface-card .small', 'Help and validation', 'Watch this area for helper notes, validation messages, examples, and warnings before saving.', 'top'),
+      step('#main-content button[type="submit"], #main-content .btn-cf-primary, #main-content .btn.btn-primary, #main-content .btn.btn-danger, #main-content .btn.btn-outline-secondary', 'Save and next actions', 'Use these controls to save the record, cancel safely, or move to the next part of the workflow.', 'top')
+    ];
+  }
+
+  function buildDetailSteps(label){
+    return [
+      step('#sidebar .nav-group.open, #sidebar .nav-group.has-active, #sidebar .nav-group', 'Sidebar navigation', 'You can jump to related modules from here without leaving the current workflow completely.', 'right'),
+      step('.topbar-title, #main-content .page-header, #main-content .detail-head', label + ' summary', 'This section gives the primary identity, status, and context for the record you opened.', 'bottom'),
+      step('#main-content .surface-card, #main-content .cf-card, #main-content .detail-grid, #main-content .row.g-3', 'Details and breakdowns', 'Read the cards and sections here to understand quantities, pricing, linked records, notes, or status history.', 'top'),
+      step('#main-content .cf-table, #main-content table, #main-content .list-group', 'Supporting records', 'Linked items, line entries, or subordinate records appear in this area when the detail page needs them.', 'top'),
+      step('#main-content .btn-cf-primary, #main-content .btn.btn-primary, #main-content .btn.btn-outline-primary, #main-content .btn.btn-outline-secondary, #main-content .btn.btn-danger', 'Available actions', 'Use these buttons for follow-up actions such as update, print, approve, resend, or go back to the main list.', 'top')
+    ];
+  }
+
+  function buildBoardSteps(label){
+    return [
+      step('#sidebar .nav-group.open, #sidebar .nav-group.has-active, #sidebar .nav-group', 'Role workspace', 'This sidebar reflects the current role and keeps the most-used operational screens nearby.', 'right'),
+      step('.topbar-title', label, 'This page is meant for live day-to-day operation, so the most important tools are kept in view.', 'bottom'),
+      step('#main-content .filter-card, #main-content .toolbar, #main-content .toolbar-card, #main-content .surface-card form', 'Live controls', 'Use these controls to filter the live data, change the view, or trigger connected hardware actions.', 'bottom'),
+      step('#main-content .cf-table, #main-content table, #main-content .order-grid, #main-content .kitchen-grid, #main-content .ticket-board, #main-content .row.g-3', 'Live records', 'This section updates the current tickets, orders, or work items that your team must act on.', 'top'),
+      step('#main-content .btn-cf-primary, #main-content .btn.btn-primary, #main-content .btn.btn-outline-primary, #main-content .btn.btn-outline-secondary, #main-content .status-chip, #main-content .badge', 'Operational actions', 'Use the visible buttons and status controls here to progress the workflow without leaving the page.', 'top')
+    ];
+  }
+
+  function buildRouteSteps(){
+    const urlname = document.body.dataset.urlname || '';
+    const viewname = document.body.dataset.viewname || '';
+    const label = pageLabel('This page');
+
+    if (viewname === 'dashboard:home' || viewname === 'dashboard:cashier') return [];
+
+    if (viewname === 'dashboard:kitchen') {
+      return [
+        step('.topbar-title', 'Kitchen workflow', 'This is the live kitchen board where teams monitor production and move tickets through preparation.', 'bottom'),
+        step('#main-content .surface-card form, #main-content .toolbar, #main-content .filter-card', 'Kitchen filters', 'Use these controls to narrow the queue by station, status, or delivery window.', 'bottom'),
+        step('#main-content .kitchen-grid, #main-content .row.g-3, #main-content .order-grid', 'Kitchen tickets', 'Each card here represents the next work item. Open a card to see order contents and current progress.', 'top'),
+        step('#main-content .btn, #main-content .status-chip, #main-content .badge', 'Status controls', 'Use these controls to mark progress, signal readiness, or keep the kitchen queue moving.', 'top')
+      ];
+    }
+
+    if (viewname === 'dashboard:reports') {
+      return [
+        step('.topbar-title', 'Reports hub', 'Use this page to filter, compare, and export the operational numbers your team needs.', 'bottom'),
+        step('#main-content form, #main-content .filter-card, #main-content .surface-card form', 'Report filters', 'Choose the company, date range, payment view, or grouping here before running a report.', 'bottom'),
+        step('#main-content canvas, #main-content .chart-card, #main-content .surface-card .table-responsive, #main-content table', 'Charts and tables', 'This area shows the resulting charts, summaries, and detailed report tables.', 'top'),
+        step('#main-content .btn.btn-success, #main-content .btn.btn-danger, #main-content .btn-cf-primary, #main-content .btn.btn-outline-primary', 'Export actions', 'Use these controls to export the report or move into a deeper operational page.', 'top')
+      ];
+    }
+
+    if (viewname === 'dashboard:flash_order') {
+      return [
+        step('.topbar-title', 'Flash order flow', 'Flash order is used when a walk-in request needs to be created quickly outside the usual ordering path.', 'bottom'),
+        step('#main-content form, #main-content .surface-card form', 'Quick order form', 'Capture company, customer, payment mode, and products here for the instant order.', 'top'),
+        step('#main-content table, #main-content .cf-table, #main-content .surface-card .table-responsive', "Today's flash orders", 'The right-side list or table shows recent flash orders so the team can verify what was created.', 'left'),
+        step('#main-content button[type="submit"], #main-content .btn.btn-primary, #main-content .btn-cf-primary', 'Place the order', 'Use the primary button only after confirming the selected customer and product lines are correct.', 'top')
+      ];
+    }
+
+    if (viewname === 'dashboard:stock_management') {
+      return [
+        step('.topbar-title', 'Stock management', 'This page is for live web and POS quantity control across the current menu.', 'bottom'),
+        step('#main-content .stats-grid, #main-content .row.g-3, #main-content .surface-card .row.g-3', 'Stock summaries', 'Use the summary cards to understand current stock posture before making adjustments.', 'bottom'),
+        step('#main-content form, #main-content .cf-table, #main-content table', 'Stock update grid', 'Change web quantity, POS quantity, or notes here and save row by row for accuracy.', 'top'),
+        step('#main-content .recent-ledger, #main-content .ledger-card, #main-content .surface-card table', 'Recent ledger', 'Review the latest stock movements here to verify who changed a quantity and when.', 'left')
+      ];
+    }
+
+    if (viewname === 'dashboard:royalty_leaderboard') {
+      return [
+        step('.topbar-title', 'Royalty leaderboard', 'Use this ranking page to review top-performing customers across the selected reward window.', 'bottom'),
+        step('#main-content form, #main-content .filter-card', 'Leaderboard filters', 'Choose company, date range, or scoring rules before reviewing the rankings.', 'bottom'),
+        step('#main-content .cf-table, #main-content table, #main-content .row.g-3', 'Leaderboard results', 'The ranked customers and their points or spend appear in this main results area.', 'top')
+      ];
+    }
+
+    if (viewname === 'dashboard:hierarchy') {
+      return [
+        step('.topbar-title', 'Hierarchy overview', 'This page shows how companies, locations, buildings, cafes, and counters are connected.', 'bottom'),
+        step('#main-content .surface-card, #main-content .row.g-3, #main-content .hierarchy-grid', 'Hierarchy map', 'Use the cards and sections here to verify the current structure before making master changes.', 'top'),
+        step('#main-content .btn, #main-content a.btn', 'Management shortcuts', 'These shortcuts help you jump directly into the specific master pages that control each layer.', 'top')
+      ];
+    }
+
+    if (viewname === 'dashboard:company_detail') return buildDetailSteps('Company detail');
+    if (viewname === 'dashboard:order_list' || viewname === 'pos:order_list' || viewname === 'dashboard:counter_ticket_board') return buildBoardSteps(label);
+    if (viewname === 'dashboard:order_detail') return buildDetailSteps('Order detail');
+    if (viewname === 'pos:terminal') {
+      return [
+        step('.topbar-title', 'POS terminal', 'The POS terminal is where the cashier adds items, selects tables or customers, and takes payment.', 'bottom'),
+        step('#main-content .product-grid, #main-content .row.g-3, #main-content .surface-card', 'Products and categories', 'Browse available items here, then add them into the current bill.', 'top'),
+        step('#main-content .order-panel, #main-content .cart-panel, #main-content .bill-panel, #main-content .checkout-panel', 'Current bill', 'This side panel shows the active cart, totals, taxes, discounts, and payment choices.', 'left'),
+        step('#main-content .btn.btn-primary, #main-content .btn.btn-success, #main-content .btn.btn-outline-primary', 'Checkout actions', 'Use these controls to hold, print, split, or complete the bill once the order is ready.', 'top')
+      ];
+    }
+    if (viewname === 'pos:products') return buildListSteps('POS product catalog');
+
+    if (/_list$/.test(urlname) || ['product_gallery','offering_gallery','media_library'].includes(urlname)) {
+      return buildListSteps(label);
+    }
+
+    if (/_add$/.test(urlname) || /_edit$/.test(urlname) || ['category_bulk_copy'].includes(urlname)) {
+      return buildFormSteps(label);
+    }
+
+    if (['customer_wallet', 'company_detail', 'product_bulk_upload'].includes(urlname)) {
+      return buildDetailSteps(label);
+    }
+
+    return [];
+  }
+
+  function buildGenericSteps(){
+    const candidates = [
+      step('#sidebar .brand-logo-link', 'Brand & workspace', 'This left panel is your main workspace. It keeps the most-used operations close at hand.', 'right'),
+      step('#sidebar .nav-group.open, #sidebar .nav-group.has-active, #sidebar .nav-group', 'Sidebar navigation', 'Menu sections are grouped by purpose so each team can move quickly between day-to-day screens.', 'right'),
+      step('.topbar-title', 'Current page', 'The page title confirms where you are right now and helps the team stay oriented.', 'bottom'),
+      step('#main-content .filter-card, #main-content .filter-bar, #main-content .cf-card, #main-content .page-header, #main-content form', 'Work area', 'This central area changes with the module you open. Filters, forms, cards, and tables here drive the workflow.', 'top'),
+      step('#main-content .cf-table, #main-content table, #main-content .btn-cf-primary, #main-content .btn-cf-outline, #main-content .btn.btn-primary', 'Next action', 'Use the visible controls on this page to continue the workflow. The tour button stays available whenever you want a replay.', 'top')
+    ];
+    return resolveSteps(candidates);
+  }
+
+  const customSteps = resolveSteps(window.NEVERQ_DASHBOARD_TOUR || []);
+  const routeSteps = resolveSteps(buildRouteSteps());
+  const steps = customSteps.length ? customSteps : (routeSteps.length ? routeSteps : buildGenericSteps());
+  if (!steps.length) return;
+
+  function toursDisabledGlobally(){
+    try { return localStorage.getItem(GLOBAL_TOUR_DISABLE_KEY) === '1'; } catch (e) { return false; }
+  }
+
+  function disableToursGlobally(){
+    try { localStorage.setItem(GLOBAL_TOUR_DISABLE_KEY, '1'); } catch (e) {}
+  }
+
+  triggerButtons.forEach((btn) => { btn.hidden = toursDisabledGlobally(); });
+
+  const pageKey = (window.NEVERQ_DASHBOARD_TOUR_KEY || document.body.dataset.tourKey || window.location.pathname || 'dashboard').replace(/[^a-z0-9_-]+/gi, '_');
+  const storageKey = 'neverq_staff_tour_seen:' + pageKey + ':v5';
+
+  function tourStorageGet(){
+    try {
+      return localStorage.getItem(storageKey) || sessionStorage.getItem(storageKey) || '';
+    } catch (e) {
+      try { return sessionStorage.getItem(storageKey) || ''; } catch (inner) { return ''; }
+    }
+  }
+
+  function tourStorageSetDone(){
+    try { localStorage.setItem(storageKey, '1'); } catch (e) {}
+    try { sessionStorage.setItem(storageKey, '1'); } catch (e) {}
+  }
+
+  function tourStorageClear(){
+    try { localStorage.removeItem(storageKey); } catch (e) {}
+    try { sessionStorage.removeItem(storageKey); } catch (e) {}
+  }
+
+  let index = 0;
+  let activeElement = null;
+
+  function clearHighlight(){
+    if (activeElement) activeElement.classList.remove('tour-target-active');
+    activeElement = null;
+  }
+
+  function placePopover(target, placement){
+    const rect = target.getBoundingClientRect();
+    const popRect = popover.getBoundingClientRect();
+    const gap = 16;
+    let top = rect.bottom + gap;
+    let left = rect.left;
+    if (placement === 'right') { top = rect.top; left = rect.right + gap; }
+    else if (placement === 'left') { top = rect.top; left = rect.left - popRect.width - gap; }
+    else if (placement === 'top') { top = rect.top - popRect.height - gap; left = rect.left; }
+    const maxLeft = window.innerWidth - popRect.width - 12;
+    const maxTop = window.innerHeight - popRect.height - 12;
+    left = Math.max(12, Math.min(left, maxLeft));
+    top = Math.max(12, Math.min(top, maxTop));
+    popover.style.left = left + 'px';
+    popover.style.top = top + 'px';
+  }
+
+  function renderStep(){
+    clearHighlight();
+    const step = steps[index];
+    if (!step || !isVisible(step.element)) { closeTour(false); return; }
+    activeElement = step.element;
+    activeElement.classList.add('tour-target-active');
+    try { activeElement.scrollIntoView({behavior:'smooth', block:'center', inline:'nearest'}); } catch (e) {}
+    stepLabel.textContent = 'Step ' + (index + 1);
+    titleEl.textContent = step.title;
+    copyEl.textContent = step.copy;
+    progressEl.textContent = (index + 1) + ' of ' + steps.length;
+    backBtn.style.display = index === 0 ? 'none' : 'inline-flex';
+    nextBtn.textContent = index === steps.length - 1 ? 'Finish' : 'Next';
+    overlay.style.display = 'block';
+    popover.style.display = 'block';
+    setTimeout(() => placePopover(activeElement, step.placement), 80);
+  }
+
+  function closeTour(markDone){
+    clearHighlight();
+    overlay.style.display = 'none';
+    popover.style.display = 'none';
+    if (markDone) tourStorageSetDone();
+  }
+
+  function startTour(force){
+    if (toursDisabledGlobally()) return;
+    if (!force && tourStorageGet() === '1') return;
+    index = 0;
+    renderStep();
+  }
+
+  nextBtn.addEventListener('click', () => {
+    if (index >= steps.length - 1) { closeTour(true); return; }
+    index += 1;
+    renderStep();
+  });
+  backBtn.addEventListener('click', () => { if (index === 0) return; index -= 1; renderStep(); });
+  disableBtn.addEventListener('click', () => {
+    disableToursGlobally();
+    triggerButtons.forEach((btn) => { btn.hidden = true; });
+    closeTour(true);
+  });
+  skipBtn.addEventListener('click', () => closeTour(true));
+  overlay.addEventListener('click', () => closeTour(true));
+  triggerButtons.forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      if (toursDisabledGlobally()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      tourStorageClear()
+      setTimeout(() => startTour(true), 0);
+    });
+  });
+  window.addEventListener('resize', () => { if (popover.style.display === 'block' && activeElement) placePopover(activeElement, steps[index].placement); });
+  overlay.addEventListener('click', (event) => {
+    if (event.target === overlay) closeTour(true);
+  });
+
+  window.addEventListener('load', () => {
+    setTimeout(() => startTour(false), 650);
+  });
+})();
+</script>
+<script>
+(function () {
+  const rawHash = window.location.hash || '';
+  if (!rawHash) return;
+
+  const targetId = rawHash.replace(/^#/, '');
+  if (!targetId) return;
+
+  const target = document.getElementById(decodeURIComponent(targetId));
+  if (!target) return;
+
+  const restore = () => {
+    try {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('tour-target-active');
+      setTimeout(() => target.classList.remove('tour-target-active'), 2200);
+    } catch (e) {}
+  };
+
+  setTimeout(restore, 120);
+  window.addEventListener('load', () => setTimeout(restore, 120));
+  window.addEventListener('pageshow', () => setTimeout(restore, 120));
+})();
+</script>
+</body>
+</html>

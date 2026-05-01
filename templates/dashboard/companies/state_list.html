@@ -1,0 +1,14 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+{% url 'dashboard:state_bulk_delete' as bulk_delete_url %}
+<div class="cf-card">
+  <div class="cf-card-header d-flex justify-content-between align-items-center">
+    <h5 class="mb-0">States</h5>
+    <a href="{% url 'dashboard:state_add' %}" class="btn btn-cf-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Add State</a>
+  </div>
+  <div class="cf-card-body">
+    {% include "dashboard/includes/bulk_delete_controls.html" with bulk_form_id='state-bulk-delete-form' bulk_action=bulk_delete_url bulk_confirm_message='Delete selected states? Cities and buildings will be unlinked but not deleted.' %}
+    <div style="overflow-x:auto;"><table class="cf-table"><thead><tr><th style="width:44px;"></th><th>#</th><th>State Name</th><th>Cities</th><th>Buildings</th><th></th></tr></thead><tbody>{% for st in states %}<tr><td><input type="checkbox" class="form-check-input bulk-item-check" data-bulk-form-input="state-bulk-delete-form" form="state-bulk-delete-form" name="ids" value="{{ st.pk }}"></td><td class="text-muted">{{ forloop.counter }}</td><td class="fw-bold">{{ st.name }}</td><td>{{ st.cities.count }}</td><td>{{ st.buildings.count }}</td><td class="d-flex gap-1"><a href="{% url 'dashboard:state_edit' st.pk %}" class="btn btn-cf-outline btn-sm">Edit</a><button type="submit" form="state-bulk-delete-form" formaction="{% url 'dashboard:state_delete' st.pk %}" formmethod="post" class="btn btn-outline-danger btn-sm" onclick="return confirm('Delete state {{ st.name|escapejs }}? Cities and buildings will be unlinked but not deleted.')">Delete</button></td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted py-4">No states found. <a href="{% url 'dashboard:state_add' %}">Add one.</a></td></tr>{% endfor %}</tbody></table></div>
+  </div>
+</div>
+{% endblock %}

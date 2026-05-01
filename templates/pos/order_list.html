@@ -1,0 +1,193 @@
+{% extends "base/dashboard_base.html" %}
+{% load core_extras %}
+
+{% block extra_head %}
+<style>
+  .bt-status { display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:4px 10px;border-radius:20px;cursor:pointer;border:none; }
+  .bt-status.connected    { background:#E8F5E9;color:#2E7D32; }
+  .bt-status.disconnected { background:#FFF3E0;color:#E65100; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Hidden iframe — no new windows ever -->
+<iframe id="posKotFrame"
+        style="position:fixed;left:-9999px;top:-9999px;width:80mm;height:1px;border:none;"
+        aria-hidden="true"></iframe>
+
+<!-- BT toolbar -->
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+  <div class="d-flex align-items-center gap-3">
+    <button onclick="connectBluetooth(this)"
+            class="bt-status disconnected nq-bt-btn"
+            style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+                   padding:5px 14px;border-radius:20px;cursor:pointer;border:none;">
+      <i class="bi bi-bluetooth"></i>
+      <span class="nq-bt-label">Connect KOT Printer</span>
+    </button>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+      <input type="checkbox" id="autoPrintToggle" style="accent-color:var(--cf-blue);width:15px;height:15px;">
+      Auto-print on page load
+    </label>
+  </div>
+</div>
+
+<div class="cf-card">
+  <div class="cf-card-header">
+    <h5><i class="bi bi-receipt me-2"></i>POS Orders</h5>
+    <form class="d-flex flex-wrap gap-2 align-items-end" method="get">
+      <div>
+        <label class="form-label">Date</label>
+        <input type="date" name="date" value="{{ date_filter }}"
+               class="form-control form-control-sm" style="width:150px;">
+      </div>
+      {% if companies %}
+      <div>
+        <label class="form-label">Company</label>
+        <select name="company" class="form-select form-select-sm" style="width:170px;" onchange="this.form.submit()">
+          <option value="">All Companies</option>
+          {% for co in companies %}
+          <option value="{{ co.pk }}" {% if company_filter == co.pk|stringformat:'s' %}selected{% endif %}>
+            {{ co.name|truncatechars:22 }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <button type="submit" class="btn btn-cf-primary btn-sm">Filter</button>
+    </form>
+  </div>
+
+  <div style="padding:12px 18px;background:var(--cf-blue-light);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <span style="font-family:'Rajdhani',sans-serif;font-size:17px;font-weight:700;color:var(--cf-navy);">
+      {{ date_filter }}{% if company %} — {{ company.name }}{% endif %}
+    </span>
+    <span style="font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:var(--cf-blue);">
+      Revenue: ₹{{ total_revenue|floatformat:2 }} &nbsp;·&nbsp; {{ orders|length }} orders
+    </span>
+  </div>
+
+  <div style="overflow-x:auto;">
+    <table class="cf-table">
+      <thead>
+        <tr><th>#</th><th>Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Payment</th><th>Time</th><th>Print</th></tr>
+      </thead>
+      <tbody>
+        {% for order in orders %}
+        <tr id="posrow-{{ order.pk }}">
+          <td class="text-muted">{{ forloop.counter }}</td>
+          <td><span class="fw-600 text-blue">{{ order.order_number|short_order_no }}</span></td>
+          <td>
+            <div class="fw-500">{{ order.customer_name }}</div>
+            {% if order.customer_phone %}
+              <small class="text-muted">{{ order.customer_phone }}</small>
+            {% endif %}
+          </td>
+          <td>
+            <small>
+              {% for item in order.items.all %}
+                {{ item.product_name }} ×{{ item.qty }}{% if not forloop.last %}, {% endif %}
+              {% endfor %}
+            </small>
+          </td>
+          <td><strong>₹{{ order.total_amount }}</strong></td>
+          <td><small>{{ order.get_payment_type_display }}</small></td>
+          <td><small class="text-muted">{{ order.created_at|time:"h:i A"|default:"—" }}</small></td>
+          <td>
+            <button onclick="printPOSKOT({{ order.pk }})"
+                    id="posPrintBtn-{{ order.pk }}"
+                    title="Print KOT"
+                    class="btn btn-sm"
+                    style="background:var(--cf-red);color:white;border:none;padding:4px 10px;border-radius:5px;">
+              <i class="bi bi-printer" style="font-size:13px;"></i>
+            </button>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="text-center text-muted py-5">
+            No POS orders for {{ date_filter }}.
+            {% if not company %}
+              <br><small>Tip: Make sure your account has a company assigned.</small>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// All BT functions (connectBluetooth, sendToPrinter, buildEscPos,
+// printViaIframe, printKOT) are global from dashboard_base.html
+
+function getCsrf() {
+  const m = document.cookie.match(/csrftoken=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
+async function printPOSKOT(orderId) {
+  const btn = document.getElementById(`posPrintBtn-${orderId}`);
+  if (btn) { btn.style.opacity='0.5'; btn.disabled=true; }
+
+  let data;
+  try {
+    const resp = await fetch(`/pos/kot/${orderId}/`, {
+      headers: { 'X-Requested-With':'XMLHttpRequest', 'X-CSRFToken': getCsrf() }
+    });
+    const ct = resp.headers.get('Content-Type') || '';
+    if (!ct.includes('application/json')) {
+      throw new Error(resp.redirected || resp.url.includes('/auth/login')
+        ? 'Session expired — please refresh the page and log in again.'
+        : 'Unexpected server response (HTTP ' + resp.status + ')');
+    }
+    data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error || 'Server error ' + resp.status);
+  } catch(e) {
+    if (btn) { btn.style.opacity='1'; btn.disabled=false; }
+    alert('Failed to load order: ' + e.message);
+    return;
+  }
+
+  const sent = await window.printKOT(data, 'POS ORDER RECEIPT', 'posKotFrame');
+  if (btn) {
+    btn.style.opacity='1'; btn.disabled=false;
+    if (sent) {
+      btn.style.background='#10B981';
+      setTimeout(()=>{ btn.style.background='var(--cf-red)'; }, 1800);
+    }
+  }
+}
+
+// BUG 4 FIX: autoPrintToggle had NO JavaScript handler — the checkbox did nothing.
+// Now: persist state in localStorage, and auto-print every order row on page load
+// when the toggle is checked (mirrors the same behaviour in cashier.html).
+(function() {
+  const toggle = document.getElementById('autoPrintToggle');
+  if (!toggle) return;
+
+  // Restore saved preference
+  const LS_AUTO = 'nq_pos_autoprint';
+  try { toggle.checked = localStorage.getItem(LS_AUTO) === '1'; } catch {}
+
+  // Save preference on change
+  toggle.addEventListener('change', () => {
+    try { localStorage.setItem(LS_AUTO, toggle.checked ? '1' : '0'); } catch {}
+  });
+
+  // Auto-print all visible orders on page load when toggle is on
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!toggle.checked) return;
+    // Small stagger so each print job queues after the previous one
+    document.querySelectorAll('[id^="posPrintBtn-"]').forEach((btn, idx) => {
+      const orderId = btn.id.replace('posPrintBtn-', '');
+      setTimeout(() => printPOSKOT(parseInt(orderId)), idx * 600);
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,176 @@
+{% extends "base/dashboard_base.html" %}
+{% load core_extras %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <a href="{% url 'dashboard:order_list' %}" class="btn btn-cf-outline btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <span class="badge bg-{{ order.status_color }} px-3 py-2 fs-6">{{ order.status_label }}</span>
+</div>
+
+<div class="row g-3">
+  <!-- Order items -->
+  <div class="col-lg-8">
+    <div class="cf-card mb-3">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-receipt me-2"></i>Order #{{ order.order_number|short_order_no }}</h5>
+        <small class="text-muted">{{ order.created_at|date:"d M Y, h:i A" }}</small>
+      </div>
+      <div class="cf-card-body p-0">
+        <table class="cf-table">
+          <thead><tr><th>Item</th><th>Price</th><th>Qty</th><th>Pickup Status</th><th>Total</th></tr></thead>
+          <tbody>
+            {% for item in items %}
+            <tr>
+              <td>
+                <div class="fw-500">{{ item.product.name|default:"Deleted product" }}</div>
+                {% if item.product.category %}<small class="text-muted">{{ item.product.category.name }}</small>{% endif %}
+                {% if item.counter %}<div class="small text-muted mt-1">Counter: {{ item.counter.name }}</div>{% endif %}
+              </td>
+              <td>₹{{ item.price }}</td>
+              <td>× {{ item.qty }}</td>
+              <td>
+                <div class="small"><strong>{{ item.pickup_code|default:'—' }}</strong></div>
+                <div class="small text-muted">{% if item.picked_up_at %}Collected {{ item.picked_up_at|date:"d M, h:i A" }}{% else %}Pending{% endif %}</div>
+              </td>
+              <td><strong>₹{{ item.line_total }}</strong></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="cf-card-body border-top">
+        <div class="row justify-content-end">
+          <div class="col-sm-5">
+            <div class="d-flex justify-content-between py-1"><span class="text-muted">Subtotal</span><span>₹{{ order.subtotal }}</span></div>
+            <div class="d-flex justify-content-between py-1"><span class="text-muted">Packing</span><span>₹{{ order.shipping_cost }}</span></div>
+            {% if order.offer_discount > 0 %}
+            <div class="d-flex justify-content-between py-1 text-success"><span><i class="bi bi-megaphone-fill me-1"></i>Offer discount</span><span>−₹{{ order.offer_discount }}</span></div>
+            {% endif %}
+            {% if order.coupon_discount > 0 %}
+            <div class="d-flex justify-content-between py-1 text-success"><span><i class="bi bi-ticket-perforated me-1"></i>Coupon discount</span><span>−₹{{ order.coupon_discount }}</span></div>
+            {% endif %}
+            {% if order.bill_to_company > 0 %}
+            <div class="d-flex justify-content-between py-1" style="color:var(--cf-blue);">
+              <span><i class="bi bi-building me-1"></i>Company Covers</span>
+              <span>₹{{ order.bill_to_company }}</span>
+            </div>
+            <div class="d-flex justify-content-between py-1 text-danger fw-600">
+              <span>Customer Pays</span>
+              <span>₹{{ order.my_pay }}</span>
+            </div>
+            {% endif %}
+            <div class="d-flex justify-content-between py-2 fw-700 border-top mt-1" style="font-family:'Rajdhani',sans-serif;font-size:18px;">
+              <span>Grand Total</span><span class="text-blue">₹{{ order.total_amount }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Update Status -->
+    <div class="cf-card">
+      <div class="cf-card-header"><h5><i class="bi bi-arrow-repeat me-2"></i>Update Status</h5><a href="{% url 'orders:pickup_scan_terminal' %}" class="btn btn-cf-outline btn-sm"><i class="bi bi-upc-scan me-1"></i>Pickup Scan</a></div>
+      <div class="cf-card-body">
+        <form method="post" action="{% url 'dashboard:order_update_status' order.pk %}" class="d-flex gap-2 flex-wrap">
+          {% csrf_token %}
+          <select name="status" class="form-select" style="max-width:200px;" {% if order.order_status == 5 or order.order_status == 6 %}disabled{% endif %}>
+            <option value="1" {% if order.order_status == 1 %}selected{% endif %} {% if order.order_status > 1 %}disabled{% endif %}>Pending</option>
+            <option value="2" {% if order.order_status == 2 %}selected{% endif %} {% if order.order_status > 2 %}disabled{% endif %}>Confirmed</option>
+            <option value="3" {% if order.order_status == 3 %}selected{% endif %} {% if order.order_status > 3 %}disabled{% endif %}>Preparing</option>
+            <option value="4" {% if order.order_status == 4 %}selected{% endif %} {% if order.order_status > 4 %}disabled{% endif %}>Ready</option>
+            <option value="5" {% if order.order_status == 5 %}selected{% endif %}>Delivered</option>
+            {% if request.user.role == 'superadmin' or request.user.role == 'admin' %}<option value="6" {% if order.order_status == 6 %}selected{% endif %}>Cancelled</option>{% endif %}
+          </select>
+          <input type="text" name="details" class="form-control" placeholder="Note (optional)" style="max-width:280px;" {% if order.order_status == 5 or order.order_status == 6 %}disabled{% endif %}>
+          <button type="submit" class="btn btn-cf-primary" {% if order.order_status == 5 or order.order_status == 6 %}disabled{% endif %}>Update</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar info -->
+  <div class="col-lg-4">
+    <!-- Customer -->
+    <div class="cf-card mb-3">
+      <div class="cf-card-header"><h5><i class="bi bi-person me-2"></i>Customer</h5></div>
+      <div class="cf-card-body">
+        <div class="fw-600 mb-1">{{ order.display_customer_name }}</div>
+        {% if not order.customer_name_snapshot and order.customer.email %}
+        <div class="text-muted small">{{ order.customer.email }}</div>
+        {% endif %}
+        {% if order.display_customer_phone %}
+        <div class="text-muted small">{{ order.display_customer_phone }}</div>
+        {% endif %}
+        {% if order.cafe %}
+        <div class="text-muted small mt-2"><i class="bi bi-shop me-1"></i>{{ order.cafe.name }}</div>
+        {% endif %}
+        {% if order.customer.address %}
+        <div class="text-muted small mt-2"><i class="bi bi-geo-alt me-1"></i>{{ order.customer.address }}</div>
+        {% endif %}
+        {% if order.customer.meal_benefit != 'none' %}
+        <div class="mt-2">
+          <span class="badge bg-info">{{ order.customer.get_meal_benefit_display }}</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Payment Breakdown -->
+    <div class="cf-card mb-3">
+      <div class="cf-card-header"><h5><i class="bi bi-credit-card me-2"></i>Payment</h5></div>
+      <div class="cf-card-body">
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">Mode</span>
+          <strong>{{ order.get_payment_mode_display }}</strong>
+        </div>
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted">Status</span>
+          <strong>{{ order.payment_status|capfirst }}</strong>
+        </div>
+        {% if order.bill_to_company > 0 %}
+        <div class="border-top pt-2 mt-2">
+          <div class="small fw-600 text-muted mb-2 text-uppercase" style="font-size:10px;letter-spacing:1px;">Subsidy Breakdown</div>
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted small">Customer Paid</span>
+            <strong class="text-danger">₹{{ order.my_pay }}</strong>
+          </div>
+          <div class="d-flex justify-content-between mb-1">
+            <span class="text-muted small">Company Covered</span>
+            <strong style="color:var(--cf-blue);">₹{{ order.bill_to_company }}</strong>
+          </div>
+          <div class="d-flex justify-content-between border-top pt-1 mt-1">
+            <span class="text-muted small">Total</span>
+            <strong>₹{{ order.total_amount }}</strong>
+          </div>
+        </div>
+        {% endif %}
+        {% if order.transaction_id %}
+        <div class="d-flex justify-content-between mt-2">
+          <span class="text-muted">Txn ID</span>
+          <small class="text-muted">{{ order.transaction_id }}</small>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Status history -->
+    <div class="cf-card">
+      <div class="cf-card-header"><h5><i class="bi bi-clock-history me-2"></i>Timeline</h5></div>
+      <div class="cf-card-body p-0">
+        {% for s in statuses %}
+        <div class="d-flex gap-3 p-3 border-bottom">
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--cf-blue);margin-top:5px;flex-shrink:0;"></div>
+          <div>
+            <div class="fw-500 small">{{ s.get_status_display }}</div>
+            {% if s.details %}<div class="text-muted" style="font-size:12px;">{{ s.details }}</div>{% endif %}
+            <div class="text-muted" style="font-size:11px;">{{ s.created_at|date:"d M, h:i A" }}</div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="p-3 text-muted small">No history.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

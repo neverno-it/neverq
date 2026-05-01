@@ -1,0 +1,317 @@
+{% extends "base/customer_base.html" %}
+{% load core_extras %}
+{% block extra_head %}
+<style>
+  .order-detail-shell { padding-top: 16px; }
+  .order-detail-head {
+    display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap;
+    margin-bottom: 18px;
+  }
+  .order-detail-title { margin:0; font-size: clamp(28px, 4vw, 40px); line-height:.95; }
+  .order-detail-subtitle { color: var(--cf-muted); font-size:14px; margin-top:6px; }
+  .order-detail-card {
+    background: linear-gradient(180deg,#fff,#f9fbff);
+    border:1px solid var(--cf-border);
+    border-radius: 22px;
+    box-shadow: var(--cf-shadow-soft);
+    padding: 20px;
+  }
+  .order-mini-grid { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+  .order-mini {
+    border:1px solid var(--cf-border);
+    background:#fff;
+    border-radius:18px;
+    padding:14px;
+  }
+  .order-mini-label { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--cf-muted); font-weight:800; }
+  .order-mini-value { font-family:'Rajdhani',sans-serif; font-size: clamp(22px,3vw,32px); line-height:1; margin-top: 8px; color: var(--cf-navy); }
+  .ticket-card-clean, .timeline-card-clean, .item-card-clean {
+    border:1px solid var(--cf-border); background:#fff; border-radius:18px; padding:14px;
+  }
+  .summary-action-stack .btn { min-height: 48px; }
+  @media (max-width: 991.98px) {
+    .order-mini-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  }
+  @media (max-width: 767.98px) {
+    .order-detail-shell { padding-top: 10px; }
+    .order-detail-head { margin-bottom: 14px; }
+    .order-detail-card { padding: 14px; border-radius: 18px; }
+    .order-mini-grid { grid-template-columns: 1fr; gap: 10px; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container order-detail-shell">
+  <div class="order-detail-head">
+    <div class="d-flex align-items-start gap-3 flex-wrap">
+      <a href="{% url 'orders:order_history' %}" class="btn btn-cf-soft"><i class="bi bi-arrow-left me-1"></i>Back</a>
+      <div>
+        <h1 class="order-detail-title">#{{ order.order_number|short_order_no }}</h1>
+        <div class="order-detail-subtitle">Placed on {{ order.created_at|date:"d M Y, h:i A" }}</div>
+      </div>
+    </div>
+    <span class="badge-cf bg-{{ order.status_color }}-subtle">{{ order.status_label }}</span>
+  </div>
+
+  {% if order.order_status == 6 %}
+    <div class="alert alert-danger">
+      <i class="bi bi-x-octagon me-2"></i>
+      This order is cancelled by Cafeteria.{% if order.wallet_used > 0 or order.points_redeemed > 0 or order.bill_to_company > 0 %} Your wallet balance{% if order.points_redeemed > 0 %}, points{% endif %}{% if order.bill_to_company > 0 %}, and subsidy{% endif %} {% if order.points_redeemed > 0 or order.bill_to_company > 0 %}have{% else %}has{% endif %} been refunded.{% endif %}
+    </div>
+  {% endif %}
+
+  {% if order.is_wallet_recharge %}
+    <div class="alert alert-success"><i class="bi bi-wallet2 me-2"></i>This entry is a wallet recharge, not a food order.</div>
+  {% endif %}
+
+  {% if is_delivery_mode %}
+  <div class="alert alert-info mb-4">
+    <i class="bi bi-truck me-2"></i><strong>Packet Delivery</strong> — Your food will be packed and delivered to your company by our staff. No counter pickup or QR code is required.
+  </div>
+  {% endif %}
+
+  {% if not order.is_wallet_recharge %}
+  <div class="order-detail-card mb-4">
+    <div class="section-heading mb-3">
+      <div>
+        <h4><i class="bi bi-signpost-split-fill me-2 text-danger"></i>Order progress</h4>
+        <div class="section-subtitle">Current status and next step.</div>
+      </div>
+    </div>
+    <div class="progress-track">
+      {% for step in progress_steps %}
+        <div class="progress-step {% if step.complete %}complete{% endif %} {% if step.current %}current{% endif %}">
+          <div class="step-index">{{ forloop.counter }}</div>
+          <div class="fw-bold">{{ step.label }}</div>
+          <div class="small text-muted mt-1">{{ step.note }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="order-mini-grid mb-4">
+    <div class="order-mini"><div class="order-mini-label">Payment</div><div class="order-mini-value">{% if order.is_wallet_recharge and recharge_txn %}{{ recharge_txn.get_payment_mode_display }}{% else %}{{ order.get_payment_mode_display }}{% endif %}</div></div>
+    <div class="order-mini"><div class="order-mini-label">Payment Status</div><div class="order-mini-value">{{ order.payment_status|capfirst }}</div></div>
+    <div class="order-mini"><div class="order-mini-label">Amount Paid</div><div class="order-mini-value">₹{{ order.my_pay|floatformat:2 }}</div></div>
+  </div>
+
+  {% if tickets and not is_delivery_mode %}
+  <div class="order-detail-card mb-4">
+    <div class="section-heading mb-3">
+      <div>
+        <h4><i class="bi bi-qr-code-scan me-2 text-danger"></i>Counter tickets</h4>
+        <div class="section-subtitle">Use the right QR at the right counter. Valid today only. T&amp;C Applied.</div>
+      </div>
+    </div>
+    <div class="row g-3">
+      {% for ticket in tickets %}
+      <div class="col-md-6 col-xl-4">
+        <div class="ticket-card-clean h-100 text-center">
+          {% if ticket.counter %}
+            <div class="fw-bold" style="font-size:18px;">{{ ticket.counter.name }}</div>
+            {% if ticket.counter.cafe %}<div class="small text-muted">{{ ticket.counter.cafe.name }}</div>{% endif %}
+          {% else %}
+            <div class="fw-bold" style="font-size:18px;color:var(--cf-red);">Main Counter</div>
+          {% endif %}
+          <div class="small text-muted mb-2">{{ ticket.ticket_number }}</div>
+          {% if not ticket.is_collected and ticket.pickup_qr_data_uri %}
+            <img src="{{ ticket.pickup_qr_data_uri }}" alt="Counter QR" class="js-qr-enlarge" style="width:120px;height:120px;border:1px solid #eee;border-radius:12px;cursor:zoom-in;">
+          {% else %}
+            <div class="alert alert-success py-2 mb-2">Picked up ✓</div>
+          {% endif %}
+          <div class="small"><strong>Scan code:</strong> {{ ticket.scan_code }}</div>
+          <div class="small text-muted mt-2">
+            {% for item in ticket.items %}
+              {{ item.product.name|default:'Item' }} × {{ item.qty }}{% if not forloop.last %}, {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="small text-muted mt-3" style="font-size:11px;">
+      <i class="bi bi-info-circle me-1"></i>T&amp;C Applied.
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <div class="order-detail-card mb-4">
+        <div class="section-heading mb-3">
+          <div>
+            <h4><i class="bi {% if order.is_wallet_recharge %}bi-wallet2{% else %}bi-basket2-fill{% endif %} me-2 text-danger"></i>{% if order.is_wallet_recharge %}Wallet recharge{% else %}Items ordered{% endif %}</h4>
+            <div class="section-subtitle">{% if order.is_wallet_recharge %}Amount credited to your wallet.{% else %}Everything included in this order.{% endif %}</div>
+          </div>
+        </div>
+        {% if order.is_wallet_recharge %}
+        <div class="item-card-clean">
+          <div class="d-flex justify-content-between align-items-center gap-3">
+            <div>
+              <div class="fw-bold">Wallet balance added</div>
+              <div class="small text-muted">Recharge order #{{ order.order_number|short_order_no }}</div>
+              {% if recharge_txn %}<div class="small text-muted mt-1">Paid by {{ recharge_txn.get_payment_mode_display }}</div>{% endif %}
+            </div>
+            <div class="text-end">
+              <div class="fw-bold" style="color: var(--cf-blue-dark);">Rs.{% if recharge_txn %}{{ recharge_txn.wallet_delta|floatformat:2 }}{% else %}{{ order.subtotal|floatformat:2 }}{% endif %}</div>
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <div class="d-flex flex-column gap-3">
+          {% for item in items %}
+            <div class="item-card-clean">
+              <div class="d-flex justify-content-between align-items-center gap-3">
+                <div>
+                  <div class="fw-bold">{{ item.product.name|default:"Item" }}</div>
+                  <div class="small text-muted">₹{{ item.price }} × {{ item.qty }}</div>
+                  {% if item.counter and not is_delivery_mode %}
+                    <div class="small text-muted mt-1">{{ item.counter.name|default:'Unmapped' }} · Pickup code: <strong>{{ item.pickup_code }}</strong></div>
+                  {% endif %}
+                </div>
+                <div class="text-end">
+                  <div class="fw-bold" style="color: var(--cf-blue-dark);">₹{{ item.line_total }}</div>
+                  {% if item.is_picked_up %}
+                    <div class="small text-success mt-2 fw-bold">Picked up ✓</div>
+                  {% elif not is_delivery_mode and item.counter and item.pickup_qr_data_uri %}
+                    <img src="{{ item.pickup_qr_data_uri }}" alt="Pickup QR" class="js-qr-enlarge" style="width:72px;height:72px;margin-top:8px;border:1px solid #eee;border-radius:8px;cursor:zoom-in;">
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="order-detail-card">
+        <div class="section-heading mb-3">
+          <div>
+            <h4><i class="bi bi-clock-history me-2 text-danger"></i>Status timeline</h4>
+            <div class="section-subtitle">Every update on this order.</div>
+          </div>
+        </div>
+        <div class="d-flex flex-column gap-3">
+          {% for s in statuses %}
+            <div class="timeline-card-clean">
+              <div class="d-flex justify-content-between gap-2 flex-wrap">
+                <div>
+                  <div class="fw-bold">{{ s.get_status_display }}</div>
+                  {% if s.details %}<div class="small text-muted mt-1">{{ s.details }}</div>{% endif %}
+                </div>
+                <div class="small text-muted">{{ s.created_at|date:"d M Y, h:i A" }}</div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="checkout-summary">
+        <div class="section-heading mb-3">
+          <div>
+            <h4><i class="bi bi-receipt-cutoff me-2 text-danger"></i>Bill summary</h4>
+            <div class="section-subtitle">Simple breakdown of this order.</div>
+          </div>
+        </div>
+        {% if order.is_wallet_recharge %}
+        <div class="summary-row"><span class="text-muted">Wallet credited</span><strong>Rs.{% if recharge_txn %}{{ recharge_txn.wallet_delta|floatformat:2 }}{% else %}{{ order.subtotal|floatformat:2 }}{% endif %}</strong></div>
+        {% if recharge_txn and recharge_txn.card_fee_amount > 0 %}<div class="summary-row"><span class="text-muted">Card fee</span><strong>Rs.{{ recharge_txn.card_fee_amount|floatformat:2 }}</strong></div>{% endif %}
+        <div class="summary-row total"><span>Total collected</span><span>Rs.{{ order.my_pay|floatformat:2 }}</span></div>
+        {% else %}
+        <div class="summary-row"><span class="text-muted">Subtotal</span><strong>₹{{ order.subtotal }}</strong></div>
+        <div class="summary-row"><span class="text-muted">Packing</span><strong>₹{{ order.shipping_cost }}</strong></div>
+        {% if order.bill_to_company > 0 %}<div class="summary-row" style="color: var(--cf-success);"><span>Company covered</span><strong>−₹{{ order.bill_to_company }}</strong></div>{% endif %}
+        {% if order.offer_discount > 0 %}<div class="summary-row" style="color: var(--cf-success);"><span><i class="bi bi-megaphone-fill me-1"></i>Offer saving</span><strong>−₹{{ order.offer_discount }}</strong></div>{% endif %}
+        {% if order.coupon_discount > 0 %}<div class="summary-row" style="color: var(--cf-success);"><span><i class="bi bi-ticket-perforated me-1"></i>Coupon discount</span><strong>−₹{{ order.coupon_discount }}</strong></div>{% endif %}
+        {% if order.wallet_used > 0 %}<div class="summary-row" style="color:#2e7d32;"><span><i class="bi bi-wallet2 me-1"></i>Wallet used</span><strong>−₹{{ order.wallet_used|floatformat:2 }}</strong></div>{% endif %}
+        {% if order.points_redeemed > 0 %}<div class="summary-row" style="color:#2e7d32;"><span><i class="bi bi-star-fill me-1"></i>Points redeemed ({{ order.points_redeemed }} pts)</span><strong>−₹{{ order.points_redeemed }}</strong></div>{% endif %}
+        {% if order.bill_to_company > 0 %}
+          <div class="summary-row total"><span>You paid</span><span>₹{{ order.my_pay|floatformat:2 }}</span></div>
+        {% else %}
+          <div class="summary-row total"><span>Total paid</span><span>₹{{ order.total_amount|floatformat:2 }}</span></div>
+        {% endif %}
+        {% endif %}
+
+        <div class="summary-row mt-3"><span class="text-muted">Order Type</span><strong>{{ order.get_order_type_display }}</strong></div>
+        {% if order.scheduled_date %}<div class="summary-row"><span class="text-muted">Scheduled For</span><strong>{{ order.scheduled_date|date:"d M Y, h:i A" }}</strong></div>{% endif %}
+
+        <div class="d-grid gap-2 mt-3 summary-action-stack">
+          {% if not order.is_wallet_recharge %}
+          <form method="post" action="{% url 'orders:reorder_order' order.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-cf-primary w-100"><i class="bi bi-arrow-repeat me-1"></i>Reorder</button>
+          </form>
+          {% endif %}
+          <button type="button" class="btn btn-cf-outline w-100" onclick="alert('Once an order is placed, cancellation and refund are not allowed. T&amp;C Applied.')"><i class="bi bi-info-circle me-1"></i>No cancellation / refund</button>
+          {% if not order.is_wallet_recharge and not order.review_given and order.order_status == 5 %}
+            <a href="{% url 'reviews:leave_review' order.pk %}" class="btn btn-cf-soft w-100"><i class="bi bi-star me-1"></i>Leave a review</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="qrLightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;align-items:center;justify-content:center;padding:24px;cursor:zoom-out;">
+  <img id="qrLightboxImg" src="" alt="QR preview" style="max-width:min(92vw,560px);max-height:82vh;background:#fff;padding:14px;border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.45);">
+</div>
+<script>
+(function(){
+  const box=document.getElementById('qrLightbox');
+  const img=document.getElementById('qrLightboxImg');
+  if(!box||!img) return;
+  document.querySelectorAll('.js-qr-enlarge').forEach(function(el){
+    el.addEventListener('click', function(){ img.src=this.src; box.style.display='flex'; });
+  });
+  box.addEventListener('click', function(){ box.style.display='none'; img.src=''; });
+})();
+</script>
+<script>
+(function(){
+  const feedUrl = "{% url 'orders:customer_order_status_feed' order.pk %}";
+  let lastStatus = {{ order.order_status|default:0 }};
+  let lastPicked = {{ order.picked_items_count|default:0 }};
+  const terminalStatuses = [5, 6];
+  if (terminalStatuses.includes(lastStatus)) return;
+
+  async function pollOrderStatus(){
+    try {
+      const response = await fetch(feedUrl + '?_ts=' + Date.now(), {
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+        cache: 'no-store'
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const nextStatus = Number(payload.order_status || 0);
+      const nextPicked = Number(payload.picked_items_count || 0);
+      if (nextStatus !== lastStatus || nextPicked !== lastPicked) {
+        window.location.reload();
+        return;
+      }
+      lastStatus = nextStatus;
+      lastPicked = nextPicked;
+      if (terminalStatuses.includes(nextStatus)) {
+        clearInterval(pollTimer);
+      }
+    } catch (err) {
+      console.warn('Order status poll failed', err);
+    }
+  }
+
+  const pollTimer = setInterval(pollOrderStatus, 8000);
+})();
+</script>
+
+<script>
+window.NEVERQ_PAGE_TOUR_KEY = 'order-detail';
+window.NEVERQ_PAGE_TOUR = [
+  {selector:'.order-detail-head', title:'Order summary', copy:'The header shows the short order number, placed time, and the current status.', placement:'bottom'},
+  {selector:'.progress-track', title:'Order progress', copy:'Follow each step here to understand where the order currently stands.', placement:'bottom'},
+  {selector:'.ticket-card-clean', title:'Counter QR tickets', copy:'Use the right QR at the right counter when items are mapped across counters.', placement:'top'},
+  {selector:'.checkout-summary', title:'Bill summary', copy:'This panel keeps the payment breakdown visible while you track the order.', placement:'left'}
+];
+</script>
+{% endblock %}

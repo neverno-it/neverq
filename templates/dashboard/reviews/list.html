@@ -1,0 +1,91 @@
+{% extends "base/dashboard_base.html" %}
+{% load core_extras %}
+{% block content %}
+
+<div class="filter-bar">
+  <form class="d-flex flex-wrap gap-2 align-items-end" method="get">
+    <div>
+      <label class="form-label">Rating</label>
+      <select name="rating" class="form-select form-select-sm" style="width:120px;" onchange="this.form.submit()">
+        <option value="">All Ratings</option>
+        {% for i in "54321" %}
+        <option value="{{ i }}" {% if rating_filter == i %}selected{% endif %}>
+          {{ i }} ★
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <a href="{% url 'dashboard:reviews_list' %}" class="btn btn-cf-outline btn-sm">Clear</a>
+    <div class="ms-auto text-muted" style="font-size:12px;align-self:center;">
+      {{ page_obj.paginator.count }} review{{ page_obj.paginator.count|pluralize }}
+    </div>
+  </form>
+</div>
+
+<div class="cf-card">
+  <div style="overflow-x:auto;">
+    <table class="cf-table">
+      <thead>
+        <tr><th>Rating</th><th>Customer</th><th>Company</th><th>Comment</th><th>Order</th><th>Date</th></tr>
+      </thead>
+      <tbody>
+        {% for r in reviews %}
+        <tr>
+          <td>
+            <div style="color:var(--cf-warning,#F59E0B);font-size:16px;white-space:nowrap;">
+              {% for i in r.stars_range %}
+                {% if i <= r.rating_int %}★{% else %}☆{% endif %}
+              {% endfor %}
+            </div>
+            <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:var(--cf-navy);">
+              {{ r.rating }}/5
+            </div>
+          </td>
+          <td>
+            <div class="fw-500">{{ r.customer.name }}</div>
+            <small class="text-muted">{{ r.customer.phone }}</small>
+          </td>
+          <td>
+            <span class="badge" style="background:var(--cf-blue-light);color:var(--cf-blue);font-size:10px;">
+              {{ r.customer.company.name|truncatechars:18 }}
+            </span>
+          </td>
+          <td>
+            {% if r.details %}
+            <span style="font-size:13px;">{{ r.details|truncatechars:80 }}</span>
+            {% else %}
+            <span class="text-muted" style="font-size:12px;">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if r.order %}
+            <a href="{% url 'dashboard:order_detail' r.order.pk %}"
+               style="font-size:12px;color:var(--cf-blue);">
+              #{{ r.order.order_number|short_order_no }}
+            </a>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td><small class="text-muted">{{ r.created_at|date:"d M Y"|default:"—" }}</small></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted py-5">No reviews found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if page_obj.has_other_pages %}
+<nav class="mt-3">
+  <ul class="pagination pagination-sm justify-content-center">
+    {% if page_obj.has_previous %}
+    <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&rating={{ rating_filter }}">‹ Prev</a></li>
+    {% endif %}
+    <li class="page-item disabled"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+    {% if page_obj.has_next %}
+    <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&rating={{ rating_filter }}">Next ›</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

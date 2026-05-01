@@ -1,0 +1,50 @@
+{% extends "base/customer_base.html" %}
+{% block title %}Select Company{% endblock %}
+{% block content %}
+<div class="container final-page-shell" style="max-width:860px;">
+  <div class="final-page-hero mb-3 mb-md-4">
+    <div class="final-page-kicker"><i class="bi bi-buildings"></i> Choose Account</div>
+    <h1 class="final-page-title">Select your company</h1>
+    <p class="final-page-copy">We found multiple active customer accounts for <strong>{{ email }}</strong>. Choose the one you want to continue with.</p>
+  </div>
+
+  <div class="final-panel">
+    <form method="post">
+      {% csrf_token %}
+      <div class="d-grid gap-3">
+        {% for c in candidates %}
+          <label class="final-list-card" style="cursor:pointer;">
+            <div class="final-list-icon"><i class="bi bi-shop-window"></i></div>
+            <div class="flex-grow-1">
+              <h5 class="final-list-title">{{ c.company.name }}</h5>
+              <p class="final-list-copy">{{ c.building.name|default:'No building assigned' }} · {{ c.email }}</p>
+            </div>
+            <input type="radio" name="customer_id" value="{{ c.pk }}" {% if forloop.first %}checked{% endif %}>
+          </label>
+        {% empty %}
+          <div class="final-empty">
+            <i class="bi bi-person-x"></i>
+            <h5>No active accounts found</h5>
+            <p>Try signing in with another email or ask your admin to check your account.</p>
+          </div>
+        {% endfor %}
+      </div>
+      <div class="d-flex flex-column flex-sm-row gap-2 mt-4">
+        <button type="submit" class="btn btn-cf-primary px-4">Continue</button>
+        <a href="{% url 'accounts:customer_login' %}" class="btn btn-cf-outline">Back</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+window.NEVERQ_PAGE_TOUR_KEY = 'select-account';
+window.NEVERQ_PAGE_TOUR = [
+  {selector:'.final-page-hero', title:'Choose account', copy:'If one email belongs to multiple companies, you pick the correct account here.', placement:'bottom'},
+  {selector:'form .d-grid', title:'Available accounts', copy:'Each card here is one active customer account you can continue with.', placement:'bottom'},
+  {selector:'button[type="submit"]', title:'Continue', copy:'Select the right company account and continue into the customer app.', placement:'top'}
+];
+</script>
+{% endblock %}

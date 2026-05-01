@@ -1,0 +1,173 @@
+{% extends "base/dashboard_base.html" %}
+{% load core_extras %}
+{% block content %}
+
+<!-- Status filter pills -->
+<div class="d-flex gap-2 flex-wrap mb-3">
+  <a href="{% url 'orders:pickup_scan_terminal' %}" class="cat-pill" style="background:white;color:var(--cf-text);border-color:var(--cf-border);"><i class="bi bi-upc-scan me-1"></i>Pickup Scan</a>
+  <a href="{% url 'dashboard:kitchen' %}" class="cat-pill {% if not status_filter %}active{% endif %}"
+     style="background:{% if not status_filter %}var(--cf-navy){% else %}white{% endif %};color:{% if not status_filter %}white{% else %}var(--cf-text){% endif %};border-color:{% if not status_filter %}var(--cf-navy){% else %}var(--cf-border){% endif %};">
+    All Active
+  </a>
+  {% for val, lbl in statuses %}
+  <a href="?status={{ val }}" class="cat-pill {% if status_filter == val|stringformat:'s' %}active{% endif %}"
+     style="background:{% if status_filter == val|stringformat:'s' %}var(--cf-navy){% else %}white{% endif %};color:{% if status_filter == val|stringformat:'s' %}white{% else %}var(--cf-text){% endif %};border-color:{% if status_filter == val|stringformat:'s' %}var(--cf-navy){% else %}var(--cf-border){% endif %};">
+    {{ lbl }}
+  </a>
+  {% endfor %}
+</div>
+
+{% if orders %}
+<div class="row g-3" id="kitchenGrid">
+  {% for order in orders %}
+  <div class="col-md-6 col-xl-4" id="kcard-{{ order.pk }}">
+    <div class="cf-card h-100" style="border-left:4px solid
+      {% if order.order_status == 1 %}var(--cf-red)
+      {% elif order.order_status == 2 %}var(--cf-blue)
+      {% elif order.order_status == 3 %}#E65100
+      {% else %}#2E7D32{% endif %};">
+
+      <!-- Card header -->
+      <div style="padding:12px 16px;border-bottom:1px solid var(--cf-border);display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:17px;color:var(--cf-navy);">
+            #{{ order.order_number|short_order_no }}
+          </div>
+          <div style="font-size:12px;color:var(--cf-muted);">
+            {{ order.created_at|date:"h:i A" }} · {{ order.company.name }}
+          </div>
+        </div>
+        <span class="badge badge-cf bg-{{ order.status_color }} fs-6" id="status-badge-{{ order.pk }}">
+          {{ order.status_label }}
+        </span>
+      </div>
+
+      <!-- Customer -->
+      <div style="padding:10px 16px;border-bottom:1px solid var(--cf-border);font-size:13px;">
+        <i class="bi bi-person me-1 text-muted"></i>
+      <strong>{{ order.display_customer_name }}</strong>
+      {% if order.display_customer_phone %}<span class="text-muted ms-2">{{ order.display_customer_phone }}</span>{% endif %}
+        {% if order.order_type == 1 %}
+          <span class="badge bg-info ms-2" style="font-size:10px;">Pickup</span>
+        {% else %}
+          <span class="badge bg-secondary ms-2" style="font-size:10px;">Delivery</span>
+        {% endif %}
+      </div>
+
+      <!-- Items -->
+      <div style="padding:10px 16px;border-bottom:1px solid var(--cf-border);">
+        {% for item in order.remaining_items %}
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;">
+          <span>{{ item.product.name|default:"Item" }}</span>
+          <span style="font-weight:600;color:var(--cf-navy);">× {{ item.qty }}</span>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Actions -->
+      <div style="padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;">
+        {% if order.order_status == 1 %}
+        <button onclick="updateStatus({{ order.pk }}, 2)"
+                class="btn btn-sm btn-cf-outline flex-fill">
+          <i class="bi bi-check-circle me-1"></i>Confirm
+        </button>
+        {% endif %}
+        {% if order.order_status <= 2 %}
+        <button onclick="updateStatus({{ order.pk }}, 3)"
+                class="btn btn-sm flex-fill" style="background:#E65100;color:white;border:none;border-radius:6px;font-weight:600;">
+          <i class="bi bi-fire me-1"></i>Preparing
+        </button>
+        {% endif %}
+        {% if order.order_status <= 3 %}
+        <button onclick="updateStatus({{ order.pk }}, 4)"
+                class="btn btn-sm btn-cf-primary flex-fill">
+          <i class="bi bi-bell me-1"></i>Ready
+        </button>
+        {% endif %}
+        {% if order.order_status == 4 %}
+        <button onclick="updateStatus({{ order.pk }}, 5)"
+                class="btn btn-sm flex-fill" style="background:#2E7D32;color:white;border:none;border-radius:6px;font-weight:600;">
+          <i class="bi bi-bag-check me-1"></i>Delivered
+        </button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="text-center py-5">
+  <div style="font-size:64px;margin-bottom:12px;">🍳</div>
+  <h5 style="font-family:'Rajdhani',sans-serif;color:var(--cf-navy);">No active orders</h5>
+  <p class="text-muted">New orders will appear here automatically.</p>
+  <button onclick="location.reload()" class="btn btn-cf-outline mt-2">
+    <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+  </button>
+</div>
+{% endif %}
+
+<!-- Auto-refresh indicator -->
+<div style="position:fixed;bottom:20px;right:20px;z-index:500;">
+  <div style="background:var(--cf-navy);color:white;border-radius:20px;padding:8px 16px;font-size:12px;box-shadow:0 4px 12px rgba(0,0,0,.2);">
+    <i class="bi bi-arrow-clockwise me-1" id="refreshIcon"></i>
+    Auto-refresh in <span id="countdown">30</span>s
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .cat-pill{display:inline-flex;align-items:center;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;text-decoration:none;border:1.5px solid;transition:all .15s;}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const STATUS_LABELS = {1:'Pending',2:'Confirmed',3:'Preparing',4:'Ready for Pickup',5:'Delivered',6:'Cancelled'};
+const STATUS_COLORS = {1:'warning',2:'info',3:'primary',4:'success',5:'success',6:'danger'};
+
+function getCookie(n){let v=null;document.cookie.split(';').forEach(c=>{c=c.trim();if(c.startsWith(n+'='))v=decodeURIComponent(c.slice(n.length+1));});return v;}
+
+function updateStatus(pk, newStatus){
+  const form = new FormData();
+  form.append('status', newStatus);
+  form.append('details', '');
+  fetch(`/dashboard/orders/${pk}/status/`, {
+    method:'POST',
+    headers:{'X-CSRFToken':getCookie('csrftoken'),'X-Requested-With':'XMLHttpRequest'},
+    body:form
+  }).then(r=>r.json()).then(d=>{
+    if(d.success){
+      const badge = document.getElementById('status-badge-' + pk);
+      if(badge){
+        badge.textContent = STATUS_LABELS[newStatus] || newStatus;
+        badge.className = `badge badge-cf bg-${STATUS_COLORS[newStatus]} fs-6`;
+      }
+      // Remove card if delivered or cancelled
+      if(newStatus >= 5){
+        const card = document.getElementById('kcard-' + pk);
+        if(card){ card.style.opacity='0'; card.style.transition='opacity .4s'; setTimeout(()=>card.remove(), 400); }
+      } else {
+        // Reload to update action buttons
+        setTimeout(()=>location.reload(), 600);
+      }
+    }
+  }).catch(()=> alert('Failed to update. Please refresh.'));
+}
+
+// Auto-refresh every 30s
+let countdown = 30;
+const cd = document.getElementById('countdown');
+const ri = document.getElementById('refreshIcon');
+setInterval(()=>{
+  countdown--;
+  if(cd) cd.textContent = countdown;
+  if(countdown <= 0){
+    ri.style.animation = 'spin .5s linear';
+    location.reload();
+  }
+}, 1000);
+</script>
+{% endblock %}

@@ -1,0 +1,161 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<div class="row g-3">
+  <!-- Add product form -->
+  <div class="col-lg-4">
+    <div class="cf-card">
+      <div class="cf-card-header"><h5><i class="bi bi-box me-2"></i>Add POS Product</h5></div>
+      <div class="cf-card-body">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add">
+          <div class="mb-3">
+            <label class="form-label">Product Name *</label>
+            <input type="text" name="name" class="form-control" required placeholder="e.g. Masala Tea">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Price (₹) *</label>
+            <input type="number" name="price" class="form-control" required step="0.01" min="0" placeholder="0.00">
+          </div>
+          <button type="submit" class="btn btn-cf-primary w-100">Add Product</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Products list -->
+  <div class="col-lg-8">
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-box me-2"></i>POS Products — {{ company.name }}</h5>
+        <small class="text-muted">{{ products|length }} product{{ products|length|pluralize }}</small>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="cf-table" id="posProductTable">
+          <thead>
+            <tr><th>Name</th><th>Price</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {% for p in products %}
+            <tr id="prow-{{ p.pk }}">
+              <td>
+                <span class="pname-{{ p.pk }} fw-500">{{ p.name }}</span>
+              </td>
+              <td>
+                <span class="pprice-{{ p.pk }} fw-600 text-blue">₹{{ p.price }}</span>
+              </td>
+              <td>
+                <button onclick="togglePOS({{ p.pk }}, this)"
+                        class="badge border-0 {% if p.is_active %}bg-success{% else %}bg-secondary{% endif %}"
+                        style="cursor:pointer;padding:5px 10px;font-size:11px;">
+                  {% if p.is_active %}Active{% else %}Off{% endif %}
+                </button>
+              </td>
+              <td>
+                <div class="d-flex gap-1">
+                  <!-- Inline edit -->
+                  <button onclick="openEdit({{ p.pk }}, '{{ p.name|escapejs }}', '{{ p.price }}')"
+                          class="btn btn-sm btn-cf-outline" title="Edit">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <!-- Delete -->
+                  <form method="post" onsubmit="return confirm('Delete {{ p.name|escapejs }}?');" style="margin:0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="pk" value="{{ p.pk }}">
+                    <button type="submit" class="btn btn-sm btn-cf-danger" title="Delete">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-4">
+              No POS products yet. Add the first one →
+            </td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--cf-navy);color:white;border:none;">
+        <h6 class="modal-title" style="font-family:'Rajdhani',sans-serif;font-weight:700;">Edit Product</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Name</label>
+          <input type="text" id="editName" class="form-control">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Price (₹)</label>
+          <input type="number" id="editPrice" class="form-control" step="0.01" min="0">
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button onclick="saveEdit()" class="btn btn-cf-primary">Save</button>
+        <button class="btn btn-cf-outline" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let editPk = null;
+let editModal = null;
+
+function getCsrf() {
+  const m = document.cookie.match(/csrftoken=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
+function openEdit(pk, name, price) {
+  editPk = pk;
+  document.getElementById('editName').value  = name;
+  document.getElementById('editPrice').value = price;
+  editModal = new bootstrap.Modal(document.getElementById('editModal'));
+  editModal.show();
+}
+
+function saveEdit() {
+  if (!editPk) return;
+  const form = new FormData();
+  form.append('name',  document.getElementById('editName').value);
+  form.append('price', document.getElementById('editPrice').value);
+  fetch(`/pos/products/${editPk}/edit/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': getCsrf(), 'X-Requested-With': 'XMLHttpRequest' },
+    body: form
+  }).then(r => r.json()).then(d => {
+    if (d.success) {
+      document.querySelector(`.pname-${editPk}`).textContent  = d.name;
+      document.querySelector(`.pprice-${editPk}`).textContent = '₹' + d.price;
+      editModal.hide();
+    } else {
+      alert(d.error || 'Failed to save.');
+    }
+  });
+}
+
+function togglePOS(pk, btn) {
+  fetch(`/pos/products/${pk}/toggle/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': getCsrf() }
+  }).then(r => r.json()).then(d => {
+    btn.textContent = d.is_active ? 'Active' : 'Off';
+    btn.className   = 'badge border-0 ' + (d.is_active ? 'bg-success' : 'bg-secondary');
+    btn.style.cssText = 'cursor:pointer;padding:5px 10px;font-size:11px;';
+  });
+}
+</script>
+{% endblock %}

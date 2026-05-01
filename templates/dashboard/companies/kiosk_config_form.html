@@ -1,0 +1,104 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<div style="max-width:720px;">
+  <div class="cf-card">
+    <div class="cf-card-header">
+      <h5><i class="bi bi-display me-2"></i>{{ page_title }}</h5>
+      <a href="{% url 'dashboard:kiosk_config_list' %}" class="btn btn-cf-outline btn-sm">← Back</a>
+    </div>
+    <div class="cf-card-body">
+      <form method="post" enctype="multipart/form-data">{% csrf_token %}
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Company <span class="text-danger">*</span></label>
+            <select name="company" class="form-select" required>
+              <option value="">— Select —</option>
+              {% for co in companies %}<option value="{{ co.pk }}" {% if cfg and cfg.company_id == co.pk %}selected{% endif %}>{{ co.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Building <small class="text-muted">(optional)</small></label>
+            <select name="building" class="form-select">
+              <option value="">— Any building —</option>
+              {% for b in buildings %}<option value="{{ b.pk }}" {% if cfg and cfg.building_id == b.pk %}selected{% endif %}>{{ b.name }} · {{ b.company.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Kiosk Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required value="{{ cfg.name|default:'' }}" placeholder="e.g. Main Entrance Kiosk">
+          </div>
+
+          <div class="col-12"><div class="p-2 rounded" style="background:#e3f2fd;"><small class="fw-bold" style="color:#1565c0;">Branding (leave blank = use company defaults)</small></div></div>
+
+          <div class="col-md-3">
+            <label class="form-label">Theme Colour</label>
+            <input type="color" name="theme_color" class="form-control form-control-color" value="{{ cfg.theme_color|default:'#1e3a5f' }}" style="width:60px;">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Welcome Title</label>
+            <input type="text" name="welcome_title" class="form-control" value="{{ cfg.welcome_title|default:'' }}" placeholder="Company name">
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">Welcome Subtitle</label>
+            <input type="text" name="welcome_subtitle" class="form-control" value="{{ cfg.welcome_subtitle|default:'' }}" placeholder="Touch to order">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Logo Override</label>
+            {% if cfg and cfg.logo %}<img src="{{ cfg.logo.url }}" style="height:36px;border-radius:4px;display:block;margin-bottom:4px;">{% endif %}
+            <input type="file" name="logo" class="form-control" accept="image/*">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Hero Banner <small class="text-muted">(optional)</small></label>
+            {% if cfg and cfg.hero_image %}<img src="{{ cfg.hero_image.url }}" style="height:36px;border-radius:4px;display:block;margin-bottom:4px;">{% endif %}
+            <input type="file" name="hero_image" class="form-control" accept="image/*">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Card Style</label>
+            <select name="card_style" class="form-select">
+              <option value="standard" {% if not cfg or cfg.card_style == 'standard' %}selected{% endif %}>Standard</option>
+              <option value="compact"  {% if cfg and cfg.card_style == 'compact' %}selected{% endif %}>Compact</option>
+              <option value="large"    {% if cfg and cfg.card_style == 'large' %}selected{% endif %}>Large</option>
+            </select>
+          </div>
+
+          <div class="col-12"><div class="p-2 rounded" style="background:#f3e5f5;"><small class="fw-bold" style="color:#6a1b9a;">UI Toggles</small></div></div>
+          <div class="col-md-3">
+            <label class="form-label">Show Offerings</label>
+            <div class="form-check form-switch mt-1">
+              <input class="form-check-input" type="checkbox" name="show_offerings" {% if not cfg or cfg.show_offerings %}checked{% endif %} style="width:44px;height:22px;">
+              <label class="form-check-label small">Visible</label>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Show Categories</label>
+            <div class="form-check form-switch mt-1">
+              <input class="form-check-input" type="checkbox" name="show_categories" {% if not cfg or cfg.show_categories %}checked{% endif %} style="width:44px;height:22px;">
+              <label class="form-check-label small">Visible</label>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Active</label>
+            <div class="form-check form-switch mt-1">
+              <input class="form-check-input" type="checkbox" name="is_active" {% if not cfg or cfg.is_active %}checked{% endif %} style="width:44px;height:22px;">
+              <label class="form-check-label small">Enabled</label>
+            </div>
+          </div>
+
+          {% if cfg %}
+          <div class="col-12">
+            <div class="p-2 rounded border" style="background:#f8f9fa;">
+              <small class="text-muted">Kiosk URL: <code>{{ request.scheme }}://{{ request.get_host }}/orders/kiosk/{{ cfg.company_id }}/?kiosk={{ cfg.slug }}</code></small>
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-cf-primary px-4"><i class="bi bi-check-circle me-1"></i>Save</button>
+            <a href="{% url 'dashboard:kiosk_config_list' %}" class="btn btn-cf-outline">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

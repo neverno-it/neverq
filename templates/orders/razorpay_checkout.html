@@ -1,0 +1,98 @@
+{% extends "base/customer_base.html" %}
+
+{% block content %}
+<div class="page-strip">
+  <div class="container d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <a href="{% url 'orders:checkout' %}" class="btn btn-cf-soft"><i class="bi bi-arrow-left me-1"></i>Back to checkout</a>
+      <div class="phase4-header-copy">
+        <h3>Complete payment</h3>
+        <p>Razorpay checkout will open securely for order #{{ merchant_ref }}.</p>
+      </div>
+    </div>
+    <span class="pill-muted">Rs. {{ amount_display|floatformat:2 }}</span>
+  </div>
+</div>
+
+<div class="container mt-4 phase4-page">
+  <div class="phase4-card mx-auto" style="max-width: 680px;">
+    <div class="phase4-card-body text-center py-5">
+      <div class="mb-3" style="width:72px;height:72px;border-radius:24px;background:linear-gradient(135deg,#fce7e9,#fff);display:inline-flex;align-items:center;justify-content:center;color:#a01120;font-size:32px;">
+        <i class="bi bi-credit-card-2-front-fill"></i>
+      </div>
+      <h4 class="phase4-card-title mb-2">Opening Razorpay</h4>
+      <p class="text-muted mb-4">Please complete the payment of <strong>Rs. {{ amount_display|floatformat:2 }}</strong>. Your order will be confirmed only after successful verification.</p>
+
+      <button type="button" class="btn btn-cf-primary px-4" id="openRazorpayBtn">
+        Pay with Razorpay
+      </button>
+      <a href="{{ cancel_url }}" class="btn btn-cf-soft ms-2">Cancel payment</a>
+
+      <form method="post" action="{% url 'orders:razorpay_verify' %}" id="razorpayVerifyForm" class="d-none">
+        {% csrf_token %}
+        <input type="hidden" name="merchant_order_id" value="{{ merchant_ref }}">
+        <input type="hidden" name="razorpay_order_id" id="razorpayOrderId">
+        <input type="hidden" name="razorpay_payment_id" id="razorpayPaymentId">
+        <input type="hidden" name="razorpay_signature" id="razorpaySignature">
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+(function(){
+  const options = {{ checkout_options_json|safe }};
+  const form = document.getElementById('razorpayVerifyForm');
+  const openBtn = document.getElementById('openRazorpayBtn');
+  const cancelUrl = "{{ cancel_url|escapejs }}";
+
+  options.handler = function(response) {
+    document.getElementById('razorpayOrderId').value = response.razorpay_order_id || '';
+    document.getElementById('razorpayPaymentId').value = response.razorpay_payment_id || '';
+    document.getElementById('razorpaySignature').value = response.razorpay_signature || '';
+    form.submit();
+  };
+  options.modal = {
+    confirm_close: true,
+    ondismiss: function() {
+      window.location.href = cancelUrl;
+    }
+  };
+
+  let checkoutOpened = false;
+
+  function openCheckout() {
+    if (typeof Razorpay === 'undefined') {
+      alert('Razorpay checkout could not load. Please check your connection and try again.');
+      return;
+    }
+    if (checkoutOpened) {
+      return;
+    }
+    checkoutOpened = true;
+    const checkout = new Razorpay(options);
+    checkout.open();
+  }
+
+  function autoOpenCheckout(attempt) {
+    if (typeof Razorpay === 'undefined') {
+      if (attempt < 20) {
+        setTimeout(function() {
+          autoOpenCheckout(attempt + 1);
+        }, 250);
+        return;
+      }
+      alert('Razorpay checkout could not load. Please check your connection and try again.');
+      return;
+    }
+    openCheckout();
+  }
+
+  openBtn.addEventListener('click', openCheckout);
+  autoOpenCheckout(0);
+})();
+</script>
+{% endblock %}

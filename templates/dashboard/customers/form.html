@@ -1,0 +1,292 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  .customer-form-shell{max-width:880px}
+  .customer-form-section{background:linear-gradient(135deg,#f6f9ff,#ffffff);border:1px solid #dfe7f4;border-radius:14px;padding:16px 18px}
+  .customer-form-section h6{margin:0 0 14px;font-size:16px;color:var(--cf-navy);display:flex;align-items:center;gap:8px}
+  .customer-form-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding-top:6px}
+  .customer-form-shell .form-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--cf-muted)}
+  .customer-form-shell .form-control,.customer-form-shell .form-select{min-height:44px}
+  .customer-form-shell textarea.form-control{min-height:104px}
+  .benefit-help{font-size:12px;color:var(--cf-muted);margin-top:6px}
+  .benefit-card-grid>[class*="col-"]{display:flex}
+  .benefit-card{cursor:pointer;width:100%;min-height:100%;display:flex!important;flex-direction:column;border:2px solid #dee2e6;border-radius:12px;padding:16px;transition:all .2s;background:#fff}
+  .benefit-card:hover{border-color:var(--cf-blue);box-shadow:0 2px 12px rgba(30,58,95,.1)}
+  .benefit-card.is-active{border-color:var(--cf-blue);box-shadow:0 2px 16px rgba(30,58,95,.15)}
+  .benefit-card.is-green.is-active{border-color:#27ae60}
+  .benefit-card-bottom{margin-top:auto}
+  .benefit-icon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:0 0 36px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="customer-form-shell">
+  <div class="cf-card">
+    <div class="cf-card-header">
+      <h5><i class="bi bi-person-plus me-2"></i>Add Customer</h5>
+      <a href="{% url 'dashboard:customer_list' %}" class="btn btn-cf-outline btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    </div>
+    <div class="cf-card-body">
+      {% if form.errors %}
+      <div class="alert alert-danger mb-3">
+        {% for field in form %}{% for e in field.errors %}<div>{{ field.label }}: {{ e }}</div>{% endfor %}{% endfor %}
+        {% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}
+      </div>
+      {% endif %}
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="customer-form-section mb-3">
+          <h6><i class="bi bi-person"></i>Basic Details</h6>
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">Full Name</label>{{ form.name }}</div>
+            <div class="col-md-6"><label class="form-label">Phone</label>{{ form.phone }}</div>
+            <div class="col-md-6"><label class="form-label">Email</label>{{ form.email }}</div>
+            <div class="col-md-6">
+              <label class="form-label">Birth Date</label>
+              <div class="row g-2">
+                <div class="col-6">
+                  <select name="birth_day" class="form-select" required>
+                    <option value="">Date</option>
+                    {% for day in birth_day_options %}
+                    <option value="{{ day }}" {% if birth_day_value == day|stringformat:"s" %}selected{% endif %}>{{ day }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-6">
+                  <select name="birth_month" class="form-select" required>
+                    <option value="">Month</option>
+                    {% for month in birth_month_options %}
+                    <option value="{{ month }}" {% if birth_month_value == month|stringformat:"s" %}selected{% endif %}>{{ month }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+              <div class="benefit-help">Choose only date and month.</div>
+              {% if birth_date_error %}
+              <div class="text-danger mt-1" style="font-size:12px;">{{ birth_date_error }}</div>
+              {% elif form.date_of_birth.errors %}
+              <div class="text-danger mt-1" style="font-size:12px;">{{ form.date_of_birth.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-6"><label class="form-label">Company</label>{{ form.company }}</div>
+            <div class="col-md-6"><label class="form-label">Building / Floor</label>{{ form.building }}</div>
+          </div>
+        </div>
+
+        <div class="customer-form-section mb-3">
+          <h6><i class="bi bi-shield-lock"></i>Access & Benefit</h6>
+          <div class="row g-3 align-items-end">
+            <div class="col-md-6"><label class="form-label">Password</label>{{ form.password }}</div>
+            <div class="col-md-6"><label class="form-label">Confirm Password</label>{{ form.password2 }}</div>
+            <div class="col-12">
+              <label class="form-label">Meal Benefit</label>
+              <div class="alert alert-info py-2 mb-3" id="benefitSelectCompanyNotice" style="border-radius:10px;display:none;">
+                Select a company first to configure meal benefits.
+              </div>
+              <div class="alert alert-warning py-2 mb-3" id="benefitDisabledNotice" style="border-radius:10px;display:none;">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                Meal benefits are disabled for this company because billing mode is Employee Pays.
+              </div>
+              <div class="row g-3 benefit-card-grid" id="addBenefitCards">
+                <div class="col-md-4">
+                  <label class="benefit-card" for="add_benefit_none">
+                    <input type="radio" name="meal_benefit" value="none" id="add_benefit_none" class="d-none" {% if not request.POST.meal_benefit or request.POST.meal_benefit == 'none' %}checked{% endif %}>
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                      <div class="benefit-icon" style="background:#f1f3f5;"><i class="bi bi-person" style="color:#6c757d;"></i></div>
+                      <div>
+                        <div class="fw-700" style="font-size:14px;">No Benefit</div>
+                        <div class="small text-muted">Employee pays in full</div>
+                      </div>
+                    </div>
+                    <div class="small text-muted mb-2">Every order is fully charged to the employee. No company contribution.</div>
+                    <div class="benefit-card-bottom text-center">
+                      <span class="badge bg-secondary">Employee Pays 100%</span>
+                    </div>
+                  </label>
+                </div>
+                <div class="col-md-4">
+                  <label class="benefit-card" for="add_benefit_subsidy">
+                    <input type="radio" name="meal_benefit" value="subsidy" id="add_benefit_subsidy" class="d-none" {% if request.POST.meal_benefit == 'subsidy' %}checked{% endif %}>
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                      <div class="benefit-icon" style="background:#e3f2fd;"><i class="bi bi-cash-coin" style="color:var(--cf-blue);"></i></div>
+                      <div>
+                        <div class="fw-700" style="font-size:14px;">Subsidy</div>
+                        <div class="small text-muted">Company covers part</div>
+                      </div>
+                    </div>
+                    <div class="small text-muted mb-2">Company pays up to a fixed amount for the configured subsidy uses per day. Employee pays any remaining balance.</div>
+                    <div class="benefit-card-bottom p-2 rounded text-center" style="background:#e3f2fd;">
+                      <div class="small text-muted" style="font-size:11px;">Company covers up to</div>
+                      <div class="fw-700" style="color:var(--cf-blue);font-size:18px;">Rs.<span id="addSubsidyAmount">{{ selected_company.company_meal_amount|default:'0' }}</span></div>
+                      <div class="small text-muted" style="font-size:10px;"><span id="addSubsidyUses">{{ selected_company.subsidy_meals_per_day|default:'1' }}</span> use(s) per day</div>
+                    </div>
+                  </label>
+                </div>
+                <div class="col-md-4">
+                  <label class="benefit-card is-green" for="add_benefit_company_pay">
+                    <input type="radio" name="meal_benefit" value="company_pay" id="add_benefit_company_pay" class="d-none" {% if request.POST.meal_benefit == 'company_pay' %}checked{% endif %}>
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                      <div class="benefit-icon" style="background:#e8f5e9;"><i class="bi bi-building-check" style="color:#27ae60;"></i></div>
+                      <div>
+                        <div class="fw-700" style="font-size:14px;">Company Pays</div>
+                        <div class="small text-muted">Selected meals are free</div>
+                      </div>
+                    </div>
+                    <div class="small text-muted mb-2">Company covers the entire cost of selected free-meal products while daily meals remain. Employee pays only for non-selected products and packing, if any.</div>
+                    <div class="benefit-card-bottom p-2 rounded text-center" style="background:#e8f5e9;">
+                      <div class="small text-muted" style="font-size:11px;">Employee cost</div>
+                      <div class="fw-700" style="color:#27ae60;font-size:18px;">Rs.0</div>
+                      <div class="small text-muted" style="font-size:10px;"><span id="addCompanyPayMeals">{{ selected_company.company_pay_meals_per_day|default:'1' }}</span> meal(s) per day</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+              <div class="benefit-help mt-2" id="addBenefitHelp">Benefits apply only to eligible products while daily uses remain.</div>
+            </div>
+            <div class="col-12" id="addOverrideWrap">
+              <label class="form-label">Custom Subsidy Override (₹)</label>
+              <input type="number" step="0.01" min="0" name="subsidy_amount_override" class="form-control" value="{{ request.POST.subsidy_amount_override|default:'' }}" placeholder="Optional">
+              <div class="benefit-help">Leave blank to use the company default subsidy amount.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="customer-form-section mb-3">
+          <h6><i class="bi bi-wallet2"></i>Wallet & Royalty Points</h6>
+          {% if initial_balance_error %}
+          <div class="alert alert-danger py-2 mb-3">{{ initial_balance_error }}</div>
+          {% endif %}
+          <div class="border rounded-3 p-3" style="background:linear-gradient(135deg,#e8f4fd,#f0f8ff);">
+            <div class="d-flex gap-3 flex-wrap align-items-center mb-3">
+              <div><span class="badge bg-primary fs-6">Rs.0.00</span><span class="small text-muted ms-1">wallet</span></div>
+              <div><span class="badge bg-success fs-6">0 pts</span><span class="small text-muted ms-1">royalty (about Rs.0)</span></div>
+            </div>
+            <div class="row g-2 align-items-end">
+              <div class="col-md-4">
+                <label class="form-label">Initial Wallet Balance</label>
+                <input type="number" step="0.01" min="0" name="initial_wallet_balance" class="form-control" value="{{ initial_wallet_raw|default:'' }}" placeholder="e.g. 500">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Initial Royalty Points</label>
+                <input type="number" step="1" min="0" name="initial_royalty_points" class="form-control" value="{{ initial_points_raw|default:'' }}" placeholder="e.g. 100">
+              </div>
+              <div class="col-md-4">
+                <div class="benefit-help mb-1">Recharge and full history will be available after the customer is saved.</div>
+                <div class="d-grid gap-2">
+                  <button type="button" class="btn btn-cf-primary" disabled><i class="bi bi-wallet2 me-1"></i>Recharge</button>
+                  <button type="button" class="btn btn-cf-outline" disabled><i class="bi bi-clock-history me-1"></i>Full History</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="customer-form-actions">
+          <a href="{% url 'dashboard:customer_list' %}" class="btn btn-cf-ghost">Cancel</a>
+          <button type="submit" class="btn btn-cf-primary"><i class="bi bi-check-circle me-1"></i>Save Customer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  // Benefit cards
+  const companyBenefitData = {
+    {% for co in company_benefit_data %}
+    "{{ co.pk }}": {
+      billCompany: {{ co.bill_company|default:1 }},
+      subsidyAmount: "{{ co.company_meal_amount|default:'0' }}",
+      subsidyUses: "{{ co.subsidy_meals_per_day|default:'1' }}",
+      companyPayMeals: "{{ co.company_pay_meals_per_day|default:'1' }}"
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  };
+  const cards = document.querySelectorAll('#addBenefitCards .benefit-card');
+  const radios = document.querySelectorAll('input[name="meal_benefit"]');
+  const w = document.getElementById('addOverrideWrap');
+  const cardsWrap = document.getElementById('addBenefitCards');
+  const selectNotice = document.getElementById('benefitSelectCompanyNotice');
+  const disabledNotice = document.getElementById('benefitDisabledNotice');
+  const subsidyAmount = document.getElementById('addSubsidyAmount');
+  const subsidyUses = document.getElementById('addSubsidyUses');
+  const companyPayMeals = document.getElementById('addCompanyPayMeals');
+
+  function syncBenefit(){
+    const checked = document.querySelector('input[name="meal_benefit"]:checked');
+    const selected = checked ? checked.value : 'none';
+    cards.forEach(function(card){
+      const radio = card.querySelector('input[type="radio"]');
+      card.classList.toggle('is-active', !!radio && radio.checked);
+    });
+    if(w) w.style.display = selected === 'subsidy' ? '' : 'none';
+  }
+
+  radios.forEach(function(radio){ radio.addEventListener('change', syncBenefit); });
+  cards.forEach(function(card){
+    card.addEventListener('click', function(){
+      const radio = card.querySelector('input[type="radio"]');
+      if (radio && !radio.disabled) {
+        radio.checked = true;
+        syncBenefit();
+      }
+    });
+  });
+
+  // Company → Buildings dynamic load
+  const companySelect  = document.querySelector('[name="company"]');
+  const buildingSelect = document.querySelector('[name="building"]');
+  if (!companySelect || !buildingSelect) return;
+
+  const ajaxUrl = '{% url "accounts:get_buildings" %}';
+  const currentBuilding = '{{ form.building.value|default:"" }}';
+
+  function syncCompanyBenefit(){
+    const data = companyBenefitData[String(companySelect.value || '')];
+    const noneRadio = document.getElementById('add_benefit_none');
+    const hasCompany = !!data;
+    const benefitsEnabled = hasCompany && Number(data.billCompany) === 2;
+    if (selectNotice) selectNotice.style.display = hasCompany ? 'none' : '';
+    if (disabledNotice) disabledNotice.style.display = hasCompany && !benefitsEnabled ? '' : 'none';
+    if (cardsWrap) cardsWrap.style.display = benefitsEnabled ? '' : 'none';
+    radios.forEach(function(radio){ radio.disabled = !benefitsEnabled; });
+    if (!benefitsEnabled && noneRadio) noneRadio.checked = true;
+    if (subsidyAmount && data) subsidyAmount.textContent = data.subsidyAmount || '0';
+    if (subsidyUses && data) subsidyUses.textContent = data.subsidyUses || '1';
+    if (companyPayMeals && data) companyPayMeals.textContent = data.companyPayMeals || '1';
+    syncBenefit();
+  }
+
+  function loadBuildings(companyId, selectedId) {
+    buildingSelect.innerHTML = '<option value="">— Select building/floor —</option>';
+    if (!companyId) return;
+    fetch(ajaxUrl + '?company_id=' + companyId)
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (!data.buildings || !data.buildings.length) {
+          buildingSelect.innerHTML = '<option value="">No buildings found for this company</option>';
+          return;
+        }
+        data.buildings.forEach(function(b){
+          const opt = document.createElement('option');
+          opt.value = b.id;
+          opt.textContent = b.name;
+          if (String(b.id) === String(selectedId)) opt.selected = true;
+          buildingSelect.appendChild(opt);
+        });
+      })
+      .catch(function(){ buildingSelect.innerHTML = '<option value="">Failed to load buildings</option>'; });
+  }
+
+  companySelect.addEventListener('change', function(){
+    loadBuildings(this.value, '');
+    syncCompanyBenefit();
+  });
+
+  // On page load, if company is already selected (e.g. after a POST validation error), load its buildings
+  if (companySelect.value) {
+    loadBuildings(companySelect.value, currentBuilding);
+  }
+  syncCompanyBenefit();
+})();
+</script>
+{% endblock %}

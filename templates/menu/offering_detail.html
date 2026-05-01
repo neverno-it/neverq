@@ -1,0 +1,250 @@
+{% extends "base/customer_base.html" %}
+{% block extra_head %}
+<style>
+  .offering-sticky-filter-cluster{position:sticky;top:84px;z-index:1012;}
+  .offering-sticky-filter-cluster .phase2-toolbar-card{position:static;top:auto;z-index:auto;margin-bottom:10px !important;}
+  .offering-category-strip-shell{padding:10px 12px;border-radius:20px;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border:1px solid rgba(229,231,235,.95);box-shadow:0 12px 26px rgba(21,35,59,.08);}
+  .offering-category-strip{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
+  .offering-category-strip::-webkit-scrollbar{display:none;}
+  .offering-category-chip{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:10px 16px;border-radius:14px;border:1px solid rgba(21,101,192,.14);background:#f7f8fe;color:var(--cf-blue-dark);font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;box-shadow:var(--cf-shadow-soft);}
+  .offering-category-chip:hover{color:var(--cf-blue-dark);background:var(--cf-blue-light);}
+  .offering-category-section{scroll-margin-top:212px;}
+  .offering-category-title{font-size:18px;color:var(--cf-navy);margin:0 0 10px;}
+  .offering-category-strip{display:flex;gap:8px;overflow-x:auto;padding:2px 0 4px;scrollbar-width:none;align-items:center;}
+  .offering-category-strip::-webkit-scrollbar{display:none;}
+  .offering-category-chip{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 14px;border-radius:14px;border:1px solid rgba(160,17,32,.18);background:rgba(160,17,32,.06);color:var(--cf-red);font-size:11.5px;font-weight:700;text-decoration:none;white-space:nowrap;box-shadow:none;}
+  .offering-category-chip:hover{color:var(--cf-red);background:rgba(160,17,32,.12);}
+  .offering-category-section{scroll-margin-top:212px;}
+  .offering-category-title{font-size:17px;color:var(--cf-navy);margin:0 0 8px;}
+
+  .phase2-hero-subtitle,.phase2-results-head .section-subtitle{font-size:12px;}
+  .phase2-results-head h4{font-size:22px;}
+  .phase2-product-stack .phase3-browse-kicker{font-size:10.5px;}
+  .phase2-product-stack .phase3-browse-title{font-size:21px;}
+  .phase2-product-stack .phase3-browse-desc,.phase2-product-stack .phase3-browse-meta .pill-muted,.phase2-product-stack .phase3-browse-meta .pill-soft,.phase2-product-stack .phase3-browse-meta .pill-outline{font-size:11px;}
+  .phase2-product-stack .phase3-browse-price{font-size:24px;}
+  .phase2-product-stack .btn{font-size:12px;}
+  @media (max-width: 767.98px){
+    .offering-sticky-filter-cluster{top:66px;}
+    .offering-sticky-filter-cluster .phase2-toolbar-card{margin-bottom:8px !important;}
+    .offering-category-strip-shell{padding:8px 10px;border-radius:16px;}
+    .offering-category-chip{min-height:36px;padding:7px 12px;font-size:11px;}
+    .offering-category-section{scroll-margin-top:194px;}
+    .offering-category-title{font-size:16px;}
+    .phase2-hero-subtitle,.phase2-results-head .section-subtitle{font-size:11px;}
+    .phase2-results-head h4{font-size:19px;}
+    .phase2-product-stack .phase3-browse-title{font-size:18px;}
+    .phase2-product-stack .phase3-browse-price{font-size:21px;}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="container mt-3 mt-md-4 phase2-shell">
+  <div class="surface-card phase2-hero-card overflow-hidden mb-3 mb-md-4">
+    <div class="row g-0 align-items-stretch">
+      <div class="col-md-4 col-lg-3">
+        <div class="phase2-hero-media">
+          {% if offering.image %}
+          <img src="{{ offering.image.url }}" alt="{{ offering.name }}" class="phase2-hero-image">
+          {% else %}
+          <div class="phase2-hero-fallback">⏰</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-8 col-lg-9">
+        <div class="phase2-hero-body">
+          <div class="phase2-breadcrumb-row">
+            <a href="{% url 'menu:menu' %}{% if food_pref or calorie_max %}?{% endif %}{% if food_pref %}food={{ food_pref|urlencode }}{% endif %}{% if food_pref and calorie_max %}&{% endif %}{% if calorie_max %}calorie_max={{ calorie_max }}{% endif %}" class="btn btn-cf-soft btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to menu</a>
+            <span class="pill-soft">Offering</span>
+          </div>
+          <h2 class="phase2-hero-title">{{ offering.name }}</h2>
+          <div class="section-subtitle phase2-hero-subtitle">Browse the items available in this offering window.</div>
+          <div class="phase2-stat-row">
+            <span class="pill-muted"><i class="bi bi-grid"></i>{{ visible_count }} item{{ visible_count|pluralize }}</span>
+            {% if category_count %}<span class="pill-outline"><i class="bi bi-collection"></i>{{ category_count }} categor{{ category_count|pluralize:"y,ies" }}</span>{% endif %}
+            {% if food_pref == 'veg' %}<span class="pill-soft phase2-veg-chip"><i class="bi bi-check2-circle"></i>Veg only</span>{% endif %}
+            {% if calorie_max %}<span class="pill-soft phase2-calorie-chip"><i class="bi bi-fire"></i>Up to {{ calorie_max }} kcal</span>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if products %}
+  {% regroup products by category as category_groups %}
+  {% endif %}
+
+  <div class="offering-sticky-filter-cluster mb-3 mb-md-4">
+    <div class="surface-card p-3 p-md-4 soft-shadow menu-toolbar-card compact-toolbar phase2-toolbar-card">
+    <div class="menu-toolbar-top">
+      <div class="search-shell flex-grow-1">
+        <i class="bi bi-search"></i>
+        <input type="text" id="offeringSearchInput" class="search-input" placeholder="Search items..." value="{{ search_query }}">
+      </div>
+      <button type="button" class="veg-only-toggle {% if food_pref == 'veg' %}active{% endif %}" onclick="toggleVegOnly()" aria-label="Toggle veg only items" title="Veg only">
+        <span class="veg-toggle-mark" aria-hidden="true"><span class="veg-toggle-dot"></span></span>
+        <span class="veg-only-switch"><span class="veg-only-knob"></span></span>
+      </button>
+    </div>
+    <div class="menu-toolbar-bottom compact-only">
+      <div class="calorie-inline-group">
+        <span class="calorie-inline-label"><i class="bi bi-fire"></i>Calories</span>
+        {% for preset in calorie_presets %}
+        <button type="button" class="filter-pill filter-pill-btn compact {% if calorie_max == preset %}active{% endif %}" onclick="setCaloriePreset('{{ preset }}')">≤{{ preset }}</button>
+        {% endfor %}
+        {% if calorie_max %}
+        <button type="button" class="filter-pill filter-pill-btn compact" onclick="setCaloriePreset('')">Clear</button>
+        {% endif %}
+      </div>
+    </div>
+    </div>
+    {% if products %}
+    <div class="offering-category-strip-shell">
+      <div class="offering-category-strip">
+        {% for group in category_groups %}
+          <a href="#offering-category-{{ group.grouper.slug|default:'uncategorized' }}" class="offering-category-chip">{{ group.grouper.name|default:'Other items' }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if products %}
+  <div class="phase2-product-stack">
+    {% for group in category_groups %}
+      <section class="offering-category-section" id="offering-category-{{ group.grouper.slug|default:'uncategorized' }}">
+        <div class="phase2-results-head mb-2">
+          <div>
+            <h5 class="offering-category-title">{{ group.grouper.name|default:'Other items' }}</h5>
+          </div>
+        </div>
+        <div class="phase2-product-stack mb-4">
+          {% for product in group.list %}
+            {% include "menu/_product_row.html" %}
+          {% endfor %}
+        </div>
+      </section>
+    {% endfor %}
+  </div>
+  {% else %}
+    <div class="empty-state phase2-empty-state">
+      <div style="font-size:64px; margin-bottom:12px;">🥘</div>
+      <h4>No items available right now</h4>
+      <p class="text-muted mb-3">Try another offering or clear your filters to see more products.</p>
+      <a href="{% url 'menu:menu' %}" class="btn btn-cf-primary">Browse full menu</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block sticky_cart_bar %}
+  {% if cart_count %}
+    <div class="floating-cart-bar d-flex align-items-center justify-content-between gap-3">
+      <div>
+        <div class="small text-white-50">Ready when you are</div>
+        <div class="fw-bold">{{ cart_count }} item{{ cart_count|pluralize }} in cart</div>
+      </div>
+      <a href="{% url 'menu:cart' %}" class="btn btn-cf-danger"><i class="bi bi-cart3 me-1"></i>View Cart</a>
+    </div>
+  {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function toggleVegOnly() {
+    const current = '{{ food_pref|default:"" }}';
+    const url = new URL(window.location.href);
+    if (current === 'veg') url.searchParams.delete('food');
+    else url.searchParams.set('food', 'veg');
+    window.location.href = url.toString();
+  }
+
+  function setCaloriePreset(val) {
+    const url = new URL(window.location.href);
+    const current = url.searchParams.get('calorie_max') || '';
+    if (!val || current === String(val)) url.searchParams.delete('calorie_max');
+    else url.searchParams.set('calorie_max', val);
+    window.location.href = url.toString();
+  }
+
+  (function() {
+    const searchInput = document.getElementById('offeringSearchInput');
+    const cards = Array.from(document.querySelectorAll('.js-product-card'));
+    function normalizedText(value) {
+      return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    function applySearch() {
+      const term = normalizedText(searchInput?.value || '');
+      cards.forEach(function(card) {
+        const hay = normalizedText(card.dataset.search || card.textContent || '');
+        card.style.display = !term || hay.includes(term) ? '' : 'none';
+      });
+      document.querySelectorAll('.offering-category-section').forEach(function(section) {
+        const visibleCards = Array.from(section.querySelectorAll('.js-product-card')).filter(function(card) {
+          return card.style.display !== 'none';
+        });
+        section.style.display = visibleCards.length ? '' : 'none';
+      });
+    }
+
+    searchInput?.addEventListener('input', function() {
+      applySearch();
+    });
+    applySearch();
+
+  document.querySelectorAll('.js-add-to-cart').forEach(function(button) {
+    button.addEventListener('click', function() {
+      if (button.dataset.busy === '1') return;
+      button.dataset.busy = '1';
+      button.disabled = true;
+      const pid = button.dataset.pid;
+      const original = button.innerHTML;
+      const formData = new FormData();
+      formData.append('qty', '1');
+      formData.append('csrfmiddlewaretoken', NeverQUI.getCookie('csrftoken'));
+
+      fetch(`/menu/cart/add/${pid}/`, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': NeverQUI.getCookie('csrftoken')
+        },
+        body: formData
+      })
+      .then(resp => resp.json())
+      .then(data => {
+        if (!data.success) {
+          button.disabled = false;
+          alert(data.error || 'Could not add item to cart.');
+          return;
+        }
+        NeverQUI.updateCartBadges(data.cart_count || 0);
+        NeverQUI.flashButtonState(button, original, '<i class="bi bi-check2 me-1"></i>Added');
+      })
+      .catch(() => {
+        button.disabled = false;
+        alert('Network error. Please try again.');
+      })
+      .finally(() => {
+        window.setTimeout(function() {
+          button.dataset.busy = '0';
+        }, 1350);
+      });
+    });
+  });
+  })();
+</script>
+<script>
+window.NEVERQ_PAGE_TOUR_KEY = 'offering-detail';
+window.NEVERQ_PAGE_TOUR = [
+  {selector:'.phase2-hero-card', title:'Offering page', copy:'Offerings group products by service windows like breakfast, lunch, or snacks.', placement:'bottom'},
+  {selector:'.phase2-toolbar-card', title:'Search this offering', copy:'Search inside the offering and use the filters to narrow results quickly.', placement:'bottom'},
+  {selector:'.offering-category-strip', title:'Offering categories', copy:'Start with a category here. Each section below groups the products available under that category.', placement:'top'},
+  {selector:'.phase2-product-stack', title:'Products under each category', copy:'Scroll section by section to browse the products available inside this offering.', placement:'top'},
+  {selector:'.floating-cart-bar', title:'Continue with cart', copy:'Use this quick cart bar whenever you are ready to review items.', placement:'top'}
+];
+</script>
+{% endblock %}

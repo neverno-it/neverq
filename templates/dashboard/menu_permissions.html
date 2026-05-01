@@ -1,0 +1,81 @@
+{% extends "base/dashboard_base.html" %}
+{% load core_extras %}
+{% block content %}
+<div class="mb-4">
+  <h4 class="mb-1" style="font-family:'Rajdhani',sans-serif;font-weight:700;">Menu Permissions</h4>
+  <p class="text-muted mb-0" style="font-size:13px;">
+    Superadmin always sees everything. Configure what other roles can see below.<br>
+    <strong>No boxes checked</strong> for a role = they see their default menu. Once you check anything, they see ONLY the checked items.
+  </p>
+</div>
+
+{% if messages %}{% for msg in messages %}<div class="alert alert-success alert-dismissible fade show" style="border-radius:8px;border:none;">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+  <div class="card border-0 shadow-sm" style="border-radius:10px;overflow:hidden;">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" style="font-size:13px;">
+        <thead>
+          <tr style="background:var(--cf-blue-light);">
+            <th style="min-width:200px;padding-left:16px;">Menu Item</th>
+            {% for rk, rl in all_roles %}
+            <th class="text-center" style="min-width:110px;">
+              <div style="font-size:11px;font-weight:700;color:var(--cf-navy);">{{ rl }}</div>
+              <label style="font-size:10px;color:var(--cf-muted);cursor:pointer;user-select:none;">
+                <input type="checkbox" onchange="toggleCol(this,'{{ rk }}')" style="margin-right:2px;">all
+              </label>
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for section_name, items in sections.items %}
+          <tr style="background:#f0f4f8;">
+            <td colspan="99" style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--cf-navy);padding:10px 16px;">
+              <i class="bi bi-folder2-open me-1"></i> {{ section_name }}
+            </td>
+          </tr>
+          {% for key, label in items %}
+          <tr>
+            <td class="ps-3">
+              <strong>{{ label }}</strong>
+              <code style="font-size:10px;color:#aaa;margin-left:6px;">{{ key }}</code>
+            </td>
+            {% for rk, rl in all_roles %}
+            {% with role_keys=configs|get_item:rk %}
+            <td class="text-center">
+              <input type="checkbox"
+                     name="{{ rk }}__{{ key }}"
+                     class="form-check-input col-{{ rk }}"
+                     {% if key in role_keys %}checked{% endif %}
+                     style="cursor:pointer;">
+            </td>
+            {% endwith %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center" style="border-top:1px solid var(--cf-border);">
+      <span class="text-muted" style="font-size:12px;">
+        <i class="bi bi-info-circle me-1"></i> Changes take effect immediately.
+      </span>
+      <button type="submit" class="btn px-4"
+              style="background:var(--cf-red);color:white;border-radius:7px;font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600;">
+        <i class="bi bi-shield-check me-1"></i> Save Permissions
+      </button>
+    </div>
+  </div>
+</form>
+
+<script>
+function toggleCol(master, role) {
+  document.querySelectorAll('.col-' + role).forEach(function(cb) {
+    cb.checked = master.checked;
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,134 @@
+{% extends "base/dashboard_base.html" %}
+{% load core_extras %}
+{% block content %}
+<div class="cf-card mb-4">
+  <div class="cf-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+      <h4 style="margin:0;">{{ company.name }}</h4>
+      <div class="small text-muted">Company hierarchy, customers, and recent activity.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{% url 'dashboard:building_list' %}?company={{ company.pk }}" class="btn btn-cf-outline btn-sm">Buildings</a>
+      <a href="{% url 'dashboard:cafe_list' %}?company={{ company.pk }}" class="btn btn-cf-outline btn-sm">Cafes</a>
+      <a href="{% url 'dashboard:counter_list' %}" class="btn btn-cf-outline btn-sm">Counters</a>
+      <a href="{% url 'dashboard:company_edit' company.pk %}" class="btn btn-cf-primary btn-sm">Edit Company</a>
+    </div>
+  </div>
+    <div class="cf-card-body">
+    <div class="row g-3 mb-4">
+      <div class="col-md-3"><div class="cf-stat"><div class="small text-muted">Phone</div><div class="fw-bold">{{ company.phone|default:"-" }}</div></div></div>
+      <div class="col-md-3"><div class="cf-stat"><div class="small text-muted">GSTIN</div><div class="fw-bold">{{ company.company_gst|default:"-" }}</div></div></div>
+      <div class="col-md-3"><div class="cf-stat"><div class="small text-muted">FSSAI</div><div class="fw-bold">{{ company.fssai_number|default:"-" }}</div></div></div>
+      <div class="col-md-3"><div class="cf-stat"><div class="small text-muted">Billing</div><div class="fw-bold">{{ company.get_bill_company_display }}</div></div></div>
+    </div>
+    <div class="row g-3 mb-4">
+      <div class="col-md-3"><div class="cf-stat"><div class="small text-muted">Customers</div><div class="h4 mb-0">{{ customers.count }}</div></div></div>
+      <div class="col-md-3"><div class="cf-stat"><div class="small text-muted">Buildings</div><div class="h4 mb-0">{{ buildings|length }}</div></div></div>
+      <div class="col-md-3"><div class="cf-stat"><div class="small text-muted">Cafes</div><div class="h4 mb-0">{{ cafes|length }}</div></div></div>
+      <div class="col-md-3"><div class="cf-stat"><div class="small text-muted">Counters</div><div class="h4 mb-0">{{ counters|length }}</div></div></div>
+    </div>
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <div class="border rounded-3 p-3 h-100">
+          <div class="d-flex justify-content-between align-items-center mb-2"><h5 class="mb-0">Buildings</h5><a href="{% url 'dashboard:building_add' %}" class="btn btn-sm btn-cf-outline">Add</a></div>
+          {% for b in buildings %}
+            <div class="py-2 border-bottom">
+              <div class="fw-bold">{{ b.name }}</div>
+              <div class="small text-muted">{% if b.city %}{{ b.city.name }}{% endif %}{% if b.city and b.state %}, {% endif %}{% if b.state %}{{ b.state.name }}{% endif %}</div>
+            </div>
+          {% empty %}<div class="text-muted small">No buildings added yet.</div>{% endfor %}
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="border rounded-3 p-3 h-100">
+          <div class="d-flex justify-content-between align-items-center mb-2"><h5 class="mb-0">Cafes</h5><a href="{% url 'dashboard:cafe_add' %}" class="btn btn-sm btn-cf-outline">Add</a></div>
+          {% for building in buildings %}
+            <div class="py-2 border-bottom">
+              <div class="fw-semibold text-blue">{{ building.name }}</div>
+              {% with building_cafes=cafes_by_building|get_item:building.pk %}
+                {% if building_cafes %}
+                  <div class="small mt-1">
+                    {% for cafe in building_cafes %}
+                      <div class="py-1">• {{ cafe.name }}</div>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <div class="small text-muted mt-1">No cafes linked to this building.</div>
+                {% endif %}
+              {% endwith %}
+            </div>
+          {% endfor %}
+          {% with unassigned=cafes_by_building|get_item:0 %}
+            {% if unassigned %}
+              <div class="py-2">
+                <div class="fw-semibold text-muted">Unassigned cafes</div>
+                <div class="small mt-1">
+                  {% for cafe in unassigned %}<div class="py-1">• {{ cafe.name }}</div>{% endfor %}
+                </div>
+              </div>
+            {% endif %}
+          {% endwith %}
+          {% if not cafes %}<div class="text-muted small">No cafes added yet.</div>{% endif %}
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="border rounded-3 p-3 h-100">
+          <div class="d-flex justify-content-between align-items-center mb-2"><h5 class="mb-0">Counters</h5><a href="{% url 'dashboard:counter_add' %}" class="btn btn-sm btn-cf-outline">Add</a></div>
+          {% for cafe in cafes %}
+            <div class="py-2 border-bottom">
+              <div class="fw-semibold">{{ cafe.name }}</div>
+              <div class="small text-muted mb-1">{% if cafe.building %}{{ cafe.building.name }}{% else %}No building linked{% endif %}</div>
+              {% with cafe_counters=counters_by_cafe|get_item:cafe.pk %}
+                {% if cafe_counters %}
+                  {% for counter in cafe_counters %}
+                    <div class="d-flex justify-content-between small py-1">
+                      <span>• {{ counter.name }}</span>
+                      <span class="badge bg-{% if counter.is_active %}success{% else %}secondary{% endif %}">{% if counter.is_active %}Active{% else %}Inactive{% endif %}</span>
+                    </div>
+                  {% endfor %}
+                {% else %}
+                  <div class="small text-muted">No counters under this cafe.</div>
+                {% endif %}
+              {% endwith %}
+            </div>
+          {% endfor %}
+          {% with loose_counters=counters_by_cafe|get_item:0 %}
+            {% if loose_counters %}
+              <div class="py-2">
+                <div class="fw-semibold text-muted">Unassigned counters</div>
+                {% for counter in loose_counters %}
+                  <div class="d-flex justify-content-between small py-1">
+                    <span>• {{ counter.name }}</span>
+                    <span class="badge bg-{% if counter.is_active %}success{% else %}secondary{% endif %}">{% if counter.is_active %}Active{% else %}Inactive{% endif %}</span>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          {% endwith %}
+          {% if not counters %}<div class="text-muted small">No counters added yet.</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="cf-card">
+  <div class="cf-card-header"><h5 class="mb-0">Recent Orders</h5></div>
+  <div class="cf-card-body" style="overflow-x:auto;">
+    <table class="cf-table">
+      <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Total</th><th>Date</th></tr></thead>
+      <tbody>
+        {% for order in recent_orders %}
+        <tr>
+          <td><a href="{% url 'dashboard:order_detail' order.pk %}">#{{ order.order_number|short_order_no }}</a></td>
+          <td>{{ order.customer.name|default:'—' }}</td>
+          <td>{{ order.status_label }}</td>
+          <td>₹{{ order.total_amount }}</td>
+          <td>{{ order.created_at|date:"d M Y, h:i A" }}</td>
+        </tr>
+        {% empty %}<tr><td colspan="5" class="text-center text-muted py-4">No recent orders.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

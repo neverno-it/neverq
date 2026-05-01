@@ -1,0 +1,255 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  .live-dot  { width:8px;height:8px;border-radius:50%;background:#10B981;display:inline-block;animation:livepulse 1.5s infinite;vertical-align:middle; }
+  .sched-dot { width:8px;height:8px;border-radius:50%;background:#3B82F6;display:inline-block;vertical-align:middle; }
+  @keyframes livepulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .status-pill{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:20px;}
+  .sp-pending {background:#FFF3E0;color:#E65100;}
+  .sp-approved{background:#E8F5E9;color:#2E7D32;}
+  .sp-rejected{background:#FFEBEE;color:#C62828;}
+  .banner-thumb{width:56px;height:40px;object-fit:cover;border-radius:5px;flex-shrink:0;}
+  .banner-thumb-ph{width:56px;height:40px;background:linear-gradient(135deg,var(--cf-navy),var(--cf-blue));border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+  .banner-select-row { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--cf-border); cursor:pointer; }
+  .banner-select-row:hover { background:var(--cf-surface); }
+  .banner-select-row:last-child { border-bottom:none; }
+</style>
+{% endblock %}
+
+{% block page_heading %}Banners{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  <!-- ── Left: banners for this company ── -->
+  <div class="col-lg-5">
+
+    <!-- Live now -->
+    <div class="cf-card mb-3">
+      <div class="cf-card-header">
+        <h5>
+          <span class="live-dot me-2"></span>Live Banners
+        </h5>
+        <span class="badge" style="background:#10B981;color:white;font-size:11px;">
+          {{ live_banners|length }} active
+        </span>
+      </div>
+      {% if live_banners %}
+      <div>
+        {% for ad in live_banners %}
+        <div class="banner-select-row" onclick="previewBanner('{{ ad.display_image.url|default:'' }}','{{ ad.name|default:"(untitled)"|escapejs }}','Live now','')">
+          {% if ad.display_image %}
+            <img src="{{ ad.display_image.url }}" class="banner-thumb" alt="">
+          {% else %}
+            <div class="banner-thumb-ph">📢</div>
+          {% endif %}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;color:var(--cf-navy);">{{ ad.name|default:"(untitled)" }}</div>
+            <div style="font-size:11px;color:var(--cf-muted);">
+              {% with sites=ad.companies.all %}
+                {% if sites %}{% for co in sites %}{{ co.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                {% else %}{{ ad.company.name }}{% endif %}
+              {% endwith %}
+            </div>
+          </div>
+          <span style="font-size:11px;color:#10B981;font-weight:600;white-space:nowrap;">
+            <span class="live-dot me-1"></span>Live
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="cf-card-body text-muted text-center py-3" style="font-size:13px;">
+        No live banners for your company right now.
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Scheduled -->
+    {% if scheduled_banners %}
+    <div class="cf-card mb-3">
+      <div class="cf-card-header">
+        <h5>
+          <span class="sched-dot me-2"></span>Scheduled
+        </h5>
+        <span class="badge" style="background:#3B82F6;color:white;font-size:11px;">
+          {{ scheduled_banners|length }}
+        </span>
+      </div>
+      <div>
+        {% for ad in scheduled_banners %}
+        <div class="banner-select-row" onclick="previewBanner('{{ ad.display_image.url|default:'' }}','{{ ad.name|default:"(untitled)"|escapejs }}','Scheduled','{% if ad.next_live_date %}{{ ad.next_live_date|date:"d M Y" }}{% endif %}')">
+          {% if ad.display_image %}
+            <img src="{{ ad.display_image.url }}" class="banner-thumb" alt="">
+          {% else %}
+            <div class="banner-thumb-ph">📢</div>
+          {% endif %}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;color:var(--cf-navy);">{{ ad.name|default:"(untitled)" }}</div>
+            {% if ad.next_live_date %}
+            <div style="font-size:11px;color:#3B82F6;">Goes live {{ ad.next_live_date|date:"d M Y" }}</div>
+            {% endif %}
+          </div>
+          <span style="font-size:11px;color:#3B82F6;font-weight:600;white-space:nowrap;">
+            <span class="sched-dot me-1"></span>Sched.
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Preview panel -->
+    <div class="cf-card" id="previewCard" style="display:none;">
+      <div class="cf-card-header"><h5><i class="bi bi-eye me-2"></i>Preview</h5></div>
+      <div class="cf-card-body" style="padding:10px;">
+        <div style="width:100%;aspect-ratio:620/330;background:#F1F5F9;border-radius:7px;overflow:hidden;margin-bottom:8px;">
+          <img id="previewImg" src="" style="width:100%;height:100%;object-fit:cover;display:none;">
+          <div id="previewNoImg" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:36px;">📢</div>
+        </div>
+        <div id="previewName" style="font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;color:var(--cf-navy);"></div>
+        <div id="previewStatus" style="font-size:12px;margin-top:3px;"></div>
+        <div id="previewDate"   style="font-size:11px;color:var(--cf-muted);margin-top:2px;"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Right: submit new + my submissions ── -->
+  <div class="col-lg-7">
+
+    <div class="cf-card mb-4">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-plus-circle me-2 text-blue"></i>Request a New Banner</h5>
+      </div>
+      <div class="cf-card-body">
+        <div class="alert alert-info" style="font-size:13px;margin-bottom:16px;">
+          <i class="bi bi-info-circle me-2"></i>
+          Submitted banners go to <strong>superadmin for approval</strong> before going live.
+          Pick an image from the media library — uploads are managed by superadmin.
+        </div>
+        <a href="{% url 'dashboard:advertise_add' %}" class="btn btn-cf-primary">
+          <i class="bi bi-send me-1"></i>Submit Banner Request
+        </a>
+        <a href="{% url 'dashboard:media_library' %}" class="btn btn-cf-outline ms-2">
+          <i class="bi bi-images me-1"></i>Browse Media Library
+        </a>
+      </div>
+    </div>
+
+    <!-- My submissions -->
+    <div class="cf-card">
+      <div class="cf-card-header">
+        <h5><i class="bi bi-clock-history me-2"></i>My Submissions</h5>
+      </div>
+
+      {% if my_submissions %}
+      <div style="overflow-x:auto;">
+        <table class="cf-table">
+          <thead>
+            <tr><th>Image</th><th>Name</th><th>Schedule</th><th>Status</th><th>Note</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for ad in my_submissions %}
+            <tr>
+              <td>
+                {% if ad.display_image %}
+                  <img src="{{ ad.display_image.url }}" class="banner-thumb" alt="">
+                {% else %}
+                  <div class="banner-thumb-ph">📢</div>
+                {% endif %}
+              </td>
+              <td>
+                <div class="fw-600" style="font-size:13px;">{{ ad.name|default:"(untitled)" }}</div>
+                <small class="text-muted">{{ ad.created_at|date:"d M Y"|default:"" }}</small>
+              </td>
+              <td>
+                <small class="text-muted">
+                  {% with lbl=ad.schedule_label %}
+                  {% if lbl == 'live' %}
+                    <span class="live-dot"></span> Live now
+                  {% elif lbl == 'scheduled' %}
+                    <span class="sched-dot"></span>
+                    {% if ad.next_live_date %}{{ ad.next_live_date|date:"d M Y" }}{% else %}Scheduled{% endif %}
+                  {% elif lbl == 'expired' %}
+                    Expired
+                  {% elif lbl == 'inactive' %}
+                    Inactive
+                  {% elif lbl == 'pending' %}
+                    Awaiting approval
+                  {% elif lbl == 'rejected' %}
+                    <span style="color:var(--cf-red);">Rejected</span>
+                  {% endif %}
+                  {% endwith %}
+                </small>
+              </td>
+              <td><span class="status-pill sp-{{ ad.status }}">{{ ad.get_status_display }}</span></td>
+              <td>
+                {% if ad.review_note %}
+                  <small class="text-muted" title="{{ ad.review_note }}">{{ ad.review_note|truncatechars:28 }}</small>
+                {% else %}—{% endif %}
+              </td>
+              <td>
+                {% if ad.status != 'approved' %}
+                <div class="d-flex gap-1">
+                  <a href="{% url 'dashboard:advertise_edit' ad.pk %}"
+                     class="btn btn-sm btn-cf-outline" style="padding:3px 8px;font-size:11px;">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                  <form method="post" action="{% url 'dashboard:advertise_delete' ad.pk %}"
+                        onsubmit="return confirm('Delete this banner?');" style="margin:0;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-cf-danger" style="padding:3px 8px;font-size:11px;">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                </div>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="cf-card-body text-center text-muted py-4" style="font-size:13px;">
+        You haven't submitted any banners yet.
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function previewBanner(imgUrl, name, status, nextDate) {
+  const card  = document.getElementById('previewCard');
+  const img   = document.getElementById('previewImg');
+  const noImg = document.getElementById('previewNoImg');
+  const pName = document.getElementById('previewName');
+  const pStat = document.getElementById('previewStatus');
+  const pDate = document.getElementById('previewDate');
+
+  card.style.display = '';
+  pName.textContent  = name;
+
+  if (status === 'Live now') {
+    pStat.innerHTML = '<span style="color:#10B981;font-weight:700;">● Live now</span>';
+  } else {
+    pStat.innerHTML = '<span style="color:#3B82F6;font-weight:700;">● Scheduled</span>';
+  }
+  pDate.textContent = nextDate ? 'Goes live: ' + nextDate : '';
+
+  if (imgUrl) {
+    img.src = imgUrl;
+    img.style.display = '';
+    noImg.style.display = 'none';
+  } else {
+    img.style.display = 'none';
+    noImg.style.display = 'flex';
+  }
+}
+</script>
+{% endblock %}

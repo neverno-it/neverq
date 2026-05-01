@@ -1,0 +1,165 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  .reorder-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;margin:0 0 12px;border:1px solid #fde68a;border-radius:12px;background:#fffbeb}
+  .reorder-copy{font-size:12.5px;color:#92400e}
+  .drag-handle{width:30px;height:30px;border:1px dashed var(--cf-border);border-radius:8px;background:#fff;color:var(--cf-muted);display:inline-flex;align-items:center;justify-content:center;cursor:grab}
+  .drag-handle:active{cursor:grabbing}
+  .sort-row.dragging{opacity:.45}
+</style>
+{% endblock %}
+{% block content %}
+{% url 'dashboard:counter_bulk_delete' as bulk_delete_url %}
+<div class="cf-card">
+  <div class="cf-card-header">
+    <div>
+      <h5><i class="bi bi-qr-code-scan"></i>Counters</h5>
+      <div style="font-size:13px;color:var(--cf-muted);margin-top:2px;">Kitchen pickup counters and their Bluetooth printer routes</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'orders:pickup_scan_terminal' %}" class="btn btn-cf-ghost btn-sm"><i class="bi bi-upc-scan me-1"></i>Scan Terminal</a>
+      <a href="{% url 'dashboard:counter_ticket_board' %}" class="btn btn-cf-ghost btn-sm"><i class="bi bi-grid-3x3-gap me-1"></i>Board</a>
+      {% if lp.add %}<a href="{% url 'dashboard:counter_add' %}" class="btn btn-cf-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>Add Counter</a>{% endif %}
+    </div>
+  </div>
+  <div class="cf-card-body pb-0">
+    {% if lp.delete %}
+    {% include "dashboard/includes/bulk_delete_controls.html" with bulk_form_id='counter-bulk-delete-form' bulk_action=bulk_delete_url bulk_confirm_message='Delete selected counters?' %}
+    {% endif %}
+    {% if can_drag_sort %}
+    <div id="counterReorderBar" class="reorder-bar d-none">
+      <div class="reorder-copy"><strong>Reorder mode active.</strong> Drag counters into the right sequence and save to confirm.</div>
+      <div class="d-flex gap-2">
+        <button type="button" id="counterReorderReset" class="btn btn-cf-outline btn-sm">Reset</button>
+        <button type="button" id="counterReorderSave" class="btn btn-cf-primary btn-sm">Save Order</button>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="cf-table">
+      <thead>
+        <tr>
+          <th style="width:44px;"></th>
+          <th style="width:40px;"></th>
+          <th>Counter</th>
+          <th>Location</th>
+          <th>Printer Route</th>
+          <th>Auto Print</th>
+          <th>Status</th>
+          <th style="width:140px;"></th>
+        </tr>
+      </thead>
+      <tbody id="counterSortBody">
+        {% for counter in counters %}
+        <tr id="ctrow-{{ counter.pk }}" class="sort-row" data-sort-id="{{ counter.pk }}">
+          <td><input type="checkbox" class="form-check-input bulk-item-check" data-bulk-form-input="counter-bulk-delete-form" form="counter-bulk-delete-form" name="ids" value="{{ counter.pk }}"></td>
+          <td>
+            {% if can_drag_sort %}
+            <button type="button" class="drag-handle" title="Drag to reorder"><i class="bi bi-grip-vertical"></i></button>
+            {% endif %}
+          </td>
+          <td><div class="td-main">{{ counter.name }}</div>{% if counter.code %}<div class="td-sub">Code: {{ counter.code }}</div>{% endif %}</td>
+          <td><div class="td-main" style="font-size:13.5px;">{{ counter.company.name }}</div>{% if counter.cafe %}<div class="td-sub">{{ counter.cafe.name }}</div>{% endif %}</td>
+          <td><div class="td-main" style="font-size:13px;">{{ counter.effective_printer_label|default:"Browser default" }}</div><code style="font-size:11px;color:var(--cf-muted);">{{ counter.printer_route_key }}</code></td>
+          <td><div class="td-sub">On ready: <strong>{% if counter.auto_print_on_ready %}Yes{% else %}No{% endif %}</strong></div><div class="td-sub">On scan: <strong>{% if counter.auto_print_on_scan %}Yes{% else %}No{% endif %}</strong></div></td>
+          <td><span class="badge-cf {% if counter.is_active %}badge-active{% else %}badge-inactive{% endif %}">{% if counter.is_active %}Active{% else %}Inactive{% endif %}</span></td>
+          <td>
+            <div class="d-flex gap-1 justify-content-end">
+              {% if lp.edit %}<a href="{% url 'dashboard:counter_edit' counter.pk %}?return_to={{ request.get_full_path|urlencode }}&return_anchor=ctrow-{{ counter.pk }}" class="btn btn-cf-ghost btn-icon" title="Edit"><i class="bi bi-pencil"></i></a>{% endif %}
+              {% if lp.toggle %}<button type="submit" form="counter-bulk-delete-form" formaction="{% url 'dashboard:counter_toggle' counter.pk %}" formmethod="post" class="btn btn-cf-ghost btn-icon" title="Toggle"><i class="bi {% if counter.is_active %}bi-toggle-on text-green{% else %}bi-toggle-off text-muted{% endif %}"></i></button>
+              {% endif %}{% if lp.delete %}<button type="submit" form="counter-bulk-delete-form" formaction="{% url 'dashboard:counter_delete' counter.pk %}" formmethod="post" class="btn btn-icon" style="border:1.5px solid #fecaca;color:var(--cf-red);background:#fff;border-radius:var(--cf-radius-sm);width:34px;height:34px;" title="Delete" onclick="return confirm('Delete {{ counter.name|escapejs }}?');"><i class="bi bi-trash"></i></button>{% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🖨️</div><h6>No counters yet</h6><p><a href="{% url 'dashboard:counter_add' %}">Add your first counter</a> to enable kitchen pickup scanning.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if can_drag_sort %}
+<script>
+(function () {
+  const tbody = document.getElementById('counterSortBody');
+  const bar = document.getElementById('counterReorderBar');
+  const saveBtn = document.getElementById('counterReorderSave');
+  const resetBtn = document.getElementById('counterReorderReset');
+  const csrf = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+  if (!tbody || !bar || !saveBtn || !resetBtn) return;
+
+  let draggedRow = null;
+  let initialOrder = currentOrder();
+
+  function currentOrder() { return Array.from(tbody.querySelectorAll('tr[data-sort-id]')).map(row => row.dataset.sortId); }
+  function syncBar() { bar.classList.toggle('d-none', JSON.stringify(initialOrder) === JSON.stringify(currentOrder())); }
+  function restoreOrder() {
+    initialOrder.forEach(id => {
+      const row = tbody.querySelector(`tr[data-sort-id="${id}"]`);
+      if (row) tbody.appendChild(row);
+    });
+    syncBar();
+  }
+  function getAfterRow(y) {
+    const rows = Array.from(tbody.querySelectorAll('tr[data-sort-id]')).filter(row => row !== draggedRow);
+    let closest = { offset: Number.NEGATIVE_INFINITY, element: null };
+    rows.forEach(row => {
+      const box = row.getBoundingClientRect();
+      const offset = y - box.top - (box.height / 2);
+      if (offset < 0 && offset > closest.offset) closest = { offset, element: row };
+    });
+    return closest.element;
+  }
+
+  tbody.querySelectorAll('.drag-handle').forEach(handle => {
+    handle.setAttribute('draggable', 'true');
+    handle.addEventListener('dragstart', event => {
+      draggedRow = handle.closest('tr[data-sort-id]');
+      if (!draggedRow) return;
+      draggedRow.classList.add('dragging');
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', draggedRow.dataset.sortId);
+    });
+    handle.addEventListener('dragend', () => {
+      if (draggedRow) draggedRow.classList.remove('dragging');
+      draggedRow = null;
+      syncBar();
+    });
+  });
+
+  tbody.addEventListener('dragover', event => {
+    if (!draggedRow) return;
+    event.preventDefault();
+    const afterRow = getAfterRow(event.clientY);
+    if (!afterRow) tbody.appendChild(draggedRow);
+    else if (afterRow !== draggedRow) tbody.insertBefore(draggedRow, afterRow);
+  });
+
+  resetBtn.addEventListener('click', restoreOrder);
+  saveBtn.addEventListener('click', () => {
+    if (!confirm('Save the new counter order?')) return;
+    saveBtn.disabled = true;
+    fetch('{% url "dashboard:counter_reorder" %}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: JSON.stringify({ ids: currentOrder() })
+    })
+      .then(r => r.json().then(data => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok || !data.success) throw new Error(data.message || 'Could not save order.');
+        initialOrder = currentOrder();
+        syncBar();
+      })
+      .catch(err => alert(err.message || 'Could not save order.'))
+      .finally(() => { saveBtn.disabled = false; });
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

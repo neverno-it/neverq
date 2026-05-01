@@ -1,0 +1,66 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<div class="cf-card" style="max-width:720px;">
+  <div class="cf-card-header">
+    <h5><i class="bi bi-megaphone-fill me-2"></i>Send Broadcast Notification</h5>
+  </div>
+  <div class="cf-card-body">
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert {% if msg.tags == 'error' %}alert-danger{% else %}alert-success{% endif %} mb-3">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      {% if request.user.role == 'superadmin' %}
+      <div class="mb-3">
+        <label class="form-label fw-bold">Company</label>
+        <select name="company" class="form-select" onchange="this.form.action='?company='+this.value; this.form.method='get'; this.form.submit();">
+          <option value="">— All Companies —</option>
+          {% for co in companies %}
+            <option value="{{ co.pk }}" {% if selected_company and selected_company.pk == co.pk %}selected{% endif %}>{{ co.name }}</option>
+          {% endfor %}
+        </select>
+        <div class="small text-muted mt-1">Select a company to target its customers, or leave blank for all.</div>
+      </div>
+      {% endif %}
+      <div class="mb-3">
+        <label class="form-label fw-bold">Target Customer <span class="text-muted fw-normal">(optional — leave blank to send to all)</span></label>
+        <select name="customer" class="form-select">
+          <option value="">— All Customers {% if selected_company %}of {{ selected_company.name }}{% endif %} —</option>
+          {% for cust in customers %}
+            <option value="{{ cust.pk }}">{{ cust.name }} — {{ cust.email }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-bold">Notification Type</label>
+        <select name="notif_type" class="form-select">
+          <option value="broadcast">📢 Broadcast (General)</option>
+          <option value="promo">🎁 Promotion / Offer / Coupon</option>
+          <option value="system">⚙️ System (Maintenance / Server)</option>
+        </select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-bold">Title <span class="text-danger">*</span></label>
+        <input type="text" name="title" class="form-control" maxlength="255" placeholder="e.g. 🎉 Special Offer Today!" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-bold">Message</label>
+        <textarea name="message" class="form-control" rows="4" placeholder="e.g. Get 20% off on all meals today. Use coupon SAVE20 at checkout."></textarea>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-bold">Image <span class="text-muted fw-normal">(optional — shown in notification popup)</span></label>
+        <input type="file" name="image" class="form-control" accept="image/*">
+        <div class="small text-muted mt-1">JPG, PNG, GIF. Max 5MB. &nbsp;|&nbsp; <strong>Recommended size: 960 × 400 px</strong> (landscape banner, 2.4:1 ratio) — fits the popup cleanly on both mobile and desktop.</div>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-cf-primary">
+          <i class="bi bi-send me-1"></i>Send Notification
+        </button>
+        <a href="{% url 'dashboard:broadcast_notification_list' %}" class="btn btn-cf-soft">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

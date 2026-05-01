@@ -1,0 +1,94 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  .stock-stat-card{background:#fff;border:1px solid var(--cf-border);border-radius:14px;box-shadow:var(--cf-shadow);padding:16px 18px;height:100%}
+  .stock-stat-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--cf-muted);margin-bottom:6px}
+  .stock-stat-value{font-family:'Rajdhani',sans-serif;font-size:30px;font-weight:700;color:var(--cf-navy);line-height:1}
+  .stock-shell .stock-inline-form{display:grid;grid-template-columns:minmax(90px,110px) minmax(90px,110px) minmax(140px,1fr) auto;gap:10px;align-items:center}
+  .stock-shell .stock-inline-form .form-control{min-height:40px}
+  .stock-shell .stock-inline-form .btn{min-height:40px;white-space:nowrap}
+  .stock-shell .ledger-badge{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:700;background:#eef2f7;color:#475569;text-transform:lowercase}
+  .stock-shell .stock-row-alert{background:#fff8eb}
+  @media (max-width: 991px){
+    .stock-shell .stock-inline-form{grid-template-columns:1fr 1fr}
+    .stock-shell .stock-inline-form .stock-note{grid-column:1 / -1}
+    .stock-shell .stock-inline-form .btn{grid-column:1 / -1}
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="stock-shell">
+  <div class="page-header mb-3">
+    <h4><i class="bi bi-boxes me-2"></i>Stock Management</h4>
+    <div class="page-desc">Update live web stock (<strong>web_qty</strong>) and POS stock (<strong>pos_qty</strong>) product-wise without leaving the page.</div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-md-3"><div class="stock-stat-card"><div class="stock-stat-label">Products</div><div class="stock-stat-value">{{ stock_stats.total_products }}</div><div class="small text-muted mt-2">Products available for stock control</div></div></div>
+    <div class="col-md-3"><div class="stock-stat-card"><div class="stock-stat-label">Low Web Stock</div><div class="stock-stat-value" style="color:#e65100;">{{ stock_stats.low_web }}</div><div class="small text-muted mt-2">Web qty between 0 and 5</div></div></div>
+    <div class="col-md-3"><div class="stock-stat-card"><div class="stock-stat-label">Low POS Stock</div><div class="stock-stat-value" style="color:#c62828;">{{ stock_stats.low_pos }}</div><div class="small text-muted mt-2">POS qty between 0 and 5</div></div></div>
+    <div class="col-md-3"><div class="stock-stat-card"><div class="stock-stat-label">Unlimited Web</div><div class="stock-stat-value" style="color:#1565c0;">{{ stock_stats.unlimited_web }}</div><div class="small text-muted mt-2">Products using -1 for unlimited web stock</div></div></div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-xl-8">
+      <div class="cf-card">
+        <div class="cf-card-header">
+          <h5><i class="bi bi-box-seam me-2"></i>Product Stock</h5>
+          <div class="small text-muted">Each save creates a manual stock ledger entry when the quantity changes.</div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="cf-table">
+            <thead><tr><th>Product</th><th>Company</th><th style="min-width:430px;">Live Stock Update</th></tr></thead>
+            <tbody>
+              {% for p in products %}
+              <tr class="{% if p.web_qty >= 0 and p.web_qty <= 5 or p.pos_qty >= 0 and p.pos_qty <= 5 %}stock-row-alert{% endif %}">
+                <td>
+                  <div class="td-main">{{ p.name }}</div>
+                  <div class="td-sub">{% if p.web_qty == -1 %}Web stock is unlimited{% else %}Web: {{ p.web_qty }}{% endif %} · POS: {{ p.pos_qty }}</div>
+                </td>
+                <td class="td-sub">{{ p.company.name|default:"—" }}</td>
+                <td>
+                  <form method="post" class="stock-inline-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="product_id" value="{{ p.pk }}">
+                    <input type="number" name="web_qty" value="{{ p.web_qty }}" class="form-control form-control-sm" placeholder="Web qty" title="Web qty (-1 = unlimited)">
+                    <input type="number" name="pos_qty" value="{{ p.pos_qty }}" class="form-control form-control-sm" placeholder="POS qty" title="POS qty">
+                    <input type="text" name="note" placeholder="Note (optional)" class="form-control form-control-sm stock-note">
+                    <button class="btn btn-cf-primary btn-sm"><i class="bi bi-check2-circle me-1"></i>Save</button>
+                  </form>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3" class="text-center text-muted py-4">No products found.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-4">
+      <div class="cf-card">
+        <div class="cf-card-header"><h5><i class="bi bi-journal-text me-2"></i>Recent Ledger</h5></div>
+        <div class="cf-card-body p-0">
+          <table class="cf-table" style="font-size:12px;">
+            <thead><tr><th>Product</th><th>Qty</th><th>Source</th><th>When</th></tr></thead>
+            <tbody>
+              {% for e in recent_ledger %}
+              <tr>
+                <td>{{ e.product.name|truncatechars:18 }}</td>
+                <td><span class="{% if e.qty < 0 %}text-danger{% else %}text-success{% endif %} fw-bold">{% if e.qty > 0 %}+{% endif %}{{ e.qty }}</span></td>
+                <td><span class="ledger-badge">{{ e.source }}</span></td>
+                <td class="text-muted">{{ e.created_at|date:"d/m H:i" }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center text-muted py-3">No entries yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

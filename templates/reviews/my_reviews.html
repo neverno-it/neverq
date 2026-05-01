@@ -1,0 +1,80 @@
+{% extends "base/customer_base.html" %}
+{% load core_extras %}
+{% block content %}
+<div class="container py-3 py-md-4" style="max-width:880px;">
+  <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+    <div>
+      <h1 style="margin:0;font-size:clamp(28px,4vw,40px);line-height:.95;">My Reviews</h1>
+      <div class="text-muted" style="font-size:14px;margin-top:6px;">Rate delivered food and keep your feedback in one place.</div>
+    </div>
+    <a href="{% url 'orders:order_history' %}" class="btn btn-cf-outline">My Orders</a>
+  </div>
+
+  {% if reviewable_orders %}
+    <div style="background:#fff;border:1px solid var(--cf-border);border-radius:22px;padding:18px;box-shadow:var(--cf-shadow-soft);margin-bottom:18px;">
+      <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-3">
+        <div>
+          <h4 style="margin:0;font-size:24px;">Pending ratings</h4>
+          <div class="text-muted" style="font-size:13px;">These orders are ready for rating.</div>
+        </div>
+        <span class="pill-muted">{{ reviewable_orders|length }} pending</span>
+      </div>
+      <div class="d-flex flex-column gap-3">
+        {% for order in reviewable_orders %}
+          <div style="border:1px solid var(--cf-border);border-radius:18px;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:800;font-size:20px;color:var(--cf-navy);">{{ order.display_title }}</div>
+              <div class="text-muted" style="font-size:13px;margin-top:4px;">Order #{{ order.order_number|short_order_no }} · {{ order.created_at|date:"d M Y, h:i A" }}</div>
+            </div>
+            <a href="{% url 'reviews:leave_review' order.pk %}" class="btn btn-cf-primary"><i class="bi bi-star-fill me-1"></i>Rate food</a>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {% if reviews %}
+    <div class="d-flex flex-column gap-3">
+      {% for review in reviews %}
+        <div style="background:#fff;border:1px solid var(--cf-border);border-radius:22px;padding:18px;box-shadow:var(--cf-shadow-soft);">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+            <div>
+              <div style="color:#F59E0B;font-size:20px;line-height:1;">
+                {% for i in review.stars_range %}
+                  {% if i <= review.rating_int %}★{% else %}☆{% endif %}
+                {% endfor %}
+                <span style="font-size:16px;color:var(--cf-navy);margin-left:8px;font-weight:700;">{{ review.rating }}/5</span>
+              </div>
+              {% if review.order %}
+                <div class="text-muted" style="font-size:13px;margin-top:6px;">Order #{{ review.order.order_number|short_order_no }}</div>
+              {% endif %}
+            </div>
+            <div class="text-muted" style="font-size:13px;">{{ review.created_at|date:"d M Y" }}</div>
+          </div>
+          {% if review.details %}
+            <p style="margin:12px 0 0;font-size:14px;color:var(--cf-text);">{{ review.details }}</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% elif not reviewable_orders %}
+    <div class="empty-state">
+      <div style="font-size:56px;margin-bottom:10px;">⭐</div>
+      <h4>No reviews yet</h4>
+      <p class="text-muted">Once you receive an order, you can rate it from here.</p>
+      <a href="{% url 'orders:order_history' %}" class="btn btn-cf-primary mt-2">View Orders</a>
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+window.NEVERQ_PAGE_TOUR_KEY = 'my-reviews';
+window.NEVERQ_PAGE_TOUR = [
+  {selector:'.container.py-3', title:'Reviews hub', copy:'This page keeps your ratings and review opportunities together.', placement:'bottom'},
+  {selector:'div[style*="Pending ratings"] , .btn.btn-cf-primary', title:'Pending reviews', copy:'Whenever an order is ready for rating, you can start the review flow from here.', placement:'bottom'},
+  {selector:'div[style*="No reviews yet"], div[style*="background:#fff"]', title:'Review history', copy:'Your submitted reviews stay listed here for quick reference.', placement:'top'}
+];
+</script>
+{% endblock %}

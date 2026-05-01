@@ -1,0 +1,95 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<div style="max-width:640px;">
+  <div class="cf-card">
+    <div class="cf-card-header">
+      <h5><i class="bi bi-cup-hot me-2"></i>{{ page_title }}</h5>
+      <a href="{% url 'dashboard:cafe_list' %}" class="btn btn-cf-outline btn-sm">← Back to Cafeterias</a>
+    </div>
+    <div class="cf-card-body">
+      <form method="post">{% csrf_token %}
+        <div class="row g-3">
+
+          <!-- Hierarchy breadcrumb hint -->
+          <div class="col-12">
+            <div class="p-3 rounded-3 d-flex gap-3 align-items-center flex-wrap"
+                 style="background:#eef4ff;font-size:13px;font-weight:600;">
+              <span style="color:#888;">Company</span>
+              <i class="bi bi-arrow-right text-muted"></i>
+              <span style="color:#888;">Location</span>
+              <i class="bi bi-arrow-right text-muted"></i>
+              <span style="color:#888;">Building</span>
+              <i class="bi bi-arrow-right text-muted"></i>
+              <span class="badge bg-primary px-3 py-2">Cafeteria ← You are here</span>
+              <i class="bi bi-arrow-right text-muted"></i>
+              <span style="color:#888;">Counters</span>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Company <span class="text-danger">*</span></label>
+            <select name="company" class="form-select" required id="companySelect" onchange="loadBuildings()">
+              <option value="">— Select company —</option>
+              {% for co in companies %}
+              <option value="{{ co.pk }}" {% if cafe.company_id == co.pk %}selected{% endif %}>{{ co.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Building <small class="text-muted">(optional)</small></label>
+            <select name="building" class="form-select" id="buildingSelect">
+              <option value="">— Not linked to a building —</option>
+              {% for b in buildings %}
+              <option value="{{ b.pk }}"
+                      data-company="{{ b.company_id }}"
+                      {% if cafe.building_id == b.pk %}selected{% endif %}>
+                {{ b.name }}{% if b.location %} · {{ b.location.name }}{% endif %}
+              </option>
+              {% endfor %}
+            </select>
+            <small class="text-muted">Filter buildings by selecting a company first.</small>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Cafeteria Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control form-control-lg" required
+                   value="{{ cafe.name|default:'' }}" placeholder="e.g. Main Canteen, Block A Cafeteria">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Status</label>
+            <div class="form-check form-switch mt-2">
+              <input class="form-check-input" type="checkbox" name="is_active" id="isActive"
+                     {% if not cafe or cafe.is_active %}checked{% endif %}
+                     style="width:44px;height:22px;">
+              <label class="form-check-label" for="isActive">Active</label>
+            </div>
+          </div>
+
+          <div class="col-12 d-flex gap-2 pt-2">
+            <button type="submit" class="btn btn-cf-primary px-4">
+              <i class="bi bi-check-circle me-1"></i>Save Cafeteria
+            </button>
+            <a href="{% url 'dashboard:cafe_list' %}" class="btn btn-cf-outline">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+function loadBuildings() {
+  const coId = document.getElementById('companySelect').value;
+  document.querySelectorAll('#buildingSelect option').forEach(opt => {
+    if (!opt.value) { opt.style.display = ''; return; }
+    opt.style.display = (!coId || opt.dataset.company === coId) ? '' : 'none';
+  });
+  // Reset selection if current value no longer visible
+  const sel = document.getElementById('buildingSelect');
+  const current = sel.options[sel.selectedIndex];
+  if (current && current.value && current.style.display === 'none') sel.value = '';
+}
+window.addEventListener('DOMContentLoaded', loadBuildings);
+</script>
+{% endblock %}

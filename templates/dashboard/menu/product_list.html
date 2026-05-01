@@ -1,0 +1,547 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<style>
+  .drag-handle { cursor: grab; color: var(--cf-muted); font-size: 17px; padding: 0 6px; user-select: none; }
+  .drag-handle:active { cursor: grabbing; }
+  .sortable-ghost { opacity: .35; background: var(--cf-blue-light); }
+  #sort-save-bar { display: none; position: sticky; top: 60px; z-index: 90; background: var(--cf-warning-light); border: 1px solid var(--cf-warning); border-radius: var(--cf-radius-sm); padding: 10px 16px; margin-bottom: 12px; align-items: center; gap: 12px; }
+  #sort-save-bar.visible { display: flex; }
+  .copy-price-preview { border: 1.5px solid var(--cf-border); border-radius: var(--cf-radius-sm); background: #fff; overflow: hidden; }
+  .copy-price-row { display: grid; grid-template-columns: minmax(0, 1fr) 82px minmax(96px, 120px); gap: 10px; align-items: center; padding: 9px 12px; border-top: 1px solid var(--cf-border); }
+  .copy-price-row:first-child { border-top: 0; }
+  .copy-price-row.is-head { background: #f7f9fe; color: var(--cf-muted); font-size: 11px; font-weight: 700; letter-spacing: 0; text-transform: uppercase; }
+  .copy-price-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cf-navy); font-weight: 700; }
+  .copy-price-original { color: var(--cf-muted); font-size: 12.5px; text-align: right; }
+  .copy-price-copy { color: var(--cf-navy); font-weight: 800; text-align: right; }
+  .copy-price-input { width: 100%; min-width: 0; text-align: right; font-weight: 700; color: var(--cf-navy); }
+  @media (max-width: 576px) {
+    .copy-price-row { grid-template-columns: minmax(0, 1fr) minmax(96px, 120px); }
+    .copy-price-original, .copy-price-original-head { display: none; }
+  }
+</style>
+{% endblock %}
+{% block content %}
+{% url 'dashboard:product_bulk_delete' as bulk_delete_url %}
+
+{# ── Sort-save notification bar ───────────────────────────── #}
+{% if can_manage_products %}
+<div id="sort-save-bar">
+  <i class="bi bi-arrows-move text-warning"></i>
+  <span style="flex:1;font-size:13.5px;font-weight:600;">Order changed — confirm to save.</span>
+  <button id="sort-confirm-btn" class="btn btn-cf-primary btn-sm">
+    <i class="bi bi-check2 me-1"></i>Save Order
+  </button>
+  <button id="sort-cancel-btn" class="btn btn-cf-ghost btn-sm">Cancel</button>
+</div>
+{% endif %}
+
+{# ── Filters ───────────────────────────────────────────────── #}
+<div class="filter-card">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-md-4">
+      <label class="filter-label">Search</label>
+      <div class="input-group">
+        <span class="input-group-text" style="border:1.5px solid var(--cf-border);border-right:none;background:#fff;border-radius:var(--cf-radius-sm) 0 0 var(--cf-radius-sm);"><i class="bi bi-search text-muted"></i></span>
+        <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Product name or code…" style="border-left:none;">
+      </div>
+    </div>
+    {% if request.user.role == 'superadmin' or request.user.role == 'admin' %}
+    <div class="col-md-3">
+      <label class="filter-label">Company</label>
+      <select name="company" class="form-select" onchange="this.form.submit()">
+        <option value="">All Companies</option>
+        {% for co in companies %}
+        <option value="{{ co.pk }}" {% if company_id == co.pk|stringformat:"s" %}selected{% endif %}>{{ co.name|truncatechars:28 }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div class="col-md-3">
+      <label class="filter-label">Category</label>
+      <select name="cat" class="form-select" onchange="this.form.submit()">
+        <option value="">All Categories</option>
+        {% for cat in categories %}
+        <option value="{{ cat.pk }}" {% if cat_id == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.name|truncatechars:28 }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2 d-flex gap-2">
+      <button type="submit" class="btn btn-cf-primary flex-fill">Apply</button>
+      <a href="{% url 'dashboard:product_list' %}" class="btn btn-cf-ghost">Clear</a>
+    </div>
+  </form>
+</div>
+
+{# ── Products Table ────────────────────────────────────────── #}
+<div class="cf-card">
+  <div class="cf-card-header">
+    <div>
+      <h5><i class="bi bi-egg-fried"></i>Products</h5>
+      {% if q %}<div style="font-size:12.5px;color:var(--cf-muted);margin-top:2px;">Search results — drag sort disabled during search</div>{% elif company_id or cat_id %}<div style="font-size:12.5px;color:var(--cf-muted);margin-top:2px;">Filtered results — drag visible rows to update their display order</div>{% endif %}
+    </div>
+    {% if request.user.role == 'superadmin' or request.user.role == 'admin' %}
+    <div class="d-flex gap-2 flex-wrap">
+      {% if lp.bulk_copy or lp.copy %}
+      <button type="button" id="copy-menu-btn" class="btn btn-cf-ghost btn-sm" onclick="openCopyMenuModal()" data-can-copy="{{ lp.copy|yesno:'1,0' }}" data-can-bulk-copy="{{ lp.bulk_copy|yesno:'1,0' }}" title="Copy selected products to another company">
+        <i class="bi bi-layers me-1"></i><span id="copy-menu-btn-label">Copy Menu</span>
+      </button>
+      {% endif %}
+      {% if lp.export %}<button type="button" class="btn btn-cf-ghost btn-sm" onclick="downloadProductsExcel()" title="Download selected products, or all filtered products if nothing is selected"><i class="bi bi-file-earmark-excel me-1"></i>Download Excel</button>{% endif %}
+      {% if lp.bulk_upload %}<a href="{% url 'dashboard:product_bulk_upload' %}" class="btn btn-cf-ghost btn-sm"><i class="bi bi-upload me-1"></i>Bulk Upload</a>{% endif %}
+      {% if lp.add %}<a href="{% url 'dashboard:product_add' %}" class="btn btn-cf-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>Add Product</a>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="cf-card-body pb-0">
+    {% if can_manage_products %}
+    {% include "dashboard/includes/bulk_delete_controls.html" with bulk_form_id='product-bulk-delete-form' bulk_action=bulk_delete_url bulk_confirm_message='Delete selected products?' %}
+    {% endif %}
+  </div>
+
+  <div style="overflow-x:auto;">
+    <table class="cf-table">
+      <thead>
+        <tr>
+          {% if can_manage_products %}
+          <th style="width:44px;"></th>
+          <th style="width:32px;" title="Drag to reorder"></th>{# drag handle #}
+          {% endif %}
+          <th style="min-width:200px;">Product</th>
+          <th>Category</th>
+          <th>Pricing</th>
+          <th title="Web stock quantity">Web Qty</th>
+          <th title="POS stock quantity">POS Qty</th>
+          <th>Web</th>
+          <th>Kiosk</th>
+          <th>POS</th>
+          {% if request.user.role == 'superadmin' %}<th title="Schedule bypass">Bypass</th>{% endif %}
+          <th title="Featured in kiosk">★ Kiosk</th>
+          <th title="Featured on web portal">★ Web</th>
+          <th style="width:130px;"></th>
+        </tr>
+      </thead>
+      <tbody id="products-tbody">
+        {% for p in products %}
+        <tr id="prow-{{ p.pk }}" data-pk="{{ p.pk }}">
+          {% if can_manage_products %}
+          <td><input type="checkbox" class="form-check-input bulk-item-check" data-bulk-form-input="product-bulk-delete-form" data-product-name="{{ p.name }}" data-product-price="{{ p.price }}" form="product-bulk-delete-form" name="ids" value="{{ p.pk }}" onchange="onBulkCheck()"></td>
+          <td>{% if not q %}<span class="drag-handle" title="Drag to reorder"><i class="bi bi-grip-vertical"></i></span>{% endif %}</td>
+          {% endif %}
+          <td>
+            <div class="td-main">{{ p.name }}</div>
+            {% if p.code %}<div class="td-sub">#{{ p.code }}</div>{% endif %}
+            {% if p.company %}<div class="td-sub" style="margin-top:3px;"><span class="badge-cf badge-info" style="font-size:10.5px;">{{ p.company.name }}</span></div>{% endif %}
+            {% if p.is_free_meal_eligible %}<div class="td-sub"><span class="badge-cf" style="background:#E8F5E9;color:#2E7D32;font-size:10.5px;">Free Meal</span></div>{% endif %}
+            {% if p.calories %}<div class="td-sub" style="color:var(--cf-orange);font-size:11.5px;"><i class="bi bi-fire"></i> {{ p.calories }} kcal</div>{% endif %}
+          </td>
+          <td>
+            <div class="td-main" style="font-size:13.5px;">{{ p.category.name }}</div>
+          </td>
+          <td>
+            <span class="fw-700">Staff ₹{{ p.price }}</span>
+            {% if p.company_price > 0 %}<div class="td-sub">Visitor ₹{{ p.company_price }}</div>{% endif %}
+            {% if p.room_service_extra_percent > 0 %}<div class="td-sub">Room +{{ p.room_service_extra_percent }}%</div>{% endif %}
+            {% if p.packing_price > 0 %}<div class="td-sub">+₹{{ p.packing_price }} packing</div>{% endif %}
+          </td>
+          <td>
+            {% if lp.qty_update or lp.field_web_qty or can_limited_product_edit %}
+            <div class="d-flex align-items-center gap-1">
+              <input type="number" min="0" value="{{ p.web_qty }}" class="form-control form-control-sm qty-input" data-pk="{{ p.pk }}" data-type="web" style="width:66px;text-align:center;" {% if request.user.role == 'reports' %}readonly{% endif %}>
+              <button type="button" class="btn btn-sm qty-save-btn" data-pk="{{ p.pk }}" data-type="web" style="padding:4px 9px;background:var(--cf-blue);color:white;border:none;border-radius:6px;font-size:11.5px;display:none;">Save</button>
+            </div>
+            {% else %}
+            <span class="fw-600">{{ p.web_qty }}</span>
+            {% endif %}
+            {% if p.web_qty == 0 %}<div class="td-sub text-warning">Auto-off</div>{% endif %}
+          </td>
+          <td>
+            {% if lp.qty_update or lp.field_pos_qty %}
+            <div class="d-flex align-items-center gap-1">
+              <input type="number" min="0" value="{{ p.pos_qty }}" class="form-control form-control-sm qty-input" data-pk="{{ p.pk }}" data-type="pos" style="width:66px;text-align:center;" {% if request.user.role == 'reports' %}readonly{% endif %}>
+              <button type="button" class="btn btn-sm qty-save-btn" data-pk="{{ p.pk }}" data-type="pos" style="padding:4px 9px;background:var(--cf-orange);color:white;border:none;border-radius:6px;font-size:11.5px;display:none;">Save</button>
+            </div>
+            {% else %}
+            <span class="fw-600">{{ p.pos_qty }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if lp.toggle %}
+            <button onclick="toggleProduct({{ p.pk }}, this)" class="toggle-badge {% if p.is_active %}on{% else %}off{% endif %}" id="status-{{ p.pk }}" title="Toggle web ordering">
+              {% if p.is_active %}Active{% else %}Inactive{% endif %}
+            </button>
+            {% else %}
+            <span class="badge-cf {% if p.is_active %}badge-active{% else %}badge-inactive{% endif %}">{% if p.is_active %}Active{% else %}Inactive{% endif %}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if lp.kiosk_toggle %}
+            <button onclick="toggleKiosk({{ p.pk }}, this)" class="toggle-badge {% if p.is_kiosk_active %}on{% else %}off{% endif %}" id="kiosk-status-{{ p.pk }}" title="Toggle kiosk">
+              {% if p.is_kiosk_active %}Active{% else %}Inactive{% endif %}
+            </button>
+            {% else %}
+            <span class="badge-cf {% if p.is_kiosk_active %}badge-active{% else %}badge-inactive{% endif %}">{% if p.is_kiosk_active %}Active{% else %}Inactive{% endif %}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if lp.pos_toggle or lp.field_is_pos_active %}
+            <button onclick="togglePos({{ p.pk }}, this)" class="toggle-badge {% if p.is_pos_active %}on{% else %}off{% endif %}" id="pos-status-{{ p.pk }}" title="Toggle POS">
+              {% if p.is_pos_active %}Active{% else %}Inactive{% endif %}
+            </button>
+            {% else %}
+            <span class="badge-cf {% if p.is_pos_active %}badge-active{% else %}badge-inactive{% endif %}">{% if p.is_pos_active %}Active{% else %}Inactive{% endif %}</span>
+            {% endif %}
+          </td>
+          {% if request.user.role == 'superadmin' %}
+          <td>
+            <button onclick="toggleBypass({{ p.pk }}, this)" class="toggle-badge {% if p.schedule_bypass %}on{% else %}off{% endif %}" id="bypass-{{ p.pk }}" title="Ignore schedule when ON">
+              {% if p.schedule_bypass %}ON{% else %}Off{% endif %}
+            </button>
+          </td>
+          {% endif %}
+          <td>
+            {% if lp.featured_toggle %}
+            <button onclick="toggleFeatured({{ p.pk }}, this)" class="toggle-badge {% if p.featured_in_kiosk_extra %}on{% else %}off{% endif %}" id="feat-{{ p.pk }}" title="Show in kiosk Featured section">
+              {% if p.featured_in_kiosk_extra %}★ On{% else %}Off{% endif %}
+            </button>
+            {% else %}<span class="td-sub">—</span>{% endif %}
+          </td>
+          <td>
+            {% if lp.web_featured_toggle %}
+            <button onclick="toggleWebFeatured({{ p.pk }}, this)" class="toggle-badge {% if p.featured_in_web %}on{% else %}off{% endif %}" id="web-feat-{{ p.pk }}" title="Show in customer web portal Featured section">
+              {% if p.featured_in_web %}★ On{% else %}Off{% endif %}
+            </button>
+            {% else %}<span class="td-sub">—</span>{% endif %}
+          </td>
+          <td>
+            {% if lp.edit or lp.delete or lp.cashier_edit %}
+            <div class="d-flex gap-1 justify-content-end">
+              {% if request.user.role == 'pos' and lp.edit %}<a href="{% url 'dashboard:product_cashier_edit' p.pk %}?return_to={{ request.get_full_path|urlencode }}&return_anchor=prow-{{ p.pk }}" class="btn btn-cf-ghost btn-icon" title="Edit availability and description"><i class="bi bi-pencil"></i></a>{% elif lp.edit %}<a href="{% url 'dashboard:product_edit' p.pk %}?return_to={{ request.get_full_path|urlencode }}&return_anchor=prow-{{ p.pk }}" class="btn btn-cf-ghost btn-icon" title="Edit"><i class="bi bi-pencil"></i></a>{% elif lp.cashier_edit %}<a href="{% url 'dashboard:product_cashier_edit' p.pk %}?return_to={{ request.get_full_path|urlencode }}&return_anchor=prow-{{ p.pk }}" class="btn btn-cf-ghost btn-icon" title="Edit availability and description"><i class="bi bi-pencil"></i></a>{% endif %}
+              {% if lp.delete %}<button type="submit" form="product-bulk-delete-form" formaction="{% url 'dashboard:product_delete' p.pk %}" formmethod="post" class="btn btn-icon" style="border:1.5px solid #fecaca;color:var(--cf-red);background:#fff;border-radius:var(--cf-radius-sm);" title="Delete" onclick="return confirm('Delete {{ p.name|escapejs }}?');"><i class="bi bi-trash"></i></button>{% endif %}
+            </div>
+            {% else %}<span class="td-sub">—</span>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+<tr><td colspan="{% if request.user.role == 'superadmin' %}14{% elif can_manage_products %}13{% else %}11{% endif %}"><div class="empty-state"><div class="empty-icon">🍽</div><h6>No products found</h6><p>{% if q or company_id or cat_id %}Try adjusting your filters.{% elif lp.add %}<a href="{% url 'dashboard:product_add' %}">Add your first product</a> to get started.{% else %}No products are available for your current scope.{% endif %}</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Copy Menu Modal ────────────────────────────────────────── #}
+{% if request.user.role == 'superadmin' or request.user.role == 'admin' %}
+{% if lp.bulk_copy or lp.copy %}
+<div class="modal fade" id="bulkCopyModal" tabindex="-1" aria-labelledby="bulkCopyModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:var(--cf-radius);border:1.5px solid var(--cf-border);">
+      <div class="modal-header" style="border-bottom:1px solid var(--cf-border);">
+        <h5 class="modal-title" id="bulkCopyModalLabel" style="font-family:'Rajdhani',sans-serif;color:var(--cf-navy);"><i class="bi bi-files me-2 text-blue"></i>Copy Menu</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{% url 'dashboard:product_bulk_copy' %}" id="bulk-copy-form">
+        {% csrf_token %}
+        {# Hidden inputs: populated by JS from checked checkboxes #}
+        <div id="bulk-copy-ids-container"></div>
+        <div class="modal-body">
+          <p class="small text-muted mb-3">
+            <i class="bi bi-info-circle me-1"></i>
+            Selected products will be copied to the target company. Duplicates (same name + category) are skipped automatically.
+          </p>
+          <div class="mb-3">
+            <label class="form-label fw-600">Target Company <span class="text-danger">*</span></label>
+            <select name="target_company" class="form-select" required>
+              <option value="">— Select company —</option>
+              {% for co in companies %}
+              <option value="{{ co.pk }}">{{ co.name }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Products will be created under this company.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-600">Override Category <span class="text-muted">(optional)</span></label>
+            <select name="target_category" class="form-select">
+              <option value="">— Keep each product's own category —</option>
+              {% for cat in categories %}
+              <option value="{{ cat.pk }}">{{ cat.name }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Leave blank to preserve original categories.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-600">Override Offering <span class="text-muted">(optional)</span></label>
+            <select name="target_offering" class="form-select">
+              <option value="">— Keep each product's own offering —</option>
+              {% for off in offerings %}
+              <option value="{{ off.pk }}">{{ off.company.name }} — {{ off.name }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Leave blank to preserve original offerings.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-600">Copy Prices</label>
+            <div id="copy-price-preview" class="copy-price-preview"></div>
+          </div>
+          <div id="bulk-copy-selected-count" class="alert alert-info py-2 small mb-0"></div>
+        </div>
+        <div class="modal-footer" style="border-top:1px solid var(--cf-border);">
+          <button type="button" class="btn btn-cf-ghost" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-cf-primary">
+            <i class="bi bi-files me-1"></i>Copy Menu
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+
+<script>
+const CSRF = document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrftoken='))?.split('=')[1]||'';
+{% if can_manage_products or can_limited_product_edit or lp.qty_update or lp.field_web_qty or lp.field_pos_qty %}
+
+// ── Qty save ──────────────────────────────────────────────────
+document.querySelectorAll('.qty-input').forEach(input=>{
+  input.dataset.originalValue = input.value;
+  input.addEventListener('input',function(){
+    const btn=document.querySelector(`.qty-save-btn[data-pk="${this.dataset.pk}"][data-type="${this.dataset.type}"]`);
+    if(btn)btn.style.display=this.value!=this.dataset.originalValue?'inline-block':'none';
+  });
+});
+document.querySelectorAll('.qty-save-btn').forEach(btn=>{
+  btn.addEventListener('click',function(event){
+    event.preventDefault();
+    const pk=this.dataset.pk,type=this.dataset.type;
+    const input=document.querySelector(`.qty-input[data-pk="${pk}"][data-type="${type}"]`);
+    const val=parseInt(input.value,10);
+    if(!Number.isFinite(val) || val < 0){alert('Enter a valid quantity.');return;}
+    const params = new URLSearchParams({csrfmiddlewaretoken: CSRF});
+    params.set(type === 'web' ? 'web_qty' : 'pos_qty', String(val));
+    btn.textContent='…';btn.disabled=true;
+    fetch(`/dashboard/menu/products/${pk}/qty/`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:params.toString()})
+    .then(r=>r.json()).then(data=>{
+      if(data.success){input.dataset.originalValue=input.value;btn.textContent='Saved';setTimeout(()=>{btn.style.display='none';btn.textContent='Save';btn.disabled=false;},800);}
+      else{alert(data.error||data.message||'Update failed');btn.textContent='Save';btn.disabled=false;}
+    }).catch(()=>{alert('Update failed');btn.textContent='Save';btn.disabled=false;});
+  });
+});
+
+// ── Toggle helpers ────────────────────────────────────────────
+{% endif %}
+function _post(url){return fetch(url,{method:'POST',headers:{'X-CSRFToken':CSRF,'X-Requested-With':'XMLHttpRequest'}}).then(r=>r.json());}
+function toggleProduct(pk,el){_post(`/dashboard/menu/products/${pk}/toggle/`).then(d=>{if(d.success){el.classList.toggle('on',d.is_active);el.classList.toggle('off',!d.is_active);el.textContent=d.is_active?'Active':'Inactive';}}).catch(()=>alert('Toggle failed'));}
+function toggleKiosk(pk,el){_post(`/dashboard/menu/products/${pk}/kiosk-toggle/`).then(d=>{if(d.success){el.classList.toggle('on',d.is_kiosk_active);el.classList.toggle('off',!d.is_kiosk_active);el.textContent=d.is_kiosk_active?'Active':'Inactive';}}).catch(()=>alert('Toggle failed'));}
+function togglePos(pk,el){_post(`/dashboard/menu/products/${pk}/pos-toggle/`).then(d=>{if(d.success){el.classList.toggle('on',d.is_pos_active);el.classList.toggle('off',!d.is_pos_active);el.textContent=d.is_pos_active?'Active':'Inactive';}else{alert(d.error||d.message||'Toggle failed');}}).catch(()=>alert('Toggle failed'));}
+function toggleBypass(pk,el){_post(`/dashboard/menu/products/${pk}/bypass-toggle/`).then(d=>{if(d.success){el.classList.toggle('on',d.schedule_bypass);el.classList.toggle('off',!d.schedule_bypass);el.textContent=d.schedule_bypass?'ON':'Off';}}).catch(()=>alert('Toggle failed'));}
+function toggleFeatured(pk,el){_post(`/dashboard/menu/products/${pk}/featured-toggle/`).then(d=>{if(d.success){el.classList.toggle('on',d.featured);el.classList.toggle('off',!d.featured);el.textContent=d.featured?'★ On':'Off';}}).catch(()=>alert('Toggle failed'));}
+function toggleWebFeatured(pk,el){_post(`/dashboard/menu/products/${pk}/web-featured-toggle/`).then(d=>{if(d.success){el.classList.toggle('on',d.featured_web);el.classList.toggle('off',!d.featured_web);el.textContent=d.featured_web?'★ On':'Off';}}).catch(()=>alert('Toggle failed'));}
+
+// ── Drag sort ─────────────────────────────────────────────────
+{% if can_manage_products %}
+const tbody = document.getElementById('products-tbody');
+const sortBar = document.getElementById('sort-save-bar');
+let originalOrder = [];
+let isDirty = false;
+
+{% if not q %}
+// Enable drag-sort for the full list and company/category filtered lists.
+// Search results are intentionally excluded because search order is temporary.
+originalOrder = [...tbody.querySelectorAll('tr[data-pk]')].map(r=>r.dataset.pk);
+
+const sortable = Sortable.create(tbody, {
+  handle: '.drag-handle',
+  animation: 150,
+  ghostClass: 'sortable-ghost',
+  onEnd: function() {
+    isDirty = true;
+    sortBar.classList.add('visible');
+  }
+});
+
+document.getElementById('sort-confirm-btn').addEventListener('click', function() {
+  if (!confirm('Save this new display order? This will update position numbers in the database.')) return;
+  const ids = [...tbody.querySelectorAll('tr[data-pk]')].map(r=>parseInt(r.dataset.pk));
+  this.disabled = true;
+  this.textContent = 'Saving…';
+  fetch('{% url "dashboard:product_reorder" %}', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken':CSRF},
+    body: JSON.stringify({ids})
+  }).then(r=>r.json()).then(d=>{
+    if(d.success){
+      sortBar.classList.remove('visible');
+      isDirty = false;
+      originalOrder = ids.map(String);
+    } else {
+      alert('Save failed: ' + (d.error||'Unknown error'));
+    }
+    this.disabled = false;
+    this.innerHTML = '<i class="bi bi-check2 me-1"></i>Save Order';
+  }).catch(()=>{
+    alert('Network error — order not saved.');
+    this.disabled = false;
+    this.innerHTML = '<i class="bi bi-check2 me-1"></i>Save Order';
+  });
+});
+
+document.getElementById('sort-cancel-btn').addEventListener('click', function() {
+  // Restore original DOM order
+  originalOrder.forEach(pk => {
+    const row = document.getElementById('prow-' + pk);
+    if (row) tbody.appendChild(row);
+  });
+  sortBar.classList.remove('visible');
+  isDirty = false;
+});
+{% endif %}
+
+// ── Copy menu helpers ─────────────────────────────────────────
+{% endif %}
+function onBulkCheck() {
+  updateCopyMenuButton();
+}
+
+function selectedProductChecks() {
+  return [...document.querySelectorAll('.bulk-item-check:checked')];
+}
+
+function formatCopyPrice(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '0.00';
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return raw;
+  return parsed.toFixed(2);
+}
+
+function appendCopyPriceCell(row, text, className) {
+  const cell = document.createElement('div');
+  cell.className = className;
+  cell.textContent = text;
+  row.appendChild(cell);
+}
+
+function appendCopyPriceInput(row, productId, productName, originalPrice) {
+  const cell = document.createElement('div');
+  cell.className = 'copy-price-copy';
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '0';
+  input.step = '0.01';
+  input.name = `copy_price_${productId}`;
+  input.value = formatCopyPrice(originalPrice);
+  input.className = 'form-control form-control-sm copy-price-input';
+  input.setAttribute('aria-label', `Copy price for ${productName}`);
+  cell.appendChild(input);
+  row.appendChild(cell);
+}
+
+function renderCopyPricePreview() {
+  const preview = document.getElementById('copy-price-preview');
+  if (!preview) return;
+
+  preview.innerHTML = '';
+  const checked = selectedProductChecks();
+  if (!checked.length) {
+    const empty = document.createElement('div');
+    empty.className = 'copy-price-row';
+    appendCopyPriceCell(empty, 'Select products to preview copy prices.', 'copy-price-name');
+    preview.appendChild(empty);
+    return;
+  }
+
+  const head = document.createElement('div');
+  head.className = 'copy-price-row is-head';
+  appendCopyPriceCell(head, 'Product', 'copy-price-name');
+  appendCopyPriceCell(head, 'Original', 'copy-price-original copy-price-original-head');
+  appendCopyPriceCell(head, 'Copy Price', 'copy-price-copy');
+  preview.appendChild(head);
+
+  checked.forEach(cb => {
+    const originalPrice = cb.dataset.productPrice || '';
+    const productName = cb.dataset.productName || 'Product';
+    const row = document.createElement('div');
+    row.className = 'copy-price-row';
+    appendCopyPriceCell(row, productName, 'copy-price-name');
+    appendCopyPriceCell(row, formatCopyPrice(originalPrice), 'copy-price-original');
+    appendCopyPriceInput(row, cb.value, productName, originalPrice);
+    preview.appendChild(row);
+  });
+}
+
+function updateCopyMenuButton() {
+  const btn = document.getElementById('copy-menu-btn');
+  const label = document.getElementById('copy-menu-btn-label');
+  if (!btn || !label) return;
+  const checked = document.querySelectorAll('.bulk-item-check:checked').length;
+  label.textContent = checked > 0 ? `Copy Menu (${checked})` : 'Copy Menu';
+  btn.title = checked > 0
+    ? `Copy ${checked} selected product${checked !== 1 ? 's' : ''} to another company`
+    : 'Select one or more products, then copy menu';
+}
+
+function openCopyMenuModal() {
+  const checked = selectedProductChecks();
+  if (!checked.length) { alert('Select one or more products first.'); return; }
+
+  const btn = document.getElementById('copy-menu-btn');
+  const canBulkCopy = !btn || btn.dataset.canBulkCopy === '1';
+  if (checked.length > 1 && !canBulkCopy) {
+    alert('You can copy one product at a time with your current permission.');
+    return;
+  }
+
+  const container = document.getElementById('bulk-copy-ids-container');
+  const form = document.getElementById('bulk-copy-form');
+  const modalEl = document.getElementById('bulkCopyModal');
+  if (!container || !form || !modalEl) { alert('Copy Menu is not available.'); return; }
+
+  form.reset();
+  container.innerHTML = '';
+  checked.forEach(cb => {
+    const inp = document.createElement('input');
+    inp.type = 'hidden';
+    inp.name = 'ids';
+    inp.value = cb.value;
+    container.appendChild(inp);
+  });
+
+  document.getElementById('bulk-copy-selected-count').textContent =
+    `${checked.length} product${checked.length !== 1 ? 's' : ''} selected for copying.`;
+  renderCopyPricePreview();
+  new bootstrap.Modal(modalEl).show();
+}
+
+function openBulkCopyModal() {
+  openCopyMenuModal();
+}
+
+document.addEventListener('change', function(e) {
+  if (e.target.classList.contains('bulk-item-check') || e.target.classList.contains('bulk-select-all')) {
+    setTimeout(function() {
+      updateCopyMenuButton();
+      renderCopyPricePreview();
+    }, 0);
+  }
+});
+updateCopyMenuButton();
+
+function downloadProductsExcel() {
+  const url = new URL('{% url "dashboard:product_excel_download" %}', window.location.origin);
+  const current = new URLSearchParams(window.location.search);
+  ['q', 'company', 'cat'].forEach(function(key) {
+    const value = current.get(key);
+    if (value) url.searchParams.set(key, value);
+  });
+  const ids = [...document.querySelectorAll('.bulk-item-check:checked')]
+    .map(function(cb) { return cb.value; })
+    .filter(Boolean);
+  if (ids.length) {
+    url.searchParams.set('ids', ids.join(','));
+  }
+  window.location.href = url.toString();
+}
+</script>
+{% endblock %}

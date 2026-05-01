@@ -1,0 +1,101 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<div style="max-width:720px;">
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h4 style="margin:0;font-family:'Rajdhani',sans-serif;color:var(--cf-navy);">Category Bulk Copy</h4>
+      <div style="font-size:13px;color:var(--cf-muted);margin-top:2px;">
+        Copy all products in a category to another company.
+        Hierarchy: <strong>Offering → Category → Product</strong>
+      </div>
+    </div>
+    <a href="{% url 'dashboard:product_list' %}" class="btn btn-cf-ghost btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back to Products
+    </a>
+  </div>
+
+  <div class="cf-card">
+    <div class="cf-card-header">
+      <h5><i class="bi bi-layers me-2 text-blue"></i>Copy Settings</h5>
+    </div>
+    <div class="cf-card-body">
+      <form method="post">
+        {% csrf_token %}
+
+        <div class="form-section">
+          <div class="form-section-title"><i class="bi bi-box-arrow-up-right text-blue"></i>Source</div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Source Category <span class="text-danger">*</span></label>
+              <select name="source_category" class="form-select" required id="sourceCategorySelect" onchange="updatePreview()">
+                <option value="">— Select category —</option>
+                {% for cat in categories %}
+                  <option value="{{ cat.pk }}">{{ cat.name }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">All products in this category will be copied.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Filter by Offering <span class="text-muted">(optional)</span></label>
+              <select name="source_offering" class="form-select" id="sourceOfferingSelect" onchange="updatePreview()">
+                <option value="">— All offerings in category —</option>
+                {% for off in offerings %}
+                  <option value="{{ off.pk }}">{{ off.name }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Leave blank to copy all offerings.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="form-section-title"><i class="bi bi-box-arrow-in-down-right text-green"></i>Target</div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Target Company <span class="text-danger">*</span></label>
+              <select name="target_company" class="form-select" required>
+                <option value="">— Select company —</option>
+                {% for co in companies %}
+                  <option value="{{ co.pk }}">{{ co.name }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Products will be created under this company.</div>
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+              <div class="alert alert-info w-100 mb-0 small py-2">
+                <i class="bi bi-info-circle me-1"></i>
+                If the target company already has a product with the same name in the same category, it will be <strong>skipped</strong> (no duplicates).
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+          <button type="submit" class="btn btn-cf-primary px-4">
+            <i class="bi bi-layers me-1"></i>Run Bulk Copy
+          </button>
+          <a href="{% url 'dashboard:product_list' %}" class="btn btn-cf-outline">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="cf-card mt-3">
+    <div class="cf-card-header">
+      <h6 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>What gets copied</h6>
+    </div>
+    <div class="cf-card-body">
+      <ul class="small mb-0" style="line-height:2;">
+        <li>All products in the selected category (filtered by offering if chosen)</li>
+        <li>Each product's offering is matched by name in the target company — created if missing</li>
+        <li>Category is matched by slug in the target company — created if missing</li>
+        <li>Copied: name, code, staff/base price, visitor price, packing price, qty limits, description, position, image, food types, kiosk settings, prep time, calories</li>
+        <li><strong>Not copied:</strong> site price overrides, counter mappings (set those separately)</li>
+        <li>Sub-category field is <strong>not used</strong> — hierarchy is Offering → Category → Product only</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

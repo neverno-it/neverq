@@ -1,0 +1,149 @@
+{% extends "base/dashboard_base.html" %}
+{% load core_extras %}
+{% block content %}
+<div style="max-width:900px;">
+  <div class="cf-card">
+    <div class="cf-card-header">
+      <h5><i class="bi bi-upc-scan me-2"></i>Counter Pickup Scan</h5>
+      <a href="{% url 'dashboard:counter_list' %}" class="btn btn-cf-outline btn-sm">Counters</a>
+    </div>
+    <div class="cf-card-body">
+      <form method="get" class="row g-3 align-items-end mb-4">
+        <div class="col-md-9">
+          <label class="form-label">Pickup / Ticket Code</label>
+          <input type="text" name="pickup_code" value="{{ pickup_code }}" class="form-control" placeholder="Scan ticket QR, ticket number, or item pickup code" autofocus>
+        </div>
+        <div class="col-md-3 d-grid">
+          <button class="btn btn-cf-primary"><i class="bi bi-search me-1"></i>Find</button>
+        </div>
+      </form>
+
+      {% if expired_error %}
+      <div class="alert alert-danger">{{ expired_error }}</div>
+      {% elif pickup_code and not item and not ticket %}
+      <div class="alert alert-warning">No pickup item or counter ticket found for <strong>{{ pickup_code }}</strong>.</div>
+      {% endif %}
+
+      {% if ticket %}
+      <div class="surface-card p-4">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+          <div>
+            <div class="small text-muted">Counter Ticket</div>
+            <div class="fw-bold" style="font-size:22px;color:var(--cf-navy);">{{ ticket.ticket_number }}</div>
+            <div class="small text-muted">Order #{{ ticket.order.order_number|short_order_no }} · {{ ticket.order.customer.name }} · {{ ticket.order.company.name }}</div>
+          </div>
+          <span class="badge badge-cf bg-{% if ticket.is_collected %}success{% elif ticket.status == 'ready' %}primary{% else %}warning{% endif %}">
+            {% if ticket.is_collected %}Collected{% else %}{{ ticket.get_status_display }}{% endif %}
+          </span>
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-4"><div class="p-3 border rounded"><div class="small text-muted">Counter</div><div class="fw-bold">{{ ticket.counter.name|default:'Unassigned' }}</div></div></div>
+          <div class="col-md-4"><div class="p-3 border rounded"><div class="small text-muted">Scan Code</div><div class="fw-bold">{{ ticket.scan_code }}</div></div></div>
+          <div class="col-md-4"><div class="p-3 border rounded"><div class="small text-muted">Printer</div><div class="fw-bold">{{ ticket.counter.effective_printer_label|default:'Default browser printer' }}</div><div class="small text-muted mt-1">Route: {{ ticket.counter.printer_route_key }}</div></div></div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap mb-3">
+          <button type="button" class="btn btn-cf-outline btn-sm nq-bt-btn" data-route-key="{{ ticket.counter.printer_route_key|default:'default' }}" data-route-label="{{ ticket.counter.effective_printer_label|default:'KOT Printer' }}" onclick="connectBluetooth(this)">
+            <i class="bi bi-bluetooth me-1"></i><span class="nq-bt-label">Connect {{ ticket.counter.effective_printer_label|default:'KOT Printer' }}</span>
+          </button>
+          <div class="small text-muted align-self-center">Use this once on each counter browser to bind the correct Bluetooth printer.</div>
+        </div>
+        <div class="table-responsive mb-3">
+          <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Item</th><th class="text-center">Qty</th><th class="text-end">Status</th></tr></thead>
+            <tbody>
+              {% for item in ticket.items %}
+              <tr>
+                <td>{{ item.product.name|default:'Item' }}</td>
+                <td class="text-center">{{ item.qty }}</td>
+                <td class="text-end">
+                  {% if item.is_picked_up %}<span class="badge text-bg-success">Picked up</span>{% else %}<span class="badge text-bg-warning">Pending</span>{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if not ticket.is_collected %}
+        <button id="markTicketBtn" class="btn btn-cf-primary" onclick="markTicketCollected({{ ticket.pk }})">
+          <i class="bi bi-check2-circle me-1"></i>Mark Ticket Collected &amp; Print
+        </button>
+        {% else %}
+        <div class="alert alert-success mb-0">Collected on {{ ticket.collected_at|date:"d M Y, h:i A" }}</div>
+        {% endif %}
+      </div>
+      {% elif item %}
+      <div class="surface-card p-4">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+          <div>
+            <div class="small text-muted">Order</div>
+            <div class="fw-bold" style="font-size:20px;color:var(--cf-navy);">#{{ item.order.order_number|short_order_no }}</div>
+            <div class="small text-muted">{{ item.order.customer.name }} · {{ item.order.company.name }}</div>
+          </div>
+          <span class="badge badge-cf bg-{% if item.is_picked_up %}success{% else %}warning{% endif %}">{% if item.is_picked_up %}Already Collected{% else %}Pending Pickup{% endif %}</span>
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-6"><div class="p-3 border rounded"><div class="small text-muted">Item</div><div class="fw-bold">{{ item.product.name|default:'Item' }}</div></div></div>
+          <div class="col-md-3"><div class="p-3 border rounded"><div class="small text-muted">Qty</div><div class="fw-bold">{{ item.qty }}</div></div></div>
+          <div class="col-md-3"><div class="p-3 border rounded"><div class="small text-muted">Counter</div><div class="fw-bold">{{ item.counter.name|default:'Unmapped' }}</div></div></div>
+        </div>
+        {% if item.counter %}
+        <div class="d-flex gap-2 flex-wrap mb-3">
+          <button type="button" class="btn btn-cf-outline btn-sm nq-bt-btn" data-route-key="{{ item.counter.printer_route_key }}" data-route-label="{{ item.counter.effective_printer_label }}" onclick="connectBluetooth(this)">
+            <i class="bi bi-bluetooth me-1"></i><span class="nq-bt-label">Connect {{ item.counter.effective_printer_label }}</span>
+          </button>
+          <div class="small text-muted align-self-center">Printer route: {{ item.counter.printer_route_key }}</div>
+        </div>
+        {% endif %}
+        <div class="small text-muted mb-3">Pickup code: <strong>{{ item.pickup_code }}</strong></div>
+        {% if not item.is_picked_up %}
+        <button id="markItemBtn" class="btn btn-cf-primary" onclick="markItemCollected({{ item.pk }})">
+          <i class="bi bi-check2-circle me-1"></i>Mark Item Collected &amp; Print
+        </button>
+        {% else %}
+        <div class="alert alert-success mb-0">Collected on {{ item.picked_up_at|date:"d M Y, h:i A" }}</div>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+{% if ticket and ticket.counter %}
+window.setPreferredPrinterRoute('{{ ticket.counter.printer_route_key }}', '{{ ticket.counter.effective_printer_label|escapejs }}', false);
+{% elif item and item.counter %}
+window.setPreferredPrinterRoute('{{ item.counter.printer_route_key }}', '{{ item.counter.effective_printer_label|escapejs }}', false);
+{% endif %}
+
+async function doPrintAndReload(url, btnId) {
+  const btn = document.getElementById(btnId);
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Processing…';
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '',
+      },
+    });
+    const data = await resp.json();
+    if (data.success && !data.already_done && data.kot && window.printKOT) {
+      btn.innerHTML = '<i class="bi bi-printer me-1"></i>Printing…';
+      await window.printKOT(data.kot, data.kind === 'ticket' ? 'COUNTER TICKET' : 'PICKUP RECEIPT', 'kotPrintFrame');
+    }
+    setTimeout(() => location.reload(), 800);
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Try Again';
+    alert('Error: ' + e.message);
+  }
+}
+function markItemCollected(itemId) {
+  doPrintAndReload('{% url "orders:pickup_mark_collected" 0 %}'.replace('/0/', '/' + itemId + '/'), 'markItemBtn');
+}
+function markTicketCollected(ticketId) {
+  doPrintAndReload('{% url "orders:pickup_ticket_mark_collected" 0 %}'.replace('/0/', '/' + ticketId + '/'), 'markTicketBtn');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+<h4 class="mb-4" style="font-family:'Rajdhani',sans-serif;font-weight:700;">{{ page_title }}</h4>
+<div class="card border-0 shadow-sm" style="border-radius:var(--cf-radius);">
+  <div class="card-body p-4">
+    <form method="post">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Title</label>
+        <input type="text" name="title" class="form-control" value="{{ page_obj.title }}" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Content (HTML)</label>
+        <textarea name="content" class="form-control" rows="12">{{ page_obj.content }}</textarea>
+      </div>
+      <div class="form-check mb-3">
+        <input type="checkbox" name="is_active" class="form-check-input" id="is_active" {% if page_obj.is_active %}checked{% endif %}>
+        <label class="form-check-label" for="is_active">Active</label>
+      </div>
+      <button type="submit" class="btn px-4" style="background:var(--cf-blue);color:white;border-radius:7px;">Save</button>
+      <a href="{% url 'dashboard:static_page_list' %}" class="btn btn-light ms-2" style="border-radius:7px;">Cancel</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,226 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  .ad-card{background:white;border:1px solid var(--cf-border);border-radius:var(--cf-radius);overflow:hidden;transition:box-shadow .2s}
+  .ad-card:hover{box-shadow:var(--cf-shadow-lg)}
+  .ad-thumb{width:100%;height:130px;object-fit:cover}
+  .ad-thumb-ph{height:130px;background:linear-gradient(135deg,var(--cf-navy),var(--cf-blue));display:flex;align-items:center;justify-content:center;font-size:36px;color:white}
+  .status-pill{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:20px;flex-shrink:0}
+  .sp-pending{background:#FFF3E0;color:#E65100}
+  .sp-approved{background:#E8F5E9;color:#2E7D32}
+  .sp-rejected{background:#FFEBEE;color:#C62828}
+  .schedule-badge{font-size:10px;color:var(--cf-muted);display:flex;align-items:center;gap:4px;margin-top:4px}
+  .live-dot{width:7px;height:7px;border-radius:50%;background:#10B981;display:inline-block;animation:livepulse 1.5s infinite}
+  .dead-dot{width:7px;height:7px;border-radius:50%;background:#9CA3AF;display:inline-block}
+  .bulk-check-wrap{position:absolute;top:10px;left:10px;z-index:3;background:rgba(255,255,255,.96);border-radius:999px;padding:5px 7px;box-shadow:0 4px 12px rgba(15,23,42,.14)}
+  .drag-handle{position:absolute;top:10px;right:10px;z-index:3;width:32px;height:32px;border:1px dashed rgba(255,255,255,.7);border-radius:999px;background:rgba(15,23,42,.62);color:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:grab}
+  .drag-handle:active{cursor:grabbing}
+  .sort-card.dragging{opacity:.45}
+  .reorder-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;margin:0 0 12px;border:1px solid #fde68a;border-radius:12px;background:#fffbeb}
+  .reorder-copy{font-size:12.5px;color:#92400e}
+  @keyframes livepulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .approval-panel{background:#FFF8E1;border:1px solid #FFE082;border-radius:var(--cf-radius-sm);padding:10px 12px;margin-top:8px}
+</style>
+{% endblock %}
+
+{% block page_heading %}Advertisement Banners{% endblock %}
+
+{% block content %}
+{% url 'dashboard:advertise_bulk_delete' as bulk_delete_url %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <a href="{% url 'dashboard:advertise_list' %}" class="btn btn-sm {% if not status_filter %}btn-cf-primary{% else %}btn-cf-outline{% endif %}">All</a>
+    <a href="?status=pending" class="btn btn-sm {% if status_filter == 'pending' %}btn-cf-primary{% else %}btn-cf-outline{% endif %}">Pending {% if pending_count %}<span class="badge bg-danger ms-1" style="font-size:10px;">{{ pending_count }}</span>{% endif %}</a>
+    <a href="?status=approved" class="btn btn-sm {% if status_filter == 'approved' %}btn-cf-primary{% else %}btn-cf-outline{% endif %}">Approved</a>
+    <a href="?status=rejected" class="btn btn-sm {% if status_filter == 'rejected' %}btn-cf-primary{% else %}btn-cf-outline{% endif %}">Rejected</a>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'dashboard:media_library' %}" class="btn btn-cf-outline btn-sm"><i class="bi bi-images me-1"></i>Media Library</a>
+    <a href="{% url 'dashboard:advertise_add' %}" class="btn btn-cf-danger btn-sm"><i class="bi bi-plus-circle me-1"></i>New Banner</a>
+  </div>
+</div>
+
+<div class="cf-card mb-3">
+  <div class="cf-card-body pb-0">
+    {% include "dashboard/includes/bulk_delete_controls.html" with bulk_form_id='advertise-bulk-delete-form' bulk_action=bulk_delete_url bulk_confirm_message='Delete selected banners?' %}
+    {% if can_drag_sort %}
+    <div id="advertiseReorderBar" class="reorder-bar d-none">
+      <div class="reorder-copy"><strong>Reorder mode active.</strong> Drag banner cards, then save to confirm the new banner sequence.</div>
+      <div class="d-flex gap-2">
+        <button type="button" id="advertiseReorderReset" class="btn btn-cf-outline btn-sm">Reset</button>
+        <button type="button" id="advertiseReorderSave" class="btn btn-cf-primary btn-sm">Save Order</button>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if adverts %}
+<div class="row g-3" id="advertiseSortGrid">
+  {% for ad in adverts %}
+  <div id="adrow-{{ ad.pk }}" class="col-sm-6 col-md-4 col-lg-3 sort-card" data-sort-id="{{ ad.pk }}">
+    <div class="ad-card position-relative h-100">
+      <label class="bulk-check-wrap" title="Select banner">
+        <input type="checkbox" class="form-check-input bulk-item-check" data-bulk-form-input="advertise-bulk-delete-form" form="advertise-bulk-delete-form" name="ids" value="{{ ad.pk }}">
+      </label>
+      {% if can_drag_sort %}
+      <button type="button" class="drag-handle" title="Drag to reorder"><i class="bi bi-grip-vertical"></i></button>
+      {% endif %}
+      {% if ad.display_image %}
+      <img src="{{ ad.display_image.url }}" alt="{{ ad.name }}" class="ad-thumb">
+      {% else %}
+      <div class="ad-thumb-ph">📢</div>
+      {% endif %}
+      <div style="padding:10px 12px 12px;">
+        <div class="d-flex align-items-start justify-content-between gap-1 mb-1">
+          <div style="font-size:13px;font-weight:600;color:var(--cf-navy);line-height:1.3;">{{ ad.name|default:"(untitled)" }}</div>
+          <span class="status-pill sp-{{ ad.status }}">{{ ad.get_status_display }}</span>
+        </div>
+        <div style="font-size:11px;color:var(--cf-muted);">
+          {% with sites=ad.companies.all %}
+          {% if sites %}
+          <i class="bi bi-building me-1"></i>
+          {% for co in sites %}{{ co.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+          {% else %}
+          {{ ad.company.name }}
+          {% endif %}
+          {% endwith %}
+        </div>
+        <div class="schedule-badge">
+          {% with lbl=ad.schedule_label %}
+          {% if lbl == 'live' %}
+          <span class="live-dot"></span> Live now
+          {% elif lbl == 'scheduled' %}
+          <span style="width:7px;height:7px;border-radius:50%;background:#3B82F6;display:inline-block;flex-shrink:0;"></span>
+          Scheduled{% if ad.next_live_date %} - {{ ad.next_live_date|date:"d M Y" }}{% endif %}
+          {% elif lbl == 'expired' %}
+          <span class="dead-dot"></span> Expired {{ ad.end_date|date:"d M Y" }}
+          {% elif lbl == 'inactive' %}
+          <span class="dead-dot"></span> Inactive
+          {% elif lbl == 'pending' %}
+          <span style="width:7px;height:7px;border-radius:50%;background:#F59E0B;display:inline-block;flex-shrink:0;"></span>
+          Pending approval
+          {% elif lbl == 'rejected' %}
+          <span style="width:7px;height:7px;border-radius:50%;background:#EF4444;display:inline-block;flex-shrink:0;"></span>
+          Rejected
+          {% else %}
+          <span class="dead-dot"></span> Not live
+          {% endif %}
+          {% endwith %}
+        </div>
+        {% if ad.start_date or ad.end_date %}
+        <div class="schedule-badge"><i class="bi bi-calendar3" style="font-size:10px;"></i>{% if ad.start_date %}{{ ad.start_date|date:"d M Y" }}{% else %}-{% endif %} → {% if ad.end_date %}{{ ad.end_date|date:"d M Y" }}{% else %}ongoing{% endif %}</div>
+        {% endif %}
+        {% if ad.review_note %}<div style="font-size:11px;color:var(--cf-muted);margin-top:4px;font-style:italic;">"{{ ad.review_note|truncatechars:60 }}"</div>{% endif %}
+        {% if ad.created_by %}<div style="font-size:10px;color:var(--cf-muted);margin-top:3px;">By {{ ad.created_by.name|default:ad.created_by.email|truncatechars:18 }}{% if ad.created_at %} · {{ ad.created_at|date:"d M" }}{% endif %}</div>{% endif %}
+
+        {% if ad.status == 'pending' and request.user.is_superadmin %}
+        <div class="approval-panel">
+          <div style="font-size:11px;font-weight:600;color:#E65100;margin-bottom:6px;"><i class="bi bi-clock me-1"></i>Awaiting your review</div>
+          <form method="post" action="{% url 'dashboard:advertise_approve' ad.pk %}">
+            {% csrf_token %}
+            <input type="text" name="review_note" placeholder="Optional note to submitter..." class="form-control form-control-sm mb-2" style="font-size:11px;">
+            <div class="d-flex gap-1">
+              <button type="submit" name="action" value="approve" class="btn btn-sm flex-fill" style="background:#10B981;color:white;border:none;font-size:11px;font-weight:600;"><i class="bi bi-check2"></i> Approve</button>
+              <button type="submit" name="action" value="reject" class="btn btn-sm flex-fill" style="background:#EF4444;color:white;border:none;font-size:11px;font-weight:600;"><i class="bi bi-x"></i> Reject</button>
+            </div>
+          </form>
+        </div>
+        {% endif %}
+
+        <div class="d-flex gap-1 mt-2">
+          <a href="{% url 'dashboard:advertise_edit' ad.pk %}?return_to={{ request.get_full_path|urlencode }}&return_anchor=adrow-{{ ad.pk }}" class="btn btn-sm btn-cf-outline flex-fill" style="padding:4px;font-size:12px;"><i class="bi bi-pencil"></i></a>
+          <button type="submit" form="advertise-bulk-delete-form" formaction="{% url 'dashboard:advertise_delete' ad.pk %}" formmethod="post" class="btn btn-sm btn-cf-danger" style="padding:4px 8px;font-size:12px;" onclick="return confirm('Delete this banner?');"><i class="bi bi-trash"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="cf-card"><div class="cf-card-body text-center py-5 text-muted"><i class="bi bi-megaphone" style="font-size:48px;display:block;margin-bottom:12px;opacity:.3;"></i>{% if status_filter %}No {{ status_filter }} banners. <a href="{% url 'dashboard:advertise_list' %}">View all →</a>{% else %}No banners yet. <a href="{% url 'dashboard:advertise_add' %}">Create the first →</a>{% endif %}</div></div>
+{% endif %}
+
+{% if can_drag_sort %}
+<script>
+(function () {
+  const grid = document.getElementById('advertiseSortGrid');
+  const bar = document.getElementById('advertiseReorderBar');
+  const saveBtn = document.getElementById('advertiseReorderSave');
+  const resetBtn = document.getElementById('advertiseReorderReset');
+  const csrf = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+  if (!grid || !bar || !saveBtn || !resetBtn) return;
+
+  let draggedCard = null;
+  let initialOrder = currentOrder();
+
+  function currentOrder() { return Array.from(grid.querySelectorAll('[data-sort-id]')).map(card => card.dataset.sortId); }
+  function syncBar() { bar.classList.toggle('d-none', JSON.stringify(initialOrder) === JSON.stringify(currentOrder())); }
+  function restoreOrder() {
+    initialOrder.forEach(id => {
+      const card = grid.querySelector(`[data-sort-id="${id}"]`);
+      if (card) grid.appendChild(card);
+    });
+    syncBar();
+  }
+  function getAfterCard(x, y) {
+    const cards = Array.from(grid.querySelectorAll('[data-sort-id]')).filter(card => card !== draggedCard);
+    let closest = { score: Number.POSITIVE_INFINITY, element: null };
+    cards.forEach(card => {
+      const box = card.getBoundingClientRect();
+      const score = Math.abs((box.left + box.width / 2) - x) + Math.abs((box.top + box.height / 2) - y);
+      if (score < closest.score) closest = { score, element: card };
+    });
+    return closest.element;
+  }
+
+  grid.querySelectorAll('.drag-handle').forEach(handle => {
+    handle.setAttribute('draggable', 'true');
+    handle.addEventListener('dragstart', event => {
+      draggedCard = handle.closest('[data-sort-id]');
+      if (!draggedCard) return;
+      draggedCard.classList.add('dragging');
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', draggedCard.dataset.sortId);
+    });
+    handle.addEventListener('dragend', () => {
+      if (draggedCard) draggedCard.classList.remove('dragging');
+      draggedCard = null;
+      syncBar();
+    });
+  });
+
+  grid.addEventListener('dragover', event => {
+    if (!draggedCard) return;
+    event.preventDefault();
+    const afterCard = getAfterCard(event.clientX, event.clientY);
+    if (!afterCard) grid.appendChild(draggedCard);
+    else if (afterCard !== draggedCard) grid.insertBefore(draggedCard, afterCard);
+  });
+
+  resetBtn.addEventListener('click', restoreOrder);
+  saveBtn.addEventListener('click', () => {
+    if (!confirm('Save the new banner order?')) return;
+    saveBtn.disabled = true;
+    fetch('{% url "dashboard:advertise_reorder" %}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: JSON.stringify({ ids: currentOrder() })
+    })
+      .then(r => r.json().then(data => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok || !data.success) throw new Error(data.message || 'Could not save order.');
+        initialOrder = currentOrder();
+        syncBar();
+      })
+      .catch(err => alert(err.message || 'Could not save order.'))
+      .finally(() => { saveBtn.disabled = false; });
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base/dashboard_base.html" %}
+{% block content %}
+{% url 'dashboard:building_bulk_delete' as bulk_delete_url %}
+<div class="cf-card">
+  <div class="cf-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h5 class="mb-0">Buildings</h5>
+    <div class="d-flex gap-2"><a href="{% url 'dashboard:company_list' %}" class="btn btn-cf-outline btn-sm">Companies</a><a href="{% url 'dashboard:building_add' %}" class="btn btn-cf-primary btn-sm">Add Building</a></div>
+  </div>
+  <div class="cf-card-body">
+    <form method="get" class="row g-3 mb-3">
+      <div class="col-md-4"><select name="company" class="form-select"><option value="">All companies</option>{% for co in companies %}<option value="{{ co.pk }}" {% if company_id == co.pk|stringformat:'s' %}selected{% endif %}>{{ co.name }}</option>{% endfor %}</select></div>
+      <div class="col-md-2"><button class="btn btn-cf-outline">Filter</button></div>
+    </form>
+    {% include "dashboard/includes/bulk_delete_controls.html" with bulk_form_id='building-bulk-delete-form' bulk_action=bulk_delete_url bulk_confirm_message='Delete selected buildings?' %}
+    <div style="overflow-x:auto;"><table class="cf-table"><thead><tr><th style="width:44px;"></th><th>Company</th><th>Name</th><th>State</th><th>City</th><th>Status</th><th></th></tr></thead><tbody>
+      {% for item in buildings %}<tr><td><input type="checkbox" class="form-check-input bulk-item-check" data-bulk-form-input="building-bulk-delete-form" form="building-bulk-delete-form" name="ids" value="{{ item.pk }}"></td><td>{{ item.company.name }}</td><td>{{ item.name }}</td><td>{{ item.state.name|default:'—' }}</td><td>{{ item.city.name|default:'—' }}</td><td>{% if item.is_active %}Active{% else %}Inactive{% endif %}</td><td class="d-flex gap-1"><a href="{% url 'dashboard:building_edit' item.pk %}" class="btn btn-cf-outline btn-sm">Edit</a><button type="submit" formaction="{% url 'dashboard:building_toggle' item.pk %}" formmethod="post" class="btn btn-cf-outline btn-sm" form="building-bulk-delete-form">{% if item.is_active %}Deactivate{% else %}Activate{% endif %}</button><button type="submit" formaction="{% url 'dashboard:building_delete' item.pk %}" formmethod="post" class="btn btn-outline-danger btn-sm" form="building-bulk-delete-form" onclick="return confirm('Delete this building?')">Delete</button></td></tr>{% empty %}<tr><td colspan="7" class="text-center text-muted py-4">No buildings found.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+</div>
+{% endblock %}

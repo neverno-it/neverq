@@ -1,0 +1,279 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  .reorder-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;margin:0 0 12px;border:1px solid #fde68a;border-radius:12px;background:#fffbeb}
+  .reorder-copy{font-size:12.5px;color:#92400e}
+  .drag-handle{width:30px;height:30px;border:1px dashed var(--cf-border);border-radius:8px;background:#fff;color:var(--cf-muted);display:inline-flex;align-items:center;justify-content:center;cursor:grab}
+  .drag-handle:active{cursor:grabbing}
+  .sort-row.dragging{opacity:.45}
+  .sched-pill{display:inline-block;font-size:10.5px;font-weight:600;background:var(--cf-blue-light);color:var(--cf-blue);border-radius:20px;padding:2px 8px;margin:1px;white-space:nowrap}
+  .category-table{min-width:900px;table-layout:fixed}
+  .category-table th,.category-table td{vertical-align:middle}
+  .category-title-row{display:flex;align-items:center;gap:8px;min-width:0}
+  .category-title-row .td-main{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .category-kind{flex:0 0 auto;font-size:10px;padding:3px 8px}
+  .category-copy{max-width:360px;font-size:12px;line-height:1.45;color:var(--cf-muted);margin-top:4px}
+  .category-days{font-size:10.5px;color:var(--cf-muted);margin-top:4px;white-space:normal}
+  .site-status-list{display:grid;gap:6px;max-width:280px}
+  .site-toggle-chip{width:100%;border:1px solid var(--cf-border);border-radius:8px;background:#fff;color:var(--cf-text);display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:6px 9px;font-size:11px;font-weight:700;line-height:1.1;white-space:nowrap;text-align:left}
+  .site-toggle-chip span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .site-toggle-chip.active{border-color:#bbf7d0;background:#f0fdf4;color:#166534}
+  .site-toggle-chip.inactive{border-color:#e5e7eb;background:#f8fafc;color:#64748b}
+  .site-toggle-chip i{font-size:15px}
+  .site-toggle-chip:disabled{opacity:.65;cursor:wait}
+  .category-actions{justify-content:flex-end}
+</style>
+{% endblock %}
+{% block content %}
+{% url 'dashboard:category_bulk_delete' as bulk_delete_url %}
+<div class="cf-card">
+  <div class="cf-card-header">
+    <div>
+      <h5><i class="bi bi-grid-3x3-gap"></i>Categories</h5>
+      <div style="font-size:13px;color:var(--cf-muted);margin-top:2px;">Manage menu categories and subcategories</div>
+    </div>
+    <div class="d-flex gap-2">
+      {% if can_manage_categories and 'add_category' in visible_menus %}
+      <a href="{% url 'dashboard:category_add' %}" class="btn btn-cf-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>Add Category</a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="cf-card-body pb-0">
+    {% if can_manage_categories %}
+    {% include "dashboard/includes/bulk_delete_controls.html" with bulk_form_id='category-bulk-delete-form' bulk_action=bulk_delete_url bulk_confirm_message='Delete selected categories?' %}
+    {% endif %}
+    {% if can_drag_sort %}
+    <div id="categoryReorderBar" class="reorder-bar d-none">
+      <div class="reorder-copy"><strong>Reorder mode active.</strong> Drag categories and save after confirming the new order.</div>
+      <div class="d-flex gap-2">
+        <button type="button" id="categoryReorderReset" class="btn btn-cf-outline btn-sm">Reset</button>
+        <button type="button" id="categoryReorderSave" class="btn btn-cf-primary btn-sm">Save Order</button>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  <div style="overflow-x:auto;">
+    <table class="cf-table category-table">
+      <colgroup>
+        {% if can_manage_categories %}
+        <col style="width:44px;">
+        <col style="width:48px;">
+        {% endif %}
+        <col>
+        <col style="width:170px;">
+        <col style="width:310px;">
+        <col style="width:120px;">
+      </colgroup>
+      <thead>
+        <tr>
+          {% if can_manage_categories %}
+          <th></th>
+          <th></th>
+          {% endif %}
+          <th>Category</th>
+          <th>Available Times</th>
+          <th>Site Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="categorySortBody">
+        {% for cat in categories %}
+        <tr id="crow-{{ cat.pk }}" class="sort-row" data-sort-id="{{ cat.pk }}">
+          {% if can_manage_categories %}
+          <td><input type="checkbox" class="form-check-input bulk-item-check" data-bulk-form-input="category-bulk-delete-form" form="category-bulk-delete-form" name="ids" value="{{ cat.pk }}"></td>
+          <td>
+            {% if can_drag_sort %}
+            <button type="button" class="drag-handle" title="Drag to reorder"><i class="bi bi-grip-vertical"></i></button>
+            {% endif %}
+          </td>
+          {% endif %}
+          <td>
+            <div class="category-title-row">
+              <div class="td-main">{{ cat.name }}</div>
+              <span class="badge-cf badge-info category-kind">{{ cat.get_cat_type_display }}</span>
+            </div>
+            {% if cat.tagline %}<div class="category-copy">{{ cat.tagline|truncatechars:78 }}</div>{% endif %}
+            {% if cat.parent %}<div class="td-sub">Under: {{ cat.parent.name }}</div>{% endif %}
+            {% if cat.open_days %}<div class="category-days">{{ cat.open_days|join:", " }}</div>{% endif %}
+          </td>
+          <td>
+            {% with scheds=cat.global_schedules %}
+            {% if scheds %}
+              {% for s in scheds %}
+              <span class="sched-pill">{{ s.display_day }} {{ s.start_time|time:"H:i" }}–{{ s.end_time|time:"H:i" }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="td-sub">All day</span>
+            {% endif %}
+            {% endwith %}
+          </td>
+          <td>
+            <div class="site-status-list">
+              {% for site in cat.site_statuses %}
+                {% if lp.toggle %}
+                <button type="button" id="cat-status-label-{{ cat.pk }}-{{ site.company.pk }}" class="site-toggle-chip {% if site.is_active %}active{% else %}inactive{% endif %}" onclick="toggleCategory({{ cat.pk }}, this, {{ site.company.pk }})" title="Toggle {{ site.company.name }}">
+                  <span>{{ site.company.name }}{% if site.use_custom_availability %} *{% endif %}</span>
+                  <i class="bi {% if site.is_active %}bi-toggle-on{% else %}bi-toggle-off{% endif %}"></i>
+                </button>
+                {% else %}
+                <span id="cat-status-label-{{ cat.pk }}-{{ site.company.pk }}" class="site-toggle-chip {% if site.is_active %}active{% else %}inactive{% endif %}">
+                  <span>{{ site.company.name }}{% if site.use_custom_availability %} *{% endif %}</span>
+                  <i class="bi {% if site.is_active %}bi-toggle-on{% else %}bi-toggle-off{% endif %}"></i>
+                </span>
+                {% endif %}
+              {% empty %}
+                <span id="cat-status-label-{{ cat.pk }}" class="badge-cf {% if cat.display_is_active %}badge-active{% else %}badge-inactive{% endif %}">{% if cat.display_is_active %}Active{% else %}Inactive{% endif %}</span>
+              {% endfor %}
+            </div>
+          </td>
+          <td>
+            <div class="d-flex gap-1 category-actions">
+              {% if lp.edit %}
+              <a href="{% url 'dashboard:category_edit' cat.pk %}?return_to={{ request.get_full_path|urlencode }}&return_anchor=crow-{{ cat.pk }}" class="btn btn-cf-ghost btn-icon" title="Edit"><i class="bi bi-pencil"></i></a>
+              {% endif %}
+              {% if lp.toggle and not request.user.is_superadmin %}<button type="button" onclick="toggleCategory({{ cat.pk }}, this)" class="btn btn-cf-ghost btn-icon" title="Toggle" id="cat-toggle-btn-{{ cat.pk }}"><i class="bi {% if cat.display_is_active %}bi-toggle-on text-green{% else %}bi-toggle-off text-muted{% endif %}"></i></button>
+              {% endif %}{% if lp.delete %}
+              <button type="submit" form="category-bulk-delete-form" formaction="{% url 'dashboard:category_delete' cat.pk %}" formmethod="post" class="btn btn-icon" style="border:1.5px solid #fecaca;color:var(--cf-red);background:#fff;border-radius:var(--cf-radius-sm);width:34px;height:34px;" title="Delete" onclick="return confirm('Delete {{ cat.name|escapejs }}?');"><i class="bi bi-trash"></i></button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="{% if can_manage_categories %}6{% else %}4{% endif %}"><div class="empty-state"><div class="empty-icon">📂</div><h6>No categories yet</h6><p>{% if can_manage_categories and 'add_category' in visible_menus %}<a href="{% url 'dashboard:category_add' %}">Create your first category</a>{% else %}No categories available right now.{% endif %}</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const categoryCSRF = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+
+function toggleCategory(pk, button, companyId) {
+  if (!button) return;
+  button.disabled = true;
+  const body = new URLSearchParams();
+  if (companyId) body.set('company_id', companyId);
+  fetch(`/dashboard/menu/categories/${pk}/toggle/`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': categoryCSRF,
+      'X-Requested-With': 'XMLHttpRequest',
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: body.toString()
+  })
+    .then(resp => resp.json().then(data => ({ ok: resp.ok, data })))
+    .then(({ ok, data }) => {
+      if (!ok || !data.success) {
+        throw new Error(data.error || data.message || 'Could not update category status.');
+      }
+      const icon = button.querySelector('i');
+      const status = companyId
+        ? document.getElementById(`cat-status-label-${pk}-${companyId}`)
+        : document.getElementById(`cat-status-label-${pk}`);
+      if (status && status.classList.contains('site-toggle-chip')) {
+        status.classList.toggle('active', !!data.is_active);
+        status.classList.toggle('inactive', !data.is_active);
+      } else if (status) {
+        status.textContent = data.is_active ? 'Active' : 'Inactive';
+        status.classList.toggle('badge-active', !!data.is_active);
+        status.classList.toggle('badge-inactive', !data.is_active);
+      }
+      if (icon) {
+        const compactChip = status && status.classList.contains('site-toggle-chip');
+        icon.className = compactChip
+          ? `bi ${data.is_active ? 'bi-toggle-on' : 'bi-toggle-off'}`
+          : `bi ${data.is_active ? 'bi-toggle-on text-green' : 'bi-toggle-off text-muted'}`;
+      }
+    })
+    .catch(err => alert(err.message || 'Could not update category status.'))
+    .finally(() => {
+      button.disabled = false;
+    });
+}
+</script>
+
+{% if can_drag_sort %}
+<script>
+(function () {
+  const tbody = document.getElementById('categorySortBody');
+  const bar = document.getElementById('categoryReorderBar');
+  const saveBtn = document.getElementById('categoryReorderSave');
+  const resetBtn = document.getElementById('categoryReorderReset');
+  const csrf = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('csrftoken='))?.split('=')[1] || '';
+  if (!tbody || !bar || !saveBtn || !resetBtn) return;
+
+  let draggedRow = null;
+  let initialOrder = currentOrder();
+
+  function currentOrder() { return Array.from(tbody.querySelectorAll('tr[data-sort-id]')).map(row => row.dataset.sortId); }
+  function syncBar() { bar.classList.toggle('d-none', JSON.stringify(initialOrder) === JSON.stringify(currentOrder())); }
+  function restoreOrder() {
+    initialOrder.forEach(id => {
+      const row = tbody.querySelector(`tr[data-sort-id="${id}"]`);
+      if (row) tbody.appendChild(row);
+    });
+    syncBar();
+  }
+  function getAfterRow(y) {
+    const rows = Array.from(tbody.querySelectorAll('tr[data-sort-id]')).filter(row => row !== draggedRow);
+    let closest = { offset: Number.NEGATIVE_INFINITY, element: null };
+    rows.forEach(row => {
+      const box = row.getBoundingClientRect();
+      const offset = y - box.top - (box.height / 2);
+      if (offset < 0 && offset > closest.offset) closest = { offset, element: row };
+    });
+    return closest.element;
+  }
+
+  tbody.querySelectorAll('.drag-handle').forEach(handle => {
+    handle.setAttribute('draggable', 'true');
+    handle.addEventListener('dragstart', event => {
+      draggedRow = handle.closest('tr[data-sort-id]');
+      if (!draggedRow) return;
+      draggedRow.classList.add('dragging');
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', draggedRow.dataset.sortId);
+    });
+    handle.addEventListener('dragend', () => {
+      if (draggedRow) draggedRow.classList.remove('dragging');
+      draggedRow = null;
+      syncBar();
+    });
+  });
+
+  tbody.addEventListener('dragover', event => {
+    if (!draggedRow) return;
+    event.preventDefault();
+    const afterRow = getAfterRow(event.clientY);
+    if (!afterRow) tbody.appendChild(draggedRow);
+    else if (afterRow !== draggedRow) tbody.insertBefore(draggedRow, afterRow);
+  });
+
+  resetBtn.addEventListener('click', restoreOrder);
+  saveBtn.addEventListener('click', () => {
+    if (!confirm('Save the new category order?')) return;
+    saveBtn.disabled = true;
+    fetch('{% url "dashboard:category_reorder" %}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: JSON.stringify({ ids: currentOrder() })
+    })
+      .then(r => r.json().then(data => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok || !data.success) throw new Error(data.message || 'Could not save order.');
+        initialOrder = currentOrder();
+        syncBar();
+      })
+      .catch(err => alert(err.message || 'Could not save order.'))
+      .finally(() => { saveBtn.disabled = false; });
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

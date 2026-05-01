@@ -1,0 +1,250 @@
+{% extends "base/dashboard_base.html" %}
+{% block extra_head %}
+<style>
+  .schedule-row { display:flex; gap:8px; align-items:center; margin-bottom:8px; background:var(--cf-surface); border:1px solid var(--cf-border); border-radius:var(--cf-radius-sm); padding:8px 10px; }
+  .schedule-row select, .schedule-row input[type=time] { font-size:13px; padding:5px 8px; border:1px solid var(--cf-border); border-radius:6px; background:#fff; }
+  .schedule-row select { min-width:110px; }
+  .schedule-row .btn-remove { border:none; background:#fef2f2; color:var(--cf-red); border-radius:6px; padding:4px 10px; font-size:13px; cursor:pointer; flex-shrink:0; }
+  .schedule-row .btn-remove:hover { background:#fecaca; }
+</style>
+{% endblock %}
+{% block content %}
+<div style="max-width:760px;">
+  <div class="cf-card">
+    <div class="cf-card-header">
+      <h5><i class="bi bi-sunrise me-2 text-blue"></i>{{ page_title }}</h5>
+      <a href="{% url 'dashboard:offering_list' %}" class="btn btn-cf-outline btn-sm">Back</a>
+    </div>
+    <div class="cf-card-body">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="return_to" value="{{ request.GET.return_to|default:'' }}">
+        <input type="hidden" name="return_anchor" value="{{ request.GET.return_anchor|default:'' }}">
+        <div class="row g-3">
+          {% if request.user.is_superadmin %}
+          <div class="col-md-6">
+            <label class="form-label">Company</label>
+            <select name="company" class="form-select" required>
+              <option value="">— Select company —</option>
+              {% for co in companies %}<option value="{{ co.pk }}" {% if offering.company_id == co.pk %}selected{% endif %}>{{ co.name }}</option>{% endfor %}
+            </select>
+          </div>
+          {% endif %}
+
+          <div class="col-md-6">
+            <label class="form-label">Offering Name *</label>
+            <input type="text" name="name" class="form-control" value="{{ offering.name|default:'' }}" required placeholder="Breakfast / Lunch / Snacks">
+          </div>
+
+          {# ── Multi-slot Schedule Windows ───────────────────── #}
+          <div class="col-12">
+            <label class="form-label">
+              <i class="bi bi-clock me-1 text-primary"></i>
+              Availability Time Windows
+              <small class="text-muted fw-normal">(multiple slots per day supported)</small>
+            </label>
+            <div id="schedule-rows">
+              {% for sched in existing_schedules %}
+              <div class="schedule-row">
+                <select name="window_day_{{ forloop.counter0 }}">
+                  {% for abbr, label in weekday_choices %}
+                  <option value="{{ abbr }}" {% if sched.day == abbr %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                  <option value="All" {% if sched.day == 'All' %}selected{% endif %}>All Days</option>
+                </select>
+                <input type="time" name="window_start_{{ forloop.counter0 }}" value="{{ sched.start }}">
+                <span style="color:var(--cf-muted);font-size:13px;">to</span>
+                <input type="time" name="window_end_{{ forloop.counter0 }}" value="{{ sched.end }}">
+                <button type="button" class="btn-remove" onclick="removeScheduleRow(this)">✕</button>
+              </div>
+              {% endfor %}
+            </div>
+            <button type="button" id="add-schedule-btn" class="btn btn-cf-outline btn-sm mt-2" onclick="addScheduleRow()">
+              <i class="bi bi-plus-circle me-1"></i>Add Time Window
+            </button>
+            <div class="small text-muted mt-1">
+              Schedule windows replace the legacy Available From/To. Leave empty to use the legacy fields below.
+            </div>
+          </div>
+
+          {# ── Legacy single-window (kept for backward compat) ─ #}
+          <div class="col-12">
+            <div class="alert alert-info py-2 mb-0 small">
+              <i class="bi bi-info-circle me-1"></i>
+              <strong>Legacy single window</strong> — used only when no Schedule Windows are set above.
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Available From <span class="text-muted">(legacy)</span></label>
+            <input type="time" name="available_from" class="form-control" value="{{ offering.available_from|time:'H:i'|default:'' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Available To <span class="text-muted">(legacy)</span></label>
+            <input type="time" name="available_to" class="form-control" value="{{ offering.available_to|time:'H:i'|default:'' }}">
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">
+              <i class="bi bi-alarm me-1 text-warning"></i>
+              Prep Start Gate
+              <small class="text-muted fw-normal">(optional)</small>
+            </label>
+            <input type="time" name="prep_start_time" class="form-control"
+                   value="{{ offering.prep_start_time|time:'H:i'|default:'' }}">
+            <div class="form-text text-muted">
+              Auto-ready countdown will not begin before this time.
+            </div>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Sort Order</label>
+            <input type="number" name="position_order" class="form-control" value="{{ offering.position_order|default:'0' }}">
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">
+              <i class="bi bi-calendar-week me-1 text-primary"></i>
+              Available Days
+              <small class="text-muted fw-normal">(empty = every day)</small>
+            </label>
+            <div class="d-flex flex-wrap gap-2">
+              {% for abbr, label in weekday_choices %}
+              <label class="d-flex align-items-center gap-1 px-3 py-2 rounded-3 border"
+                     style="cursor:pointer;font-size:13px;font-weight:600;background:#f8f9fa;">
+                <input type="checkbox" name="open_days" value="{{ abbr }}"
+                       {% if abbr in offering_open_days %}checked{% endif %}
+                       style="accent-color:#1565c0;">
+                {{ label }}
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Offering Image</label>
+            <input type="file" name="image" class="form-control" accept="image/*">
+            <div class="form-text">Local uploads are also saved into Offering Image Gallery automatically.</div>
+            <input type="hidden" name="gallery_image_url" id="offeringGalleryImageUrl" value="">
+            <div class="d-flex gap-2 mt-2 flex-wrap">
+              <a href="{% url 'dashboard:offering_gallery' %}" target="_blank" class="btn btn-cf-outline btn-sm"><i class="bi bi-images me-1"></i>Open Offering Gallery</a>
+              <button type="button" class="btn btn-cf-outline btn-sm" onclick="openOfferingGalleryPicker()"><i class="bi bi-grid-3x3-gap me-1"></i>Choose From Gallery</button>
+              <button type="button" class="btn btn-light btn-sm border" onclick="clearOfferingGalleryPick()">Clear Gallery Pick</button>
+            </div>
+            <div id="offeringGalleryPickedPreview" style="display:none;margin-top:8px;">
+              <img id="offeringGalleryPickedImg" src="" style="height:80px;border-radius:8px;object-fit:cover;">
+              <div class="small text-muted mt-1">Selected from Offering Image Gallery</div>
+            </div>
+            {% if offering and offering.image %}<div class="mt-2"><img src="{{ offering.image.url }}" style="height:42px;border-radius:6px;object-fit:cover;"><small class="text-muted ms-2">Current image</small></div>{% endif %}
+          </div>
+
+          <div class="col-12">
+            <div class="form-check form-switch mt-2">
+              <input class="form-check-input" type="checkbox" name="is_active" id="isActiveOffering" {% if not offering or offering.is_active %}checked{% endif %}>
+              <label class="form-check-label" for="isActiveOffering">Active</label>
+            </div>
+          </div>
+
+          <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-cf-primary">{{ action }} Offering</button>
+            <a href="{% url 'dashboard:offering_list' %}" class="btn btn-cf-outline">Cancel</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# Offering Gallery Modal (unchanged) #}
+<div class="modal fade" id="offeringGalleryModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title"><i class="bi bi-images me-2"></i>Pick from Offering Image Gallery</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="search" id="offeringGallerySearch" class="form-control mb-3" placeholder="Search gallery..."><div id="offeringGalleryGrid" class="row g-3"><div class="col-12 text-center text-muted py-4">Loading…</div></div></div></div></div>
+</div>
+
+<script>
+// ── Multi-slot schedule rows ──────────────────────────────────
+let scheduleRowCount = {{ existing_schedules|length|default:0 }};
+
+const DAY_OPTIONS = [
+  {% for abbr, label in weekday_choices %}['{{ abbr }}', '{{ label }}'],{% endfor %}
+  ['All', 'All Days']
+];
+
+function buildDayOptions(selectedDay) {
+  return DAY_OPTIONS.map(([v, l]) =>
+    `<option value="${v}"${v === selectedDay ? ' selected' : ''}>${l}</option>`
+  ).join('');
+}
+
+function addScheduleRow(day='Mon', start='', end='') {
+  const idx = scheduleRowCount++;
+  const row = document.createElement('div');
+  row.className = 'schedule-row';
+  row.innerHTML = `
+    <select name="window_day_${idx}">${buildDayOptions(day)}</select>
+    <input type="time" name="window_start_${idx}" value="${start}">
+    <span style="color:var(--cf-muted);font-size:13px;">to</span>
+    <input type="time" name="window_end_${idx}" value="${end}">
+    <button type="button" class="btn-remove" onclick="removeScheduleRow(this)">✕</button>
+  `;
+  document.getElementById('schedule-rows').appendChild(row);
+}
+
+function removeScheduleRow(btn) {
+  btn.closest('.schedule-row').remove();
+  document.querySelectorAll('#schedule-rows .schedule-row').forEach((row, i) => {
+    row.querySelector('select').name                  = `window_day_${i}`;
+    row.querySelectorAll('input[type=time]')[0].name  = `window_start_${i}`;
+    row.querySelectorAll('input[type=time]')[1].name  = `window_end_${i}`;
+  });
+  scheduleRowCount = document.querySelectorAll('#schedule-rows .schedule-row').length;
+}
+
+// ── Gallery helpers (unchanged) ───────────────────────────────
+function clearOfferingGalleryPick(){document.getElementById('offeringGalleryImageUrl').value='';document.getElementById('offeringGalleryPickedPreview').style.display='none';document.getElementById('offeringGalleryPickedImg').src='';}
+async function loadOfferingGallery(q=''){const grid=document.getElementById('offeringGalleryGrid');const co=document.querySelector('[name="company"]')?.value||'{{ offering.company_id|default:"" }}';const url=`{% url 'dashboard:offering_gallery_api' %}?q=${encodeURIComponent(q)}${co?`&company=${co}`:''}`;const r=await fetch(url);const data=await r.json();if(!data.images||!data.images.length){grid.innerHTML='<div class="col-12 text-center text-muted py-4">No images found.</div>';return;}grid.innerHTML=data.images.map(img=>`<div class="col-6 col-md-3"><div class="border rounded-3 overflow-hidden bg-white h-100"><img src="${img.url}" style="width:100%;height:140px;object-fit:cover;"><div class="p-2"><div class="small fw-bold text-truncate">${img.name}</div><div class="small text-muted">${img.company}</div><button type="button" class="btn btn-cf-primary btn-sm w-100 mt-2 pick-offering" data-url="${img.url}">Use this image</button></div></div></div>`).join('');}
+function pickOfferingGalleryImage(url){document.getElementById('offeringGalleryImageUrl').value=url;document.getElementById('offeringGalleryPickedImg').src=url;document.getElementById('offeringGalleryPickedPreview').style.display='block';bootstrap.Modal.getInstance(document.getElementById('offeringGalleryModal')).hide();}
+function openOfferingGalleryPicker(){const modal=new bootstrap.Modal(document.getElementById('offeringGalleryModal'));modal.show();loadOfferingGallery();}
+document.getElementById('offeringGallerySearch')?.addEventListener('input',e=>loadOfferingGallery(e.target.value));
+document.getElementById('offeringGalleryGrid')?.addEventListener('click',e=>{const btn=e.target.closest('.pick-offering');if(!btn)return;pickOfferingGalleryImage(btn.dataset.url);});
+</script>
+{% if perm_level %}
+<script>
+(function(){
+  var LVL="{{ perm_level }}";
+  var LOCKED=new Set({{ locked_names_json|safe }});
+  var form=document.querySelector('form[method="post"]');
+  if(form&&LVL!=="full_edit"){
+    var html=LVL==="view"
+      ?'<div class="alert alert-warning py-2 mb-3" style="border-radius:10px;"><i class="bi bi-eye-fill me-2"></i><strong>View-only access</strong> — you can see this record but cannot save changes.</div>'
+      :'<div class="alert alert-info py-2 mb-3" style="border-radius:10px;"><i class="bi bi-shield-lock me-2"></i><strong>Limited edit access</strong> — fields marked 🔒 cannot be modified.</div>';
+    form.insertAdjacentHTML("afterbegin",html);
+  }
+  if(LVL==="view"){
+    document.querySelectorAll('button[type="submit"]').forEach(function(b){b.style.display="none";});
+  }
+  if(LOCKED.size){
+    document.querySelectorAll("input,select,textarea").forEach(function(el){
+      if(!LOCKED.has(el.name))return;
+      el.disabled=true;el.style.background="#f8f9fa";el.style.cursor="not-allowed";el.style.opacity="0.7";
+      var c=el.closest('[class*="col-"]');
+      if(c){
+        var lb=c.querySelector("label");
+        if(lb&&!lb.querySelector(".flock"))lb.insertAdjacentHTML("beforeend",' <span class="flock" style="font-size:11px;" title="You do not have permission to edit this field">🔒</span>');
+      }
+    });
+    if(LOCKED.has("__schedule_windows__")){
+      document.querySelectorAll('[name^="window_day_"],[name^="window_start_"],[name^="window_end_"]').forEach(function(el){
+        el.disabled=true;el.style.background="#f8f9fa";el.style.cursor="not-allowed";el.style.opacity="0.7";
+      });
+      var ab=document.getElementById("add-schedule-btn");if(ab)ab.style.display="none";
+      document.querySelectorAll(".btn-remove").forEach(function(b){b.style.display="none";});
+    }
+    if(LOCKED.has("food_types")){
+      document.querySelectorAll(".food-type-pill").forEach(function(p){
+        p.style.pointerEvents="none";p.style.opacity="0.65";
+      });
+    }
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base/customer_base.html" %}
+{% load core_extras %}
+{% block content %}
+<div class="page-strip">
+  <div class="container d-flex align-items-center gap-3">
+    <a href="{% url 'orders:order_detail' order.pk %}" class="btn btn-sm" style="background:var(--cf-blue-light);color:var(--cf-blue);border-radius:6px;font-weight:600;">
+      <i class="bi bi-arrow-left me-1"></i>Order
+    </a>
+    <h4 style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--cf-navy);margin:0;">Leave a Review</h4>
+  </div>
+</div>
+<div class="container mt-3 pb-4" style="max-width:540px;">
+  <div style="background:white;border:1px solid var(--cf-border);border-radius:var(--cf-radius);padding:24px;">
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-size:48px;">⭐</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:19px;color:var(--cf-navy);">How was your order?</div>
+      <div style="font-size:13px;color:var(--cf-muted);">Order #{{ order.order_number|short_order_no }}</div>
+    </div>
+    <form method="post">
+      {% csrf_token %}
+      <div class="mb-4">
+        <label class="form-label text-center d-block">Rating</label>
+        <div style="display:flex;justify-content:center;gap:8px;" id="starRow">
+          {% for i in "12345" %}
+          <label style="cursor:pointer;font-size:36px;color:#D1D5DB;transition:color .15s;" data-val="{{ i }}">
+            ★<input type="radio" name="rating" value="{{ i }}" style="display:none;" {% if i == "5" %}checked{% endif %}>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Comments (optional)</label>
+        <textarea name="details" class="form-control" rows="4" placeholder="Tell us about your experience…"></textarea>
+      </div>
+      <button type="submit" class="btn btn-cf-primary w-100 py-2" style="font-family:'Rajdhani',sans-serif;font-size:17px;">
+        Submit Review
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+const stars = document.querySelectorAll('#starRow label');
+stars.forEach((star, i) => {
+  star.addEventListener('click', () => {
+    star.querySelector('input').checked = true;
+    stars.forEach((s, j) => s.style.color = j <= i ? '#F59E0B' : '#D1D5DB');
+  });
+});
+// Init to 5 stars
+stars.forEach(s => s.style.color = '#F59E0B');
+</script>
+<script>
+window.NEVERQ_PAGE_TOUR_KEY = 'leave-review';
+window.NEVERQ_PAGE_TOUR = [
+  {selector:'.page-strip', title:'Leave a review', copy:'This page is only for rating the selected delivered order.', placement:'bottom'},
+  {selector:'#starRow', title:'Choose a rating', copy:'Tap a star here to rate the order from one to five.', placement:'bottom'},
+  {selector:'textarea[name="details"]', title:'Optional feedback', copy:'Add a short comment if you want to explain the rating in more detail.', placement:'top'},
+  {selector:'button[type="submit"]', title:'Submit review', copy:'Send the review when you are done and it will be saved to your account.', placement:'top'}
+];
+</script>
+{% endblock %}
