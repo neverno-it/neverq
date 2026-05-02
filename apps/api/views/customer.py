@@ -1,5 +1,6 @@
 from decimal import Decimal
 from django.utils import timezone
+from django.db.models import Count, Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -11,8 +12,15 @@ from apps.api.serializers import (
     CustomerProfileSerializer, ProductSerializer, CategorySerializer,
     CartItemSerializer, OrderListSerializer, OrderDetailSerializer,
     ReviewSerializer, NotificationSerializer, CompanySerializer,
+    BannerSerializer, OfferingSerializer, OfferSerializer, CafeSerializer,
 )
-from apps.menu.models import Category, Product
+from apps.menu.models import Category, Product, Advertise, Offering, Offer, OfferUsage, Cafe
+from apps.menu.views import (
+    _attach_display_prices,
+    _mark_free_meal_products,
+    _product_is_visible_for_customer,
+    _resolve_customer_cafe,
+)
 from apps.orders.models import Order, OrderItem, OrderStatusChoices, PaymentModeChoices
 from apps.core.models import Coupon, Notification
 from apps.reviews.models import Review
@@ -51,27 +59,208 @@ class MenuView(APIView):
     def get(self, request):
         customer = request.user
         company = customer.company
+        building = getattr(customer, 'building', None)
+
+        query = (request.query_params.get('q') or '').strip()
+        food_pref = (request.query_params.get('food') or '').strip().lower()
+        offering_filter = (request.query_params.get('offering') or '').strip()
+        calorie_max = None
+        try:
+            calorie_max_raw = (request.query_params.get('calorie_max') or '').strip()
+            calorie_max = int(calorie_max_raw) if calorie_max_raw else None
+        except (TypeError, ValueError):
+            calorie_max = None
 
         categories = (
             Category.objects
-            .filter(companies=company, is_active=True, is_deleted=False)
+            .filter(companies=company, is_deleted=False)
+            .prefetch_related('schedules', 'company_statuses')
             .distinct()
             .order_by('position_order', 'name')
         )
+        visible_categories = [category for category in categories if category.is_active_now(company)]
 
-        products = (
+        adverts = [
+            ad for ad in Advertise.objects.filter(
+                is_active=True,
+                status=Advertise.STATUS_APPROVED,
+            ).filter(companies=company).distinct().prefetch_related('holiday_schedules').order_by('position_order')
+            if ad.is_live
+        ]
+
+        offerings_qs = (
+            Offering.objects
+            .filter(company=company, is_deleted=False, is_active=True)
+            .prefetch_related('schedules')
+            .order_by('position_order', 'name')
+        )
+        offerings = [offering for offering in offerings_qs if offering.is_active_now()]
+        selected_offering = None
+        if offering_filter:
+            selected_offering = next(
+                (offering for offering in offerings if str(offering.pk) == offering_filter or offering.slug == offering_filter),
+                None,
+            )
+
+        offer_qs = (
+            Offer.objects
+            .filter(company=company, is_deleted=False)
+            .select_related('product', 'cafe')
+            .prefetch_related('products')
+            .order_by('-created_at')
+        )
+        all_live_offers = [offer for offer in offer_qs if offer.is_live]
+        one_use_offer_types = {
+            Offer.TYPE_BOGO,
+            Offer.TYPE_FREE,
+            Offer.TYPE_PERCENT,
+            Offer.TYPE_FLAT,
+            Offer.TYPE_CART,
+        }
+        used_offer_ids = set(
+            OfferUsage.objects.filter(
+                customer=customer,
+                offer__in=all_live_offers,
+                used_on=timezone.localdate(),
+            ).values_list('offer_id', flat=True)
+        )
+        live_offers = [
+            offer for offer in all_live_offers
+            if offer.offer_type not in one_use_offer_types or offer.pk not in used_offer_ids
+        ]
+
+        base_products = (
             Product.objects
             .filter(company=company, is_active=True, is_deleted=False)
-            .select_related('category')
-            .prefetch_related('food_type')
-            .order_by('category__position_order', 'position_order', 'name')
+            .select_related('category', 'offering')
+            .prefetch_related('food_type', 'category__company_statuses')
+        )
+        if query:
+            base_products = base_products.filter(
+                Q(name__icontains=query)
+                | Q(description__icontains=query)
+                | Q(code__icontains=query)
+                | Q(category__name__icontains=query)
+                | Q(offering__name__icontains=query)
+            )
+        if selected_offering:
+            base_products = base_products.filter(offering=selected_offering)
+
+        products = []
+        for product in base_products.order_by('category__position_order', 'category__name', 'position_order', 'name'):
+            if _product_is_visible_for_customer(product, company, food_pref):
+                if calorie_max is None or (product.calories is not None and product.calories <= calorie_max):
+                    products.append(product)
+
+        pinned_featured_products = []
+        fallback_featured_products = []
+        featured_qs = (
+            base_products
+            .annotate(order_count=Count('orderitem'))
+            .order_by('-rating', '-order_count', 'category__position_order', 'category__name', 'position_order', 'name')
+        )
+        for product in featured_qs:
+            if len(pinned_featured_products) >= 8 and len(fallback_featured_products) >= 8:
+                break
+            if _product_is_visible_for_customer(product, company, food_pref):
+                if calorie_max is None or (product.calories is not None and product.calories <= calorie_max):
+                    if product.featured_in_web:
+                        pinned_featured_products.append(product)
+                    if len(fallback_featured_products) < 8:
+                        fallback_featured_products.append(product)
+        featured_products = pinned_featured_products[:8] if pinned_featured_products else fallback_featured_products
+
+        selected_cafe = _resolve_customer_cafe(customer, company, request=None)
+        _attach_display_prices(products, company, building=building, cafe=selected_cafe, used_offer_ids=used_offer_ids)
+        _attach_display_prices(featured_products, company, building=building, cafe=selected_cafe, used_offer_ids=used_offer_ids)
+        _mark_free_meal_products(products, company)
+        _mark_free_meal_products(featured_products, company)
+
+        recent_orders = (
+            customer.orders
+            .filter(is_deleted=False)
+            .prefetch_related('items__product')
+            .order_by('-created_at')[:3]
+        )
+
+        cafes = (
+            Cafe.objects
+            .filter(company=company, is_active=True, is_deleted=False)
+            .select_related('building')
+            .order_by('name')
         )
 
         return Response({
-            'categories': CategorySerializer(categories, many=True).data,
+            'categories': CategorySerializer(visible_categories, many=True, context={'request': request}).data,
             'products': ProductSerializer(products, many=True, context={'request': request}).data,
+            'featured_products': ProductSerializer(featured_products, many=True, context={'request': request}).data,
+            'banners': BannerSerializer(adverts, many=True, context={'request': request}).data,
+            'offerings': OfferingSerializer(offerings, many=True, context={'request': request}).data,
+            'offers': OfferSerializer(live_offers[:6], many=True, context={'request': request}).data,
+            'recent_orders': OrderListSerializer(recent_orders, many=True).data,
+            'cafes': CafeSerializer(cafes, many=True).data,
+            'selected_cafe_id': selected_cafe.pk if selected_cafe else None,
             'is_store_open': company.is_store_open,
             'ordering_status_message': company.ordering_status_message,
+            'store_name': company.name,
+            'order_window_label': company.order_window_label,
+        })
+
+
+class ProductDetailView(APIView):
+    authentication_classes = [NeverQJWTAuthentication]
+    permission_classes = [IsCustomer]
+
+    def get(self, request, pk):
+        customer = request.user
+        company = customer.company
+        try:
+            product = (
+                Product.objects
+                .select_related('category', 'offering')
+                .prefetch_related('food_type', 'category__company_statuses')
+                .get(pk=pk, company=company, is_active=True, is_deleted=False)
+            )
+        except Product.DoesNotExist:
+            return Response({'detail': 'Product not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        used_offer_ids = set(
+            OfferUsage.objects.filter(customer=customer, used_on=timezone.localdate())
+            .values_list('offer_id', flat=True)
+        )
+        selected_cafe = _resolve_customer_cafe(customer, company, request=None)
+        _attach_display_prices(
+            [product],
+            company,
+            building=getattr(customer, 'building', None),
+            cafe=selected_cafe,
+            used_offer_ids=used_offer_ids,
+        )
+        _mark_free_meal_products([product], company)
+
+        similar = [
+            candidate for candidate in (
+                Product.objects
+                .filter(company=company, category=product.category, is_active=True, is_deleted=False)
+                .exclude(pk=product.pk)
+                .select_related('category', 'offering')
+                .prefetch_related('food_type', 'category__company_statuses')
+                .order_by('position_order', 'name')[:8]
+            )
+            if _product_is_visible_for_customer(candidate, company)
+        ]
+        _attach_display_prices(
+            similar,
+            company,
+            building=getattr(customer, 'building', None),
+            cafe=selected_cafe,
+            used_offer_ids=used_offer_ids,
+        )
+        _mark_free_meal_products(similar, company)
+
+        return Response({
+            'product': ProductSerializer(product, context={'request': request}).data,
+            'similar_products': ProductSerializer(similar, many=True, context={'request': request}).data,
         })
 
 

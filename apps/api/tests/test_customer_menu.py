@@ -5,7 +5,7 @@ from rest_framework.test import APIClient
 
 from apps.accounts.models import Customer
 from apps.core.models import Company
-from apps.menu.models import Category, Product
+from apps.menu.models import Advertise, Category, Offer, Offering, Product
 
 
 class CustomerMenuApiTests(TestCase):
@@ -42,6 +42,23 @@ class CustomerMenuApiTests(TestCase):
             position_order=1,
             is_active=True,
             is_deleted=False,
+            featured_in_web=True,
+        )
+        offering = Offering.objects.create(company=self.company, name="Breakfast Slot", slug="breakfast-slot")
+        advert = Advertise.objects.create(
+            company=self.company,
+            name="Morning Banner",
+            status=Advertise.STATUS_APPROVED,
+            is_active=True,
+        )
+        advert.companies.add(self.company)
+        Offer.objects.create(
+            company=self.company,
+            title="Morning Deal",
+            offer_type=Offer.TYPE_PERCENT,
+            value=Decimal("10.00"),
+            is_active=True,
+            is_deleted=False,
         )
 
         response = self.client.get("/api/v1/customer/menu/")
@@ -51,3 +68,8 @@ class CustomerMenuApiTests(TestCase):
         self.assertEqual(response.data["products"][0]["name"], "Idli")
         self.assertEqual(response.data["products"][0]["is_veg"], True)
         self.assertEqual(response.data["products"][0]["is_available"], True)
+        self.assertEqual(response.data["featured_products"][0]["name"], "Idli")
+        self.assertEqual(response.data["banners"][0]["name"], "Morning Banner")
+        self.assertEqual(response.data["offerings"][0]["name"], offering.name)
+        self.assertEqual(response.data["offers"][0]["title"], "Morning Deal")
+        self.assertEqual(response.data["store_name"], self.company.name)

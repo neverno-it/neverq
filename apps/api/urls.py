@@ -1,7 +1,7 @@
 from django.urls import path
-from apps.api.views.auth import LoginView, TokenRefreshView, LogoutView, FCMTokenView
+from apps.api.views.auth import LoginView, TokenRefreshView, LogoutView, FCMTokenView, GoogleLoginView
 from apps.api.views.customer import (
-    CustomerProfileView, StoreInfoView, MenuView,
+    CustomerProfileView, StoreInfoView, MenuView, ProductDetailView,
     CartView, CartClearView, CouponApplyView, CheckoutView,
     OrderListView, OrderDetailView, ReviewCreateView, NotificationsView,
 )
@@ -18,6 +18,7 @@ app_name = 'api'
 urlpatterns = [
     # ── Auth ─────────────────────────────────────────────────────────────────
     path('auth/login/',         LoginView.as_view(),        name='login'),
+    path('auth/google/',        GoogleLoginView.as_view(),  name='google_login'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/logout/',        LogoutView.as_view(),       name='logout'),
     path('auth/fcm-token/',     FCMTokenView.as_view(),     name='fcm_token'),
@@ -26,6 +27,7 @@ urlpatterns = [
     path('customer/profile/',         CustomerProfileView.as_view(), name='customer_profile'),
     path('customer/store/',           StoreInfoView.as_view(),       name='store_info'),
     path('customer/menu/',            MenuView.as_view(),            name='menu'),
+    path('customer/products/<int:pk>/', ProductDetailView.as_view(), name='customer_product_detail'),
     path('customer/cart/',            CartView.as_view(),            name='cart'),
     path('customer/cart/clear/',      CartClearView.as_view(),       name='cart_clear'),
     path('customer/coupon/apply/',    CouponApplyView.as_view(),     name='coupon_apply'),

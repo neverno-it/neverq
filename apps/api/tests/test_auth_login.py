@@ -1,5 +1,6 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
+from unittest.mock import patch
 
 from apps.accounts.models import Customer
 from apps.core.models import Company
@@ -59,3 +60,20 @@ class LoginApiCustomerTests(TestCase):
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.data["detail"], "Invalid email or password.")
+
+    @patch("apps.api.views.auth._verify_google_app_id_token")
+    def test_google_login_returns_customer_jwt(self, verify_google):
+        customer = make_customer(make_company("GoogleCo"), "google@example.com", "unused", name="Google User")
+        verify_google.return_value = {"email": customer.email, "name": customer.name}
+
+        response = self.client.post(
+            "/api/v1/auth/google/",
+            {"id_token": "google-id-token"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["auth_status"], "logged_in")
+        self.assertEqual(response.data["user_type"], "customer")
+        self.assertEqual(response.data["company_id"], customer.company_id)
+        self.assertTrue(response.data["access"])

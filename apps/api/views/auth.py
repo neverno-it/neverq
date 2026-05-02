@@ -6,6 +6,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 
 from apps.accounts.models import StaffUser, Customer
+from apps.accounts.decorators import enforce_customer_active_state
+from apps.accounts.views import _try_auto_create_google_customer, _verify_google_app_id_token
 from apps.api.authentication import NeverQJWTAuthentication, make_tokens_for_staff, make_tokens_for_customer
 from apps.api.serializers import LoginSerializer, FCMTokenSerializer
 from apps.api.models import FCMDevice
@@ -93,6 +95,115 @@ class LoginView(APIView):
             {'detail': 'Invalid email or password.'},
             status=status.HTTP_401_UNAUTHORIZED,
         )
+
+
+def _customer_token_response(customer, *, extra=None):
+    tokens = make_tokens_for_customer(customer)
+    payload = {
+        **tokens,
+        'user_type': 'customer',
+        'role': 'customer',
+        'name': customer.name,
+        'email': customer.email,
+        'company_id': customer.company_id,
+    }
+    if extra:
+        payload.update(extra)
+    return payload
+
+
+class GoogleLoginView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        raw_id_token = (request.data.get('id_token') or '').strip()
+        selected_customer_id = request.data.get('customer_id')
+        if not raw_id_token:
+            return Response({'detail': 'Missing Google id token.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user_info = _verify_google_app_id_token(raw_id_token)
+        except Exception as exc:
+            return Response(
+                {'detail': f'Google token verification failed: {exc}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = (user_info.get('email') or '').strip().lower()
+        name = (user_info.get('name') or '').strip()
+        customers = list(
+            Customer.objects.select_related('company', 'building').filter(
+                email__iexact=email,
+                is_deleted=False,
+            )
+        )
+        if not customers:
+            customers = [
+                customer for customer in Customer.objects.select_related('company', 'building').filter(is_deleted=False)
+                if (customer.email or '').strip().lower() == email
+            ]
+
+        if not customers:
+            created = _try_auto_create_google_customer(email=email, name=name)
+            if created:
+                customers = [created]
+            else:
+                return Response(
+                    {
+                        'detail': 'No customer account found for this Google email. Please sign up first.',
+                        'auth_status': 'register_required',
+                        'email': email,
+                        'name': name,
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        for customer in customers:
+            enforce_customer_active_state(customer)
+
+        for customer in customers:
+            if customer.is_active and customer.is_approved and not customer.is_email_verified:
+                customer.is_email_verified = True
+                customer.save(update_fields=['is_email_verified'])
+
+        approved_customers = [
+            customer for customer in customers
+            if customer.is_active and customer.is_approved and customer.is_email_verified
+        ]
+
+        if not approved_customers:
+            if any(not customer.is_active for customer in customers):
+                return Response({'detail': 'Your account is inactive. Please contact admin.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'detail': 'Your account is pending approval. Please contact admin.'}, status=status.HTTP_403_FORBIDDEN)
+
+        if selected_customer_id:
+            selected = next((customer for customer in approved_customers if str(customer.pk) == str(selected_customer_id)), None)
+            if selected is None:
+                return Response({'detail': 'Please select a valid customer account.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(_customer_token_response(selected, extra={'auth_status': 'logged_in'}))
+
+        if len(approved_customers) > 1:
+            return Response(
+                {
+                    'detail': 'Select the company account you want to use.',
+                    'auth_status': 'select_account',
+                    'accounts': [
+                        {
+                            'id': customer.pk,
+                            'name': customer.name,
+                            'email': customer.email,
+                            'company_id': customer.company_id,
+                            'company_name': customer.company.name if customer.company_id else '',
+                            'building_name': customer.building.name if customer.building_id else '',
+                        }
+                        for customer in approved_customers
+                    ],
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        return Response(_customer_token_response(approved_customers[0], extra={'auth_status': 'logged_in'}))
 
 
 class TokenRefreshView(APIView):
