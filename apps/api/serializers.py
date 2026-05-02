@@ -78,6 +78,8 @@ class OfferingSerializer(serializers.ModelSerializer):
 
 
 class CategorySerializer(serializers.ModelSerializer):
+    sort_order = serializers.IntegerField(source='position_order', read_only=True)
+
     class Meta:
         model = Category
         fields = ['id', 'name', 'slug', 'parent_id', 'sort_order']
@@ -86,6 +88,7 @@ class CategorySerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
     category_name = serializers.CharField(source='category.name', read_only=True)
+    is_veg = serializers.SerializerMethodField()
     is_available = serializers.SerializerMethodField()
 
     class Meta:
@@ -107,6 +110,12 @@ class ProductSerializer(serializers.ModelSerializer):
             return obj.is_available_now()
         except Exception:
             return obj.is_active
+
+    def get_is_veg(self, obj):
+        category = getattr(obj, 'category', None)
+        if category is not None:
+            return bool(getattr(category, 'is_veg', False))
+        return obj.food_type.filter(name__icontains='veg').exists()
 
 
 # ── Cart ──────────────────────────────────────────────────────────────────────

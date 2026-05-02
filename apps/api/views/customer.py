@@ -54,15 +54,17 @@ class MenuView(APIView):
 
         categories = (
             Category.objects
-            .filter(company=company, is_active=True, is_deleted=False)
-            .order_by('sort_order', 'name')
+            .filter(companies=company, is_active=True, is_deleted=False)
+            .distinct()
+            .order_by('position_order', 'name')
         )
 
         products = (
             Product.objects
-            .filter(company=company, is_active=True, is_deleted=False, is_web_active=True)
+            .filter(company=company, is_active=True, is_deleted=False)
             .select_related('category')
-            .order_by('category__sort_order', 'sort_order', 'name')
+            .prefetch_related('food_type')
+            .order_by('category__position_order', 'position_order', 'name')
         )
 
         return Response({

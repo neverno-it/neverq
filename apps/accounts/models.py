@@ -142,6 +142,14 @@ class Customer(models.Model):
     def __str__(self):
         return f"{self.name} — {self.email}"
 
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_anonymous(self):
+        return False
+
     def save(self, *args, **kwargs):
         if not self.created_at:
             self.created_at = timezone.now()
