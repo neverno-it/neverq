@@ -39,17 +39,25 @@ class LoginView(APIView):
         except StaffUser.DoesNotExist:
             pass
 
-        # Try Customer
-        try:
-            customer = Customer.objects.select_related('company').get(
-                email__iexact=email, is_active=True, is_deleted=False
+        # Try Customer. Customer.email is not unique because the same person can
+        # have accounts across companies/buildings, so never use get() here.
+        customers = list(
+            Customer.objects.select_related('company', 'building').filter(
+                email__iexact=email,
+                is_deleted=False,
             )
-            if customer.check_password(password):
-                if not customer.is_approved:
-                    return Response(
-                        {'detail': 'Your account is pending approval.'},
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
+        )
+        matched_customers = [customer for customer in customers if customer.check_password(password)]
+
+        if matched_customers:
+            active_customers = [customer for customer in matched_customers if customer.is_active]
+            approved_customers = [
+                customer for customer in active_customers
+                if customer.is_approved and customer.is_email_verified
+            ]
+
+            if len(approved_customers) == 1:
+                customer = approved_customers[0]
                 tokens = make_tokens_for_customer(customer)
                 return Response({
                     **tokens,
@@ -59,8 +67,27 @@ class LoginView(APIView):
                     'email': customer.email,
                     'company_id': customer.company_id,
                 })
-        except Customer.DoesNotExist:
-            pass
+
+            if len(approved_customers) > 1:
+                return Response(
+                    {'detail': 'Multiple customer accounts found for this email. Please use the web portal to select an account.'},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            if any(customer.is_approved and not customer.is_email_verified for customer in active_customers):
+                return Response(
+                    {'detail': 'Please verify your email before signing in.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if any(not customer.is_active for customer in matched_customers):
+                return Response(
+                    {'detail': 'Your account is inactive. Please contact admin.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            return Response(
+                {'detail': 'Your account is pending approval.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         return Response(
             {'detail': 'Invalid email or password.'},
