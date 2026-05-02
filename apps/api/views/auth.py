@@ -11,6 +11,7 @@ from apps.accounts.views import _try_auto_create_google_customer, _verify_google
 from apps.api.authentication import NeverQJWTAuthentication, make_tokens_for_staff, make_tokens_for_customer
 from apps.api.serializers import LoginSerializer, FCMTokenSerializer
 from apps.api.models import FCMDevice
+from apps.core.models import Company, Building
 
 
 class LoginView(APIView):
@@ -272,3 +273,101 @@ class FCMTokenView(APIView):
         FCMDevice.objects.update_or_create(**kwargs)
 
         return Response({'detail': 'FCM token registered.'})
+
+
+class CompanyListView(APIView):
+    """Public — returns companies available for customer self-registration."""
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        companies = (
+            Company.objects
+            .filter(is_active=True, is_deleted=False)
+            .prefetch_related('buildings')
+            .order_by('name')
+        )
+        data = []
+        for company in companies:
+            buildings = list(
+                company.buildings
+                .filter(is_active=True, is_deleted=False)
+                .order_by('name')
+                .values('id', 'name')
+            )
+            data.append({
+                'id': company.id,
+                'name': company.name,
+                'buildings': buildings,
+            })
+        return Response(data)
+
+
+class CustomerRegisterView(APIView):
+    """Public — self-service customer registration from the Android app."""
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        name = (request.data.get('name') or '').strip()
+        email = (request.data.get('email') or '').strip().lower()
+        password = (request.data.get('password') or '').strip()
+        phone = (request.data.get('phone') or '').strip()
+        company_id = request.data.get('company_id')
+        building_id = request.data.get('building_id')
+
+        # Basic validation
+        if not name:
+            return Response({'detail': 'Name is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not email:
+            return Response({'detail': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not password or len(password) < 6:
+            return Response({'detail': 'Password must be at least 6 characters.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not company_id:
+            return Response({'detail': 'Company is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            company = Company.objects.get(pk=company_id, is_active=True, is_deleted=False)
+        except Company.DoesNotExist:
+            return Response({'detail': 'Invalid company.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        building = None
+        if building_id:
+            try:
+                building = Building.objects.get(pk=building_id, company=company, is_active=True, is_deleted=False)
+            except Building.DoesNotExist:
+                return Response({'detail': 'Invalid building.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Duplicate check: same email in same company
+        if Customer.objects.filter(email__iexact=email, company=company, is_deleted=False).exists():
+            return Response(
+                {'detail': 'An account with this email already exists for this company.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        customer = Customer(
+            name=name,
+            email=email,
+            phone=phone,
+            company=company,
+            building=building,
+            is_active=True,
+            is_approved=True,
+            is_email_verified=True,
+        )
+        customer.set_password(password)
+        customer.save()
+
+        from apps.api.authentication import make_tokens_for_customer
+        tokens = make_tokens_for_customer(customer)
+        return Response(
+            {
+                **tokens,
+                'user_type': 'customer',
+                'role': 'customer',
+                'name': customer.name,
+                'email': customer.email,
+                'company_id': customer.company_id,
+            },
+            status=status.HTTP_201_CREATED,
+        )

@@ -1,5 +1,5 @@
 from django.urls import path
-from apps.api.views.auth import LoginView, TokenRefreshView, LogoutView, FCMTokenView, GoogleLoginView
+from apps.api.views.auth import LoginView, TokenRefreshView, LogoutView, FCMTokenView, GoogleLoginView, CompanyListView, CustomerRegisterView
 from apps.api.views.customer import (
     CustomerProfileView, StoreInfoView, MenuView, ProductDetailView,
     CartView, CartClearView, CouponApplyView, CheckoutView,
@@ -22,6 +22,8 @@ urlpatterns = [
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/logout/',        LogoutView.as_view(),       name='logout'),
     path('auth/fcm-token/',     FCMTokenView.as_view(),     name='fcm_token'),
+    path('auth/companies/',     CompanyListView.as_view(),  name='company_list'),
+    path('auth/register/',      CustomerRegisterView.as_view(), name='customer_register'),
 
     # ── Customer ──────────────────────────────────────────────────────────────
     path('customer/profile/',         CustomerProfileView.as_view(), name='customer_profile'),
