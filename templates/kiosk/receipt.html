@@ -171,6 +171,7 @@
     <h1 style="font-size:18px;margin:4px 0 2px;">{{ company.name }}</h1>
     {% if company.phone %}<p style="margin:1px 0;font-size:12px;color:#555;">Phone: {{ company.phone }}</p>{% endif %}
     {% if company.company_gst %}<p style="margin:1px 0;font-size:12px;color:#555;">GSTIN: {{ company.company_gst }}</p>{% endif %}
+    {% if company.fssai_number %}<p style="margin:1px 0;font-size:12px;color:#555;">FSSAI: {{ company.fssai_number }}</p>{% endif %}
     <p style="margin:6px 0 0;font-weight:700;font-size:13px;">ORDER RECEIPT &amp; PICKUP SLIP</p>
   </div>
 
@@ -367,6 +368,7 @@ function systemPrint(onDone) {
           <div class="company">${esc(t.company_name || '')}</div>
           ${t.company_phone ? `<div class="co-detail">Ph: ${esc(t.company_phone)}</div>` : ''}
           ${t.company_gst ? `<div class="co-detail">GSTIN: ${esc(t.company_gst)}</div>` : ''}
+          ${t.company_fssai ? `<div class="co-detail">FSSAI: ${esc(t.company_fssai)}</div>` : ''}
           <div class="receipt-title">ORDER RECEIPT</div>
 
           <div class="rule"></div>
@@ -691,6 +693,7 @@ const ticketsData = [
     company_name:  "{{ company.name|escapejs }}",
     company_phone: "{{ company.phone|escapejs }}",
     company_gst:   "{{ company.company_gst|escapejs }}",
+    company_fssai: "{{ company.fssai_number|escapejs }}",
     customer_name: "{{ order.display_customer_name|escapejs }}",
     customer_phone: "{{ order.display_customer_phone|escapejs }}",
     payment_mode:  "{{ order.get_payment_mode_display }}",
@@ -845,6 +848,7 @@ async function printTicket(t) {
     center, bold1, enc(t.company_name), bold0,
     t.company_phone ? enc('Ph: ' + t.company_phone) : new Uint8Array(0),
     t.company_gst ? enc('GSTIN: ' + t.company_gst) : new Uint8Array(0),
+    t.company_fssai ? enc('FSSAI: ' + t.company_fssai) : new Uint8Array(0),
     center, enc('ORDER RECEIPT'), enc(''),
     line,
     left,

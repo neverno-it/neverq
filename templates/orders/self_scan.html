@@ -340,9 +340,12 @@ function buildDeliveredKotBytes(kot){
   center(); bold(true); line('COLLECT AT:'); bold(false);
   dbl(true); bold(true); line((kot.counter_name || 'Counter')); bold(false); dbl(false);
   left(); hr();
-  bold(true); line('ITEM                     QTY'); bold(false); hr();
+  bold(true); line('ITEM              QTY     AMT'); bold(false); hr();
   (kot.items || []).forEach(item => {
-    line(String(item.name || 'Item').substring(0, 24).padEnd(24) + String(item.qty || '').padStart(4));
+    const nm  = String(item.name || 'Item').substring(0, 18).padEnd(18);
+    const qty = String(item.qty || '').padStart(4);
+    const amt = ('Rs.' + money(item.lt || item.line_total || '0')).padStart(9);
+    line(nm + qty + amt);
   });
   hr();
   center(); dbl(true); bold(true); line('DELIVERED'); bold(false); dbl(false);
@@ -566,34 +569,64 @@ function restartCameraForNext(delay){
 // ── Print delivered KOT via hidden iframe (avoids popup blockers) ─
 function printDeliveredKOT(d){
   var printDate=(new Date()).toLocaleDateString('en-GB');
+  function esc(v){return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function money(v){var n=parseFloat(v||0);return(Number.isFinite(n)?n:0).toFixed(2);}
+  var rows='';
+  (d.it||[]).forEach(function(i){
+    rows+='<tr>'
+      +'<td class="name">'+esc(i.n||'Item')+'</td>'
+      +'<td class="qty">'+esc(i.q||'')+'</td>'
+      +'<td class="num">Rs.'+money(i.p)+'</td>'
+      +'<td class="num">Rs.'+money(i.lt)+'</td>'
+      +'</tr>';
+  });
   var html='<!DOCTYPE html><html><head><meta charset="utf-8">'
-    +'<style>@page{size:80mm auto;margin:2.5mm}'
+    +'<style>'
+    +'@page{size:80mm auto;margin:2.5mm}'
     +'*{box-sizing:border-box;margin:0;padding:0}'
-    +'body{font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.28;width:72mm;color:#000;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;text-rendering:geometricPrecision}'
-    +'.c{text-align:center}.b{font-weight:900}'
-    +'.dv{border-top:2px solid #000;margin:6px 0}'
-    +'.dlv{font-size:19px;font-weight:900;border:3px solid #000;padding:5px 10px;'
-    +'display:inline-block;letter-spacing:3px;margin:8px 0}'
-    +'table{width:100%;border-collapse:collapse}td{padding:4px 0;font-size:13px;color:#000}'
+    +'body{font-family:\'Courier New\',monospace;font-size:11px;width:72mm;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'.c{text-align:center}'
+    +'.brand{font-size:19px;font-weight:800;letter-spacing:1.5px;line-height:1.1}'
+    +'.co{font-size:11px;font-weight:700}'
+    +'.meta{font-size:9.5px;line-height:1.3}'
+    +'.ti{font-size:10px;letter-spacing:1.6px;font-weight:700;margin-top:3px}'
+    +'.d{border-top:1px dashed #333;margin:5px 0}'
+    +'.clbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#555;margin-top:3px}'
+    +'.cval{font-size:18px;font-weight:900;margin:1px 0 3px}'
+    +'table{width:100%;border-collapse:collapse;table-layout:fixed}'
+    +'th,td{padding:2px 0;vertical-align:top}'
+    +'th{border-bottom:1px dashed #333;font-size:9.5px}'
+    +'.name{width:42%;text-align:left;word-break:break-word}'
+    +'.qty{width:10%;text-align:right}'
+    +'.num{width:24%;text-align:right}'
+    +'.tot{font-size:14px;font-weight:700;display:flex;justify-content:space-between;margin-top:4px}'
+    +'.dlv{font-size:16px;font-weight:900;border:2px solid #000;padding:4px 10px;display:inline-block;letter-spacing:2px;margin:6px 0}'
     +'</style></head><body>'
-    +'<div class="c"><div style="font-size:19px;font-weight:900;letter-spacing:1.5px;color:#000;">NEVERNO</div>'
-    +'<div style="font-size:14px;font-weight:900;color:#000;">'+d.co+'</div>'
-    +'<div style="font-size:11px;letter-spacing:1.6px;font-weight:900;color:#000;">ORDER CONFIRMED</div></div>'
-    +'<div class="dv"></div>'
-    +'<div class="b" style="font-size:15px;color:#000;">Order: '+d.on+'</div>'
-    +'<div class="b" style="font-size:13px;color:#000;">Date: '+printDate+'</div>'
-    +'<div class="b" style="font-size:14px;color:#000;">Customer: '+d.cn+(d.ph?' | '+d.ph:'')+'</div>'
-    +'<div class="dv"></div>'
-    +'<div style="font-size:10px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.5px;">COLLECT AT</div>'
-    +'<div style="font-size:20px;font-weight:900;color:#000;">'+d.ct+'</div>'
-    +'<div class="dv"></div>'
-    +'<table><tr><td class="b">Item</td><td class="b" style="text-align:right">Qty</td></tr>';
-  d.it.forEach(function(i){html+='<tr><td>'+i.n+'</td><td style="text-align:right">'+i.q+'</td></tr>';});
-  html+='</table>'
-    +'<div class="dv"></div>'
-    +'<div class="c"><div class="dlv">&#10003; DELIVERED</div></div>'
-    +'<div class="c b" style="font-size:13px;margin-top:5px;color:#000;">Total: Rs.'+d.tt+'</div>'
-    +'<div class="c" style="font-size:10px;margin-top:4px;">T&amp;C Applied.</div>'
+    +'<div class="c">'
+    +'<div class="brand">NEVERNO</div>'
+    +'<div class="co">'+esc(d.co)+'</div>'
+    +(d.cp?'<div class="meta">Ph: '+esc(d.cp)+'</div>':'')
+    +(d.cg?'<div class="meta">GSTIN: '+esc(d.cg)+'</div>':'')
+    +(d.cf?'<div class="meta">FSSAI: '+esc(d.cf)+'</div>':'')
+    +'<div class="ti">ORDER CONFIRMED</div>'
+    +'</div>'
+    +'<div class="d"></div>'
+    +'<div>Order  : <b>'+esc(d.on)+'</b></div>'
+    +'<div>Date   : '+printDate+'</div>'
+    +'<div>Name   : '+esc(d.cn)+(d.ph?' / '+esc(d.ph):'')+'</div>'
+    +(d.pm?'<div>Payment: '+esc(d.pm)+'</div>':'')
+    +'<div class="d"></div>'
+    +'<div class="clbl">Collect At</div>'
+    +'<div class="cval">'+esc(d.ct)+'</div>'
+    +'<div class="d"></div>'
+    +'<table>'
+    +'<thead><tr><th class="name">Item</th><th class="qty">Qty</th><th class="num">Price</th><th class="num">Amount</th></tr></thead>'
+    +'<tbody>'+rows+'</tbody>'
+    +'</table>'
+    +'<div class="d"></div>'
+    +'<div class="tot"><span>TOTAL</span><span>Rs.'+money(d.tt)+'</span></div>'
+    +'<div style="text-align:center;margin-top:6px;"><div class="dlv">&#10003; DELIVERED</div></div>'
+    +'<div style="text-align:center;font-size:10px;margin-top:4px;">T&amp;C Applied.</div>'
     +'</body></html>';
   var ifrm=document.createElement('iframe');
   ifrm.style.cssText='position:absolute;width:0;height:0;border:0;left:-9999px;top:0;';
@@ -637,12 +670,16 @@ function tick(){
   {% if result.ticket %}
   printDeliveredKOT({
     co: "{{ company.name|escapejs }}",
+    cp: "{{ company.phone|escapejs }}",
+    cg: "{{ company.company_gst|escapejs }}",
+    cf: "{{ company.fssai_number|escapejs }}",
     on: "{{ result.ticket.order.order_number|escapejs }}",
     cn: "{{ result.ticket.order.display_customer_name|escapejs }}",
     ph: "{{ result.ticket.order.display_customer_phone|escapejs }}",
+    pm: "{{ result.ticket.order.get_payment_mode_display|escapejs }}",
     ct: "{{ result.ticket.counter.name|default:'Counter'|escapejs }}",
     tt: "{{ result.ticket.total_amount }}",
-    it: [{% for item in result.ticket.items %}{"n":"{{ item.product.name|default:'Item'|escapejs }}","q":{{ item.qty }}}{% if not forloop.last %},{% endif %}{% endfor %}]
+    it: [{% for item in result.ticket.items %}{"n":"{{ item.product.name|default:'Item'|escapejs }}","q":{{ item.qty }},"p":"{{ item.unit_price }}","lt":"{{ item.line_total }}"}{% if not forloop.last %},{% endif %}{% endfor %}]
   });
   {% endif %}
   restartCameraForNext(3500);
