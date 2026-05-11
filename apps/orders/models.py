@@ -4,6 +4,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+from django.utils.timezone import localtime as _tz_localtime
 from apps.core.models import Company
 from apps.accounts.models import Customer
 from apps.menu.models import Product, Cafe, Counter
@@ -531,5 +532,8 @@ class CounterTicket(models.Model):
                 for i in self.items
             ],
             'total': str(sum(i.price * i.qty for i in self.items)),
-            'created_at': self.created_at.strftime('%d-%m-%Y %H:%M') if self.created_at else '',
+            'created_at': (
+                _tz_localtime(self.created_at).strftime('%d-%m-%Y %H:%M')
+                if self.created_at else ''
+            ),
         }
