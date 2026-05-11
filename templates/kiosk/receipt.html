@@ -16,7 +16,7 @@
     .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 0 0 24px; }
     .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 10px;
            text-decoration: none; border: 2px solid #333; color: #111; font-size: 15px; font-weight: 700;
-           cursor: pointer; background: #fff; }
+           cursor: pointer; background: var(--nq-surface); }
     .btn.primary { background: #111; color: #fff; border-color: #111; }
     .btn.bt { background: #0d47a1; color: #fff; border-color: #0d47a1; }
     #btStatus { text-align: center; font-size: 13px; padding: 4px 0; min-height: 20px; display: none; }
@@ -34,7 +34,7 @@
       border-radius: 14px;
       padding: 16px;
       margin-bottom: 18px;
-      background: #fff;
+      background: var(--nq-surface);
       page-break-inside: avoid;
       break-inside: avoid;
     }
@@ -43,7 +43,7 @@
     .ticket-counter-lbl { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
     .ticket-counter { font-size: 28px; font-weight: 900; margin: 4px 0 4px; }
     .ticket-cafe { font-size: 13px; color: #555; margin-bottom: 8px; }
-    .ticket-code { font-size: 13px; font-weight: 700; color: #333; margin: 2px 0; }
+    .ticket-code { font-size: 13px; font-weight: 700; color: var(--nq-text); margin: 2px 0; }
     .ticket-qr { text-align: center; flex-shrink: 0; }
     .ticket-qr img {
       width: 160px;
@@ -51,7 +51,7 @@
       border: 2px solid #222;
       border-radius: 8px;
       padding: 6px;
-      background: #fff;
+      background: var(--nq-surface);
       display: block;          /* critical for print */
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
@@ -92,7 +92,7 @@
       margin:0 auto !important;
       padding:0 !important;
       overflow-x:hidden !important;
-      background:#fff !important;
+      background: var(--nq-surface) !important;
       -webkit-print-color-adjust:exact;
       print-color-adjust:exact;
     }
@@ -103,7 +103,7 @@
       padding:0 !important;
       box-shadow:none !important;
       border:none !important;
-      background:#fff !important;
+      background: var(--nq-surface) !important;
     }
     .ticket,.ticket-row,.ticket-card{
       page-break-inside:avoid !important;
@@ -167,8 +167,11 @@
 
   <!-- Slip header -->
   <div class="slip-header">
-    <h1>{{ company.name }}</h1>
-    <p>Customer Pickup Slip</p>
+    <div style="font-size:22px;font-weight:900;letter-spacing:1px;text-transform:uppercase;">NEVERNO</div>
+    <h1 style="font-size:18px;margin:4px 0 2px;">{{ company.name }}</h1>
+    {% if company.phone %}<p style="margin:1px 0;font-size:12px;color:#555;">Phone: {{ company.phone }}</p>{% endif %}
+    {% if company.company_gst %}<p style="margin:1px 0;font-size:12px;color:#555;">GSTIN: {{ company.company_gst }}</p>{% endif %}
+    <p style="margin:6px 0 0;font-weight:700;font-size:13px;">ORDER RECEIPT &amp; PICKUP SLIP</p>
   </div>
 
   <!-- Order meta -->
@@ -196,6 +199,10 @@
       <div class="val" style="font-size:16px;">{{ selected_cafe.name }}</div>
     </div>
     {% endif %}
+    <div class="meta-box">
+      <div class="lbl">Payment</div>
+      <div class="val" style="font-size:16px;">{{ order.get_payment_mode_display }}</div>
+    </div>
   </div>
 
   <!-- Counter tickets — ONE PER COUNTER, each with its own QR -->
@@ -336,7 +343,6 @@ function systemPrint(onDone) {
     const slips = [];
 
     for (const t of ticketsData) {
-      const slipDate = new Date().toLocaleDateString('en-GB');
       let qrDataUrl = '';
       try {
         const qrCanvas = await qrToCanvas(t.scan_code, 170);
@@ -350,36 +356,53 @@ function systemPrint(onDone) {
           <div class="item-row">
             <div class="item-name">${esc(it.name || 'Item')}</div>
             <div class="item-qty">${esc(it.qty || '')}</div>
+            <div class="item-total">&#8377;${esc(it.total || '')}</div>
           </div>
         `;
       }).join('');
 
       slips.push(`
         <section class="slip">
+          <div class="neverno-brand">NEVERNO</div>
           <div class="company">${esc(t.company_name || '')}</div>
+          ${t.company_phone ? `<div class="co-detail">Ph: ${esc(t.company_phone)}</div>` : ''}
+          ${t.company_gst ? `<div class="co-detail">GSTIN: ${esc(t.company_gst)}</div>` : ''}
+          <div class="receipt-title">ORDER RECEIPT</div>
+
+          <div class="rule"></div>
 
           <div class="label">Customer</div>
           <div class="customer">${esc(t.customer_name || 'Customer')}</div>
+          ${t.customer_phone ? `<div class="co-detail">${esc(t.customer_phone)}</div>` : ''}
 
           <div class="label">Order No</div>
           <div class="order-no">${esc(t.order_number || '')}</div>
 
-          <div class="label">Date</div>
-          <div class="slip-date">${esc(slipDate)}</div>
+          <div class="label">Date &amp; Time</div>
+          <div class="slip-date">${esc(t.created_at || '')}</div>
 
-          <div class="label">Go To Counter</div>
+          <div class="rule"></div>
+
+          <div class="collect-lbl">COLLECT AT</div>
           <div class="counter">${esc(t.counter_name || 'Counter')}</div>
+          ${t.cafe_name ? `<div class="co-detail">${esc(t.cafe_name)}</div>` : ''}
 
           <div class="rule"></div>
 
           <div class="items-head">
             <span>Item</span>
-            <span>Qty</span>
+            <span style="text-align:right">Qty</span>
+            <span style="text-align:right">Amt</span>
           </div>
 
           <div class="items-block">
-            ${itemsHtml || '<div class="item-row"><div class="item-name">-</div><div class="item-qty"></div></div>'}
+            ${itemsHtml || '<div class="item-row"><div class="item-name">-</div><div class="item-qty"></div><div class="item-total"></div></div>'}
           </div>
+
+          <div class="rule"></div>
+
+          <div class="total-line">Total: &#8377;${esc(t.total || '0')}</div>
+          ${t.payment_mode ? `<div class="payment-line">Payment: ${esc(t.payment_mode)}</div>` : ''}
 
           <div class="rule"></div>
 
@@ -387,6 +410,7 @@ function systemPrint(onDone) {
             <div class="qr-wrap">
               <img src="${qrDataUrl}" alt="QR">
             </div>
+            <div class="qr-lbl">Show QR at ${esc(t.counter_name || 'Counter')}</div>
           ` : `<div class="qr-fallback">${esc(t.scan_code || '')}</div>`}
         </section>
       `);
@@ -396,7 +420,7 @@ function systemPrint(onDone) {
 <html>
 <head>
 <meta charset="utf-8">
-<title>Kiosk 55mm Slip</title>
+<title>Receipt</title>
 <style>
   @page { size: 55mm auto; margin: 2mm; }
 
@@ -428,30 +452,54 @@ function systemPrint(onDone) {
     break-after: auto;
   }
 
+  .neverno-brand {
+    text-align: center;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    line-height: 1.2;
+    margin-bottom: 2px;
+  }
+
   .company {
     text-align: center;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 800;
     line-height: 1.2;
     word-break: break-word;
-    margin-bottom: 6px;
+  }
+
+  .co-detail {
+    text-align: center;
+    font-size: 10px;
+    color: #444;
+    line-height: 1.3;
+    margin-top: 1px;
+  }
+
+  .receipt-title {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    margin: 3px 0 0;
   }
 
   .label {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .4px;
-    color: #444;
-    margin-top: 2px;
+    color: #555;
+    margin-top: 3px;
   }
 
   .customer {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 800;
     line-height: 1.25;
     word-break: break-word;
-    margin-top: 2px;
+    margin-top: 1px;
   }
 
   .order-no {
@@ -459,44 +507,53 @@ function systemPrint(onDone) {
     font-weight: 800;
     line-height: 1.2;
     word-break: break-word;
-    margin-top: 2px;
+    margin-top: 1px;
   }
 
   .slip-date {
-    font-size: 12px;
-    font-weight: 800;
+    font-size: 11px;
+    font-weight: 700;
     line-height: 1.2;
     word-break: break-word;
+    margin-top: 1px;
+  }
+
+  .collect-lbl {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: #555;
     margin-top: 2px;
   }
 
   .counter {
-    font-size: 13px;
-    font-weight: 800;
+    font-size: 14px;
+    font-weight: 900;
     line-height: 1.2;
     word-break: break-word;
-    margin-top: 2px;
+    margin-top: 1px;
   }
 
   .rule {
     border-top: 1px dashed #777;
-    margin: 6px 0;
+    margin: 5px 0;
   }
 
   .items-head,
   .item-row {
     display: grid;
-    grid-template-columns: 1fr 22px;
-    gap: 4px;
+    grid-template-columns: 1fr 18px 36px;
+    gap: 2px;
     align-items: start;
   }
 
   .items-head {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .3px;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
   }
 
   .items-block {
@@ -518,9 +575,28 @@ function systemPrint(onDone) {
     font-weight: 700;
   }
 
+  .item-total {
+    text-align: right;
+    font-size: 11px;
+  }
+
+  .total-line {
+    font-size: 13px;
+    font-weight: 800;
+    text-align: right;
+    margin: 2px 0;
+  }
+
+  .payment-line {
+    font-size: 11px;
+    color: #333;
+    text-align: right;
+    margin: 1px 0;
+  }
+
   .qr-wrap {
     text-align: center;
-    margin-top: 6px;
+    margin-top: 5px;
   }
 
   .qr-wrap img {
@@ -529,6 +605,13 @@ function systemPrint(onDone) {
     display: inline-block;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  .qr-lbl {
+    text-align: center;
+    font-size: 10px;
+    font-weight: 700;
+    margin-top: 2px;
   }
 
   .qr-fallback {
@@ -606,6 +689,8 @@ const ticketsData = [
     counter_name:  "{% if ticket.counter %}{{ ticket.counter.name|escapejs }}{% else %}Main Counter{% endif %}",
     cafe_name:     "{% if ticket.counter and ticket.counter.cafe %}{{ ticket.counter.cafe.name|escapejs }}{% endif %}",
     company_name:  "{{ company.name|escapejs }}",
+    company_phone: "{{ company.phone|escapejs }}",
+    company_gst:   "{{ company.company_gst|escapejs }}",
     customer_name: "{{ order.display_customer_name|escapejs }}",
     customer_phone: "{{ order.display_customer_phone|escapejs }}",
     payment_mode:  "{{ order.get_payment_mode_display }}",
@@ -756,33 +841,43 @@ async function printTicket(t) {
   // Build text portion first
   const textPart = concat(
     init,
-    center, dbl1, bold1, enc(t.company_name), bold0, dbl0,
-    center, enc('PICKUP SLIP'), enc(''),
+    center, dbl1, bold1, enc('NEVERNO'), bold0, dbl0,
+    center, bold1, enc(t.company_name), bold0,
+    t.company_phone ? enc('Ph: ' + t.company_phone) : new Uint8Array(0),
+    t.company_gst ? enc('GSTIN: ' + t.company_gst) : new Uint8Array(0),
+    center, enc('ORDER RECEIPT'), enc(''),
     line,
     left,
-    bold1, enc('GO TO COUNTER:'), bold0,
-    dbl1, bold1, enc(t.counter_name), bold0, dbl0,
-    t.cafe_name ? enc('Cafe: ' + t.cafe_name) : new Uint8Array(0),
-    enc(''),
     enc('Order : ' + t.order_number),
     enc('Guest : ' + (t.customer_name || 'Customer')),
     t.customer_phone ? enc('Phone : ' + t.customer_phone) : new Uint8Array(0),
-    enc('Ticket: ' + t.ticket_number),
-    enc('Code  : ' + t.scan_code),
+    enc('Date  : ' + t.created_at),
     line,
-    bold1, enc('ITEM                  QTY'), bold0,
+    center, bold1, enc('COLLECT AT:'), bold0,
+    dbl1, bold1, enc(t.counter_name), bold0, dbl0,
+    t.cafe_name ? enc(t.cafe_name) : new Uint8Array(0),
+    enc(''),
+    left,
+    line,
+    bold1, enc('ITEM              QTY     AMT'), bold0,
     line
   );
 
   let itemsPart = new Uint8Array(0);
   for (const it of t.items) {
-    const name = (it.name || 'Item').substring(0, 20).padEnd(22);
-    itemsPart = concat(itemsPart, enc(name + String(it.qty).padStart(3)));
+    const name = (it.name || 'Item').substring(0, 18).padEnd(18);
+    const qty  = String(it.qty).padStart(4);
+    const amt  = ('Rs.' + (it.total || '0')).padStart(9);
+    itemsPart = concat(itemsPart, enc(name + qty + amt));
   }
 
   const totalPart = concat(
     line,
-    bold1, enc('Total: Rs.' + parseFloat(t.total || 0).toFixed(2)), bold0,
+    center, bold1, enc('Total: Rs.' + parseFloat(t.total || 0).toFixed(2)), bold0,
+    left,
+    t.payment_mode ? enc('Payment: ' + t.payment_mode) : new Uint8Array(0),
+    enc('Ticket: ' + t.ticket_number),
+    enc('Code  : ' + t.scan_code),
     line,
     enc('')
   );
