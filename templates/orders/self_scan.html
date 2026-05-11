@@ -328,6 +328,9 @@ function buildDeliveredKotBytes(kot){
   raw(ESC,0x40);
   center(); dbl(true); bold(true); line('NEVERNO'); bold(false); dbl(false);
   center(); bold(true); line((kot.company_name || '{{ company.name|escapejs }}').substring(0, 30)); bold(false);
+  if(kot.company_phone) line('Ph: ' + kot.company_phone);
+  if(kot.company_gst)   line('GSTIN: ' + kot.company_gst);
+  if(kot.company_fssai) line('FSSAI: ' + kot.company_fssai);
   line('ORDER CONFIRMED');
   left(); hr();
   line('Order : ' + (kot.order_number || ''));
@@ -336,6 +339,7 @@ function buildDeliveredKotBytes(kot){
   line('Date  : ' + (kot.created_at || new Date().toLocaleString('en-GB')));
   line('Name  : ' + (kot.customer_name || 'Customer'));
   if(kot.customer_phone) line('Phone : ' + kot.customer_phone);
+  if(kot.payment_mode)  line('Pymt  : ' + kot.payment_mode);
   hr();
   center(); bold(true); line('COLLECT AT:'); bold(false);
   dbl(true); bold(true); line((kot.counter_name || 'Counter')); bold(false); dbl(false);
@@ -350,6 +354,7 @@ function buildDeliveredKotBytes(kot){
   hr();
   center(); dbl(true); bold(true); line('DELIVERED'); bold(false); dbl(false);
   left(); bold(true); line('TOTAL: Rs.' + money(kot.total)); bold(false);
+  if(kot.payment_mode) line('Payment: ' + kot.payment_mode);
   line('T&C Applied.');
   raw(ESC,0x64,0x05);
   raw(GS,0x56,0x41,0x03);
