@@ -24,6 +24,7 @@ class PaymentModeChoices(models.TextChoices):
     MONTHLY = 'monthly', 'Monthly Billing'
     COMPANY = 'company', 'Bill to Company'
     WALLET  = 'wallet',  'Wallet'
+    INTERNAL = 'internal', 'Internal Consumption'
 
 
 ORDER_TYPE_WEB = 0
@@ -40,6 +41,19 @@ ORDER_TYPE_CHOICES = [
 
 
 class Order(models.Model):
+    SOURCE_CUSTOMER = 'customer'
+    SOURCE_NEVERNO_EMPLOYEE = 'neverno_employee'
+    SOURCE_CHOICES = [
+        (SOURCE_CUSTOMER, 'Customer'),
+        (SOURCE_NEVERNO_EMPLOYEE, 'Neverno Employee'),
+    ]
+    NEVERNO_FOOD_MODE_PAID = 'paid'
+    NEVERNO_FOOD_MODE_INTERNAL = 'internal'
+    NEVERNO_FOOD_MODE_CHOICES = [
+        (NEVERNO_FOOD_MODE_PAID, 'Paid'),
+        (NEVERNO_FOOD_MODE_INTERNAL, 'Internal Consumption'),
+    ]
+
     company  = models.ForeignKey(Company,  on_delete=models.CASCADE,  related_name='orders')
     # FIX: PROTECT prevents accidental history loss when customer deleted
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT,  related_name='orders')
@@ -58,6 +72,7 @@ class Order(models.Model):
     bill_to_company = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     my_pay          = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total_amount    = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    internal_consumption_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     order_number   = models.CharField(max_length=50, unique=True, blank=True)
     payment_mode   = models.CharField(max_length=20, choices=PaymentModeChoices.choices,
@@ -68,6 +83,12 @@ class Order(models.Model):
     order_type   = models.IntegerField(choices=ORDER_TYPE_CHOICES, default=0)
     order_status = models.IntegerField(choices=OrderStatusChoices.choices,
                                        default=OrderStatusChoices.PENDING)
+    order_source = models.CharField(max_length=30, choices=SOURCE_CHOICES, default=SOURCE_CUSTOMER, db_index=True)
+    neverno_food_mode = models.CharField(max_length=20, choices=NEVERNO_FOOD_MODE_CHOICES, blank=True, default='')
+    neverno_employee_id = models.CharField(max_length=64, blank=True, db_index=True)
+    neverno_employee_name = models.CharField(max_length=255, blank=True)
+    neverno_site_id = models.CharField(max_length=64, blank=True)
+    neverno_site_name = models.CharField(max_length=255, blank=True)
 
     review_given      = models.BooleanField(default=False)
     session_foodtype  = models.CharField(max_length=255, blank=True)
@@ -154,6 +175,14 @@ class Order(models.Model):
     @property
     def is_wallet_recharge(self):
         return self.order_type == ORDER_TYPE_WALLET_RECHARGE
+
+    @property
+    def is_neverno_employee_order(self):
+        return self.order_source == self.SOURCE_NEVERNO_EMPLOYEE
+
+    @property
+    def is_internal_consumption(self):
+        return (self.internal_consumption_amount or Decimal('0.00')) > Decimal('0.00')
 
     @property
     def recharge_transaction(self):
@@ -476,18 +505,29 @@ class CounterTicket(models.Model):
 
     def kot_data(self):
         """Return dict suitable for printKOT()."""
+        co = self.company
         return {
             'order_number': self.order.order_number,
             'ticket_number': self.ticket_number,
             'scan_code': self.scan_code,
             'counter_name': self.counter.name if self.counter else 'Counter',
-            'company_name': self.company.name if self.company else '',
+            'cafe_name': self.counter.cafe.name if (self.counter and self.counter.cafe) else '',
+            'company_name': co.name if co else '',
+            'company_phone': co.phone if co else '',
+            'company_gst': co.company_gst if co else '',
+            'company_fssai': co.fssai_number if co else '',
             'printer_label': self.counter.effective_printer_label if self.counter else '',
             'printer_route_key': self.counter.printer_route_key if self.counter else 'default',
             'customer_name': self.order.display_customer_name,
             'customer_phone': self.order.display_customer_phone,
+            'payment_mode': self.order.get_payment_mode_display(),
             'items': [
-                {'name': (i.product.name if i.product else 'Item'), 'qty': i.qty, 'price': str(i.price)}
+                {
+                    'name': (i.product.name if i.product else 'Item'),
+                    'qty': i.qty,
+                    'price': str(i.price),
+                    'lt': str(i.line_total),
+                }
                 for i in self.items
             ],
             'total': str(sum(i.price * i.qty for i in self.items)),
